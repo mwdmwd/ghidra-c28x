@@ -1,0 +1,3 @@
+export PATH="$PATH:/home/user/re/inverter/tms320/ti-cgt-c2000_22.6.1.LTS/bin"
+
+if [ "$SHELL" = /bin/zsh ]; then rehash; fi
