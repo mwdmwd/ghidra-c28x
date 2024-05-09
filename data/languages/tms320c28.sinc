@@ -1,14 +1,34 @@
 define token opcode (16)
-   op0_16		 = (0,15)
-   op0_12		 = (0,11)
-   shift4		 = (12,15)
+	op0_16		= (0,15)
+	op4_12		= (4,15)
+	op8_8		= (8,15)
+	op9_7		= (9,15)
+	ax8			= (8,8)
+	op12_4		= (12,15)
+
+	shift4		= (12,15)
+	loc16		= (0,7)
+;
+
+define token lopcode (16)
+	lop0_16		= (0,15)
+	lop8_8		= (8,15)
+	lop12_4		= (12,15)
+
+	lshift4		= (12,15)
+	lloc16		= (0,7)
+
+	lsimm16		= (0,15) signed
 ;
 
 define token data16 (16)
-   imm16		= (0,15)
-   sign16		= (15,15)
-   simm16		= (0,15) signed
+	imm16		= (0,15)
+	sign16		= (15,15)
+	simm16		= (0,15) signed
 ;
+
+# TODO check order
+attach variables ax8 [ AL AH ];
 
 ################################################################
 # Macros
@@ -40,15 +60,39 @@ macro pop8(ret8) {
 # Addressing and stuff
 ################################################################
 
-# Absolute
-#OP1: imm16	  is imm16			{ export *:1 imm16; }
+Mloc16: lloc16 is lloc16 { tmp:1 = lloc16; export tmp; }
 
 ################################################################
 
+# p.124
 :aborti is op0_16=0b0000000000000001 {}
 
+# p.125
 :abs ACC is op0_16=0b1111111101010110 & ACC {}
 
+# p.126
 :abstc ACC is op0_16=0b0101011001011111 & objmode=1 & ACC {}
 
-:add ACC,imm16<<shift4 is op0_12=0b111111110001 & ACC & shift4; imm16 {}  # sxm
+# p.128
+:add ACC,#imm16<<#shift4 is op4_12=0b111111110001 & ACC & shift4; imm16 {}  # sxm
+
+# p.129
+:add ACC,Mloc16<<T is op0_16=0b0101011000100011 & objmode=1 & ACC & T; lop8_8=0 & Mloc16 {} # TODO loc16!
+
+# p.130
+:add ACC,loc16 is op8_8=0b10000001 & objmode=1 & ACC & loc16 {} # TODO loc16!
+
+# p.130
+:add ACC,loc16<<#16 is op8_8=0b10000101 & ACC & loc16 {} # TODO loc16!
+
+# p.130
+:add ACC,loc16<<#shift4 is op12_4=0b1010 & objmode=0 & ACC & loc16 & shift4 {} # TODO loc16!
+
+# p.130
+:add ACC,lloc16<<#lshift4 is op0_16=0b0101011000000100; lop12_4=0b0000 & objmode=1 & ACC & lloc16 & lshift4 {} # TODO loc16!
+
+# p.131
+:add ax8,loc16 is op9_7=0b1001010 & ax8 & loc16 {}
+
+# p.132
+:add loc16,ax8 is op9_7=0b0111001 & ax8 & loc16 {}
