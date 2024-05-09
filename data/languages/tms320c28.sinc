@@ -18,13 +18,8 @@ define token lopcode (16)
 	lshift4		= (12,15)
 	lloc16		= (0,7)
 
+	limm16		= (0,15)
 	lsimm16		= (0,15) signed
-;
-
-define token data16 (16)
-	imm16		= (0,15)
-	sign16		= (15,15)
-	simm16		= (0,15) signed
 ;
 
 # TODO check order
@@ -74,25 +69,25 @@ Mloc16: lloc16 is lloc16 { tmp:1 = lloc16; export tmp; }
 :abstc ACC is op0_16=0b0101011001011111 & objmode=1 & ACC {}
 
 # p.128
-:add ACC,#imm16<<#shift4 is op4_12=0b111111110001 & ACC & shift4; imm16 {}  # sxm
+:add ACC, #limm16 << #shift4 is op4_12=0b111111110001 & ACC & shift4; limm16 {}  # sxm
 
 # p.129
-:add ACC,Mloc16<<T is op0_16=0b0101011000100011 & objmode=1 & ACC & T; lop8_8=0 & Mloc16 {} # TODO loc16!
+:add ACC, Mloc16 << T is op0_16=0b0101011000100011 & objmode=1 & ACC & T; lop8_8=0 & Mloc16 {} # TODO loc16!
 
 # p.130
-:add ACC,loc16 is op8_8=0b10000001 & objmode=1 & ACC & loc16 {} # TODO loc16!
+:add ACC, loc16 is op8_8=0b10000001 & objmode=1 & ACC & loc16 {} # TODO loc16!
 
 # p.130
-:add ACC,loc16<<#16 is op8_8=0b10000101 & ACC & loc16 {} # TODO loc16!
+:add ACC, loc16 << #16 is op8_8=0b10000101 & ACC & loc16 {} # TODO loc16!
 
 # p.130
-:add ACC,loc16<<#shift4 is op12_4=0b1010 & objmode=0 & ACC & loc16 & shift4 {} # TODO loc16!
+:add ACC, loc16 << #shift4 is op12_4=0b1010 & objmode=0 & ACC & loc16 & shift4 {} # TODO loc16!
 
 # p.130
-:add ACC,lloc16<<#lshift4 is op0_16=0b0101011000000100; lop12_4=0b0000 & objmode=1 & ACC & lloc16 & lshift4 {} # TODO loc16!
+:add ACC, lloc16 << #lshift4 is op0_16=0b0101011000000100; lop12_4=0b0000 & objmode=1 & ACC & lloc16 & lshift4 {} # TODO loc16!
 
 # p.131
-:add ax8,loc16 is op9_7=0b1001010 & ax8 & loc16 {}
+:add ax8, loc16 is op9_7=0b1001010 & ax8 & loc16 {}
 
 # p.132
-:add loc16,ax8 is op9_7=0b0111001 & ax8 & loc16 {}
+:add loc16, ax8 is op9_7=0b0111001 & ax8 & loc16 {}
