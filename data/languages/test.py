@@ -3,9 +3,8 @@ from pypcode import Context, PcodePrettyPrinter
 
 ctx = Context("tms320c28:LE:32:default")
 
-t = b"\x01\x00\x56\xff\x5f\x56\x1a\xff\x34\x12\x23\x56\xab\x00\xab\x81\xab\x85\x04\x56\xa1\x09\x21\x94\x21\x95\x21\x72\x21\x73"
-with open("test.bin", "wb") as f:
-    f.write(t)
+with open("test.bin", "rb") as f:
+    t = f.read()
 
 dx = ctx.disassemble(t)
 for ins in dx.instructions:
