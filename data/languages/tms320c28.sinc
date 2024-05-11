@@ -77,7 +77,7 @@ Mloc16: lloc16 is lloc16 { tmp:1 = lloc16; export tmp; }
 :add ACC, loc16 is op8_8=0b10000001 & objmode=1 & ACC & loc16 {} # TODO loc16!
 
 # p.130
-:add ACC, loc16 << #16 is op8_8=0b10000101 & ACC & loc16 {} # TODO loc16!
+:add ACC, loc16 << #16 is op8_8=0b00000101 & ACC & loc16 {} # TODO loc16!
 
 # p.130
 :add ACC, loc16 << #shift4 is op12_4=0b1010 & objmode=0 & ACC & loc16 & shift4 {} # TODO loc16!
