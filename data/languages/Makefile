@@ -4,7 +4,7 @@ DIS := $(TIBIN)dis2000
 HEX := $(TIBIN)hex2000
 
 tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec tms320c28.sinc tms320c28.slaspec
-	/opt/ghidra/support/sleigh -a $$PWD
+	/opt/ghidra/support/sleigh -l -u -t -c -o -a $$PWD # -f unused fields
 
 test.obj: test.asm
 	$(AS) $<
