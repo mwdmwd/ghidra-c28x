@@ -10,7 +10,6 @@
 	ADD          ACC, PL << T
 
 	ADD          ACC, PL
-	MOV          ACC, PL
 	ADD          ACC, AR1 << #9
 	ADD          ACC, PL << #9
 
@@ -18,4 +17,5 @@
 	ADD          AH, @0x21
 	ADD          @0x21, AL
 	ADD          @0x21, AH
+	;MOV          ACC, PL
 	.endasmfunc
