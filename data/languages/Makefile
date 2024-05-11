@@ -14,7 +14,7 @@ test.bin: test.obj
 
 .PHONY: dis
 dis: test.obj
-	$(DIS) $<
+	$(DIS) $< | tail -n+5
 
 .PHONY: test
 test: tms320c28.sla test.bin
