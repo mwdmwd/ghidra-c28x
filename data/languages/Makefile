@@ -14,8 +14,12 @@ test.bin: test.obj
 
 .PHONY: dis
 dis: test.obj
-	$(DIS) $< | tail -n+5
+	$(DIS) $< | tail -n+5 | sed -E 's/(<<|>>)\s+([0-9]+)/\1 #\2/g'
 
 .PHONY: test
 test: tms320c28.sla test.bin
 	./test.py
+
+.PHONY: diff
+diff: tms320c28.sla test.bin
+	diff -u <(make --silent dis) <(make --silent test)

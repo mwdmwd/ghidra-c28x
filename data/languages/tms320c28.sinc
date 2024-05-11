@@ -6,7 +6,7 @@ define token opcode (16)
 	ax8			= (8,8)
 	op12_4		= (12,15)
 
-	shift4		= (12,15)
+	shift4		= (0,3)
 	loc16		= (0,7)
 ;
 
@@ -15,14 +15,13 @@ define token lopcode (16)
 	lop8_8		= (8,15)
 	lop12_4		= (12,15)
 
-	lshift4		= (12,15)
+	lshift4		= (8,11)
 	lloc16		= (0,7)
 
 	limm16		= (0,15)
 	lsimm16		= (0,15) signed
 ;
 
-# TODO check order
 attach variables ax8 [ AL AH ];
 
 ################################################################
