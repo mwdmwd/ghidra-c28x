@@ -14,11 +14,11 @@ test.bin: test.obj
 
 .PHONY: dis
 dis: test.obj
-	$(DIS) $< | tail -n+5 | sed -E 's/(<<|>>)\s+([0-9]+)/\1 #\2/g'
+	$(DIS) $< | tail -n+5 | sed -E 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' | ./unhex_immediate.py
 
 .PHONY: test
 test: tms320c28.sla test.bin
-	./test.py
+	./test.py | ./unhex_immediate.py
 
 .PHONY: diff
 diff: tms320c28.sla test.bin

@@ -24,6 +24,6 @@ for ins in dx.instructions:
     words = ib.hex(" ", 2).split()
     # print(f"{ins.addr.offset:#x}/{ins.length}: {words[0]} {ins.mnem} {ins.body}")
     wordOffset = ins.addr.offset // 2
-    print(f"{wordOffset:08x}   {words[0]}   {ins.mnem.upper():13}{dehex_shifts(ins.body)}")
+    print(f"{wordOffset:08x}   {words[0]}   {ins.mnem.upper():13}{ins.body}")
     for i, word in enumerate(words[1:], start=1):
         print(f"{wordOffset + i:08x}   {word}")
