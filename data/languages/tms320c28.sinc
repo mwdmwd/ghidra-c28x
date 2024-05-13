@@ -63,19 +63,19 @@ loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
 :abs ACC is op0_16=0b1111111101010110 & ACC {}
 
 # p.126
-:abstc ACC is op0_16=0b0101011001011111 & objmode=1 & ACC {}
+:abstc ACC is objmode=1 & op0_16=0b0101011001011111 & ACC {}
 
 # p.128
 :add ACC, #imm16 << #shift0_4 is op4_12=0b111111110001 & ACC & shift0_4; imm16 {}  # sxm
 
 # p.129
-:add ACC, loc16 << T is op0_16=0b0101011000100011 & objmode=1 & ACC & T; op8_8=0 & loc16 {} # TODO loc16!
+:add ACC, loc16 << T is objmode=1 & op0_16=0b0101011000100011 & ACC & T; op8_8=0 & loc16 {} # TODO loc16!
 
 # p.130
-:add ACC, loc16 is op8_8=0b10000001 & objmode=1 & ACC & loc16 {} # TODO loc16!
+:add ACC, loc16 is objmode=1 & op8_8=0b10000001 & ACC & loc16 {} # TODO loc16!
 
 # p.130
-:add ACC, loc16 << #shift8_4 is op0_16=0b0101011000000100; op12_4=0b0000 & objmode=1 & ACC & loc16 & shift8_4 {} # TODO loc16!
+:add ACC, loc16 << #shift8_4 is objmode=1 & op0_16=0b0101011000000100; op12_4=0b0000 & ACC & loc16 & shift8_4 {} # TODO loc16!
 
 # p.130
 :add ACC, loc16 << #16 is op8_8=0b00000101 & ACC & loc16 {} # TODO loc16!
