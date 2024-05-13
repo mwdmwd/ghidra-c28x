@@ -3,6 +3,7 @@ define token opcode (16)
 	op4_12		= (4,15)
 	op4_4		= (4,7)
 	op6_2		= (6,7)
+	op7_9		= (7,15)
 	op8_8		= (8,15)
 	op9_7		= (9,15)
 	ax8			= (8,8)
@@ -10,11 +11,13 @@ define token opcode (16)
 
 	shift0_4	= (0,3)
 	shift8_4	= (8,11)
-	loc16f		= (0,7)
 	reg16		= (0,3)
 	imm6		= (0,5)
 	imm7		= (0,6)
+	imm8		= (0,7)
+	simm8		= (0,7) signed
 	imm16		= (0,15)
+	simm16		= (0,15) signed
 ;
 
 attach variables ax8 [ AL AH ];
@@ -88,3 +91,15 @@ loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
 
 # p.132
 :add loc16, ax8 is op9_7=0b0111001 & ax8 & loc16 {}
+
+# p.133
+:add loc16, #simm16 is op8_8=0b00001000 & loc16; simm16 {}
+
+# p.134
+:addb ACC, #imm8 is op8_8=0b00001001 & ACC & imm8 {}
+
+# p.135
+:addb ax8, #simm8 is op9_7=0b1001110 & ax8 & simm8 {}
+
+# p.136
+:addb SP, #imm7 is op7_9=0b111111100 & SP & imm7 {}

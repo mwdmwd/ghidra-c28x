@@ -17,5 +17,9 @@
 	ADD          AH, @0x21
 	ADD          @0x21, AL
 	ADD          @0x21, AH
+	ADD          AR1, #0x859
+	ADDB         ACC, #5
+	ADDB         AL, #2
+	ADDB         SP, #1
 	;MOV          ACC, PL
 	.endasmfunc
