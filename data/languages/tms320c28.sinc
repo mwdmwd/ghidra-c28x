@@ -1,17 +1,25 @@
 define token opcode (16)
 	op0_16		= (0,15)
 	op4_12		= (4,15)
+	op4_4		= (4,7)
+	op6_2		= (6,7)
 	op8_8		= (8,15)
 	op9_7		= (9,15)
 	ax8			= (8,8)
 	op12_4		= (12,15)
 
-	shift4		= (0,3)
-	loc16		= (0,7)
+	shift0_4	= (0,3)
+	shift8_4	= (8,11)
+	loc16f		= (0,7)
+	reg16		= (0,3)
+	imm6		= (0,5)
+	imm7		= (0,6)
 	imm16		= (0,15)
 ;
 
 attach variables ax8 [ AL AH ];
+# T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH
+attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
 
 ################################################################
 # Macros
@@ -43,7 +51,8 @@ macro pop8(ret8) {
 # Addressing and stuff
 ################################################################
 
-Mloc16: loc16 is loc16 { tmp:1 = loc16; export tmp; }
+loc16: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
+loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
 
 ################################################################
 
@@ -57,22 +66,22 @@ Mloc16: loc16 is loc16 { tmp:1 = loc16; export tmp; }
 :abstc ACC is op0_16=0b0101011001011111 & objmode=1 & ACC {}
 
 # p.128
-:add ACC, #imm16 << #shift4 is op4_12=0b111111110001 & ACC & shift4; imm16 {}  # sxm
+:add ACC, #imm16 << #shift0_4 is op4_12=0b111111110001 & ACC & shift0_4; imm16 {}  # sxm
 
 # p.129
-:add ACC, Mloc16 << T is op0_16=0b0101011000100011 & objmode=1 & ACC & T; op8_8=0 & Mloc16 {} # TODO loc16!
+:add ACC, loc16 << T is op0_16=0b0101011000100011 & objmode=1 & ACC & T; op8_8=0 & loc16 {} # TODO loc16!
 
 # p.130
 :add ACC, loc16 is op8_8=0b10000001 & objmode=1 & ACC & loc16 {} # TODO loc16!
 
 # p.130
-:add ACC, loc16 << #shift4 is op0_16=0b0101011000000100; op12_4=0b0000 & objmode=1 & ACC & loc16 & shift4 {} # TODO loc16!
+:add ACC, loc16 << #shift8_4 is op0_16=0b0101011000000100; op12_4=0b0000 & objmode=1 & ACC & loc16 & shift8_4 {} # TODO loc16!
 
 # p.130
 :add ACC, loc16 << #16 is op8_8=0b00000101 & ACC & loc16 {} # TODO loc16!
 
 # p.130
-:add ACC, loc16 << #shift4 is op12_4=0b1010 & objmode=0 & ACC & loc16 & shift4 {} # TODO loc16!
+:add ACC, loc16 << #shift0_4 is op12_4=0b1010 & objmode=0 & ACC & loc16 & shift0_4 {} # TODO loc16!
 
 # p.131
 :add ax8, loc16 is op9_7=0b1001010 & ax8 & loc16 {}
