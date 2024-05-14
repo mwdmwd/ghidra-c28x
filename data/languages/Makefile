@@ -14,7 +14,7 @@ test.bin: test.obj
 
 .PHONY: dis
 dis: test.obj
-	$(DIS) $< | tail -n+5 | sed -E 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' | ./unhex_immediate.py
+	$(DIS) $< | tail -n+5 | sed -E -e 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' -e 's/ADDL      ACC/ADDL         ACC/g' | ./unhex_immediate.py
 
 .PHONY: test
 test: tms320c28.sla test.bin
