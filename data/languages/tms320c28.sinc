@@ -1,17 +1,26 @@
 define token opcode (16)
 	op0_16		= (0,15)
+	op1_15		= (1,15)
 	op4_12		= (4,15)
 	op4_4		= (4,7)
+	op5_11		= (5,15)
 	op6_2		= (6,7)
 	op7_9		= (7,15)
+	op7			= (7,7)
 	op8_8		= (8,15)
 	op9_7		= (9,15)
 	ax8			= (8,8)
+	ax4			= (4,4)
+	ax0			= (0,0)
+	op11_5		= (11,15)
 	op12_4		= (12,15)
 
 	shift0_4	= (0,3)
+	shift0_4_1	= (0,3)
 	shift8_4	= (8,11)
 	reg16		= (0,3)
+	reg32		= (0,3)
+	xarn8		= (8,10)
 	imm6		= (0,5)
 	imm7		= (0,6)
 	imm8		= (0,7)
@@ -20,9 +29,13 @@ define token opcode (16)
 	simm16		= (0,15) signed
 ;
 
-attach variables ax8 [ AL AH ];
+attach variables [ ax0 ax4 ax8 ] [ AL AH ];
+attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
+
 # T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH
 attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
+attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
+attach variables xarn8 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
 
 ################################################################
 # Macros
@@ -56,6 +69,9 @@ macro pop8(ret8) {
 
 loc16: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
 loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
+
+loc32: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
+loc32: reg32 is amode=0 & op4_4=0b1010 & reg32 {}
 
 ################################################################
 
@@ -103,3 +119,72 @@ loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
 
 # p.136
 :addb SP, #imm7 is op7_9=0b111111100 & SP & imm7 {}
+
+# p.137
+:addb xarn8, #imm7 is op11_5=0b11011 & xarn8 & op7=0 & imm7 {}
+
+# p.138
+:addcl ACC, loc32 is objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {}
+
+# p.139
+:addcu ACC, loc16 is op8_8=0b00001100 & ACC & loc16 {}
+
+# p.140
+:addl ACC, loc32 is op8_8=0b00000111 & ACC & loc32 {}
+
+# p.141
+:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM {}
+
+# p.142
+:addl loc32, ACC is objmode=1 & op0_16=0b0101011000000001 & ACC; op8_8=0b00000000 & loc32 {}
+
+# p.143
+:addu ACC, loc16 is op8_8=0b00001101 & ACC & loc16 {}
+
+# p.144
+:addul P, loc32 is objmode=1 & op0_16=0b0101011001010111 & P; op8_8=0b00000000 & loc32 {}
+
+# p.145
+:addul ACC, loc32 is objmode=1 & op0_16=0b0101011001010011 & ACC; loc32 {}
+
+# p.146
+:adrk #imm8 is op8_8=0b11111100 & imm8 {}
+
+# p.147
+:and ACC, #imm16 << #shift0_4 is objmode=1 & op4_12=0b001111100000 & ACC & shift0_4; imm16 {}
+
+# p.147
+:and ACC, #imm16 << #16 is objmode=1 & op0_16=0b0101011000001000 & ACC; imm16 {}
+
+# p.148
+:and ACC, loc16 is objmode=1 & op8_8=0b10001001 & ACC & loc16 {}
+
+# p.149
+:and ax8, loc16, #imm16 is op9_7=0b1100110 & ax8 & loc16; imm16 {}
+
+# p.150
+:and IER, #imm16 is op0_16=0b0111011000100110 & IER; imm16 {}
+
+# p.151
+:and IFR, #imm16 is op0_16=0b0111011000101111 & IFR; imm16 {}
+
+# p.152
+:and loc16, ax8 is op9_7=0b1100000 & ax8 & loc16 {}
+
+# p.153
+:and ax8, loc16 is op9_7=0b1100111 & ax8 & loc16 {}
+
+# p.154
+:and loc16, #imm16 is op8_8=0b00011000 & loc16; imm16 {}
+
+# p.155
+:andb ax8, #imm8 is op9_7=0b1001000 & ax8 & imm8 {}
+
+# p.156
+:asp is op0_16=0b0111011000011011 {}
+
+# p.157
+:asr ax4, shift0_4_1 is op5_11=0b11111111101 & ax4 & shift0_4_1 {}
+
+# p.158
+:asr ax0, T is op1_15=0b111111110110010 & ax0 & T {}

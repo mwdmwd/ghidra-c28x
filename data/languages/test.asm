@@ -21,5 +21,28 @@
 	ADDB         ACC, #5
 	ADDB         AL, #2
 	ADDB         SP, #1
+	ADDB         XAR2, #7
+	ADDCL        ACC, XT
+	ADDCU        ACC, T
+	ADDL         ACC, XT
+	ADDL         ACC, P << PM
+	ADDL         XT, ACC
+	ADDU         ACC, T
+	ADDUL        P, XT
+	ADDUL        ACC, XT
+	ADRK         #217
+	AND          ACC, #0x859 << #13
+	AND          ACC, #0x859 << #16
+	AND          ACC, PL
+	AND          AL, PL, #0x859
+	AND          IER, #0x2137
+	AND          IFR, #0x2137
+	AND          PL, AH
+	AND          AH, PL
+	AND          PL, #0x859
+	ANDB         AL, #0xaa
+	ASP
+	ASR          AL, #5
+	ASR          AH, T
 	;MOV          ACC, PL
 	.endasmfunc
