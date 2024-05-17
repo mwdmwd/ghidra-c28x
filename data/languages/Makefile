@@ -1,6 +1,7 @@
 TIBIN := /home/user/re/inverter/tms320/ti-cgt-c2000_22.6.1.LTS/bin/
 AS := $(TIBIN)cl2000
 DIS := $(TIBIN)dis2000
+DISFLAGS ?=
 HEX := $(TIBIN)hex2000
 
 tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec tms320c28.sinc tms320c28.slaspec
@@ -14,7 +15,7 @@ test.bin: test.obj
 
 .PHONY: dis
 dis: test.obj
-	$(DIS) $< | tail -n+5 | sed -E -e 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' -e 's/ADDL      ACC/ADDL         ACC/g' | ./unhex_immediate.py
+	$(DIS) $(DISFLAGS) $< | tail -n+5 | sed -E -e 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' -e 's/ADDL      ACC/ADDL         ACC/g' | ./unhex_immediate.py
 
 .PHONY: test
 test: tms320c28.sla test.bin
