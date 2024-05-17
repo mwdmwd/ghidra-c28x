@@ -44,5 +44,23 @@
 	ASP
 	ASR          AL, #5
 	ASR          AH, T
+	ASR64        ACC:P, #5
+	ASR64        ACC:P, T
+	ASRL         ACC, T
+	B            1000, HIS
+	B            -201, LO
+	B            1000, UNC
+	BANZ         0x859, AR2--
+	BAR          21, AR3, AR7, EQ
+	BAR          21, AR3, AR7, NEQ
+	BF           256, NEQ
+	C27MAP
+	CLRC         M0M1MAP
+	C27OBJ
+	CLRC         OBJMODE
+	C28ADDR
+	CLRC         AMODE
+	C28MAP
+	SETC         M0M1MAP
 	;MOV          ACC, PL
 	.endasmfunc

@@ -1,9 +1,11 @@
 define token opcode (16)
 	op0_16		= (0,15)
 	op1_15		= (1,15)
+	op3_13		= (3,15)
 	op4_12		= (4,15)
 	op4_4		= (4,7)
 	op5_11		= (5,15)
+	op6_10		= (6,15)
 	op6_2		= (6,7)
 	op7_9		= (7,15)
 	op7			= (7,7)
@@ -18,8 +20,11 @@ define token opcode (16)
 	shift0_4	= (0,3)
 	shift0_4_1	= (0,3)
 	shift8_4	= (8,11)
+	cond0_4		= (0,3)
 	reg16		= (0,3)
 	reg32		= (0,3)
+	arn0		= (0,2)
+	arn3		= (3,5)
 	xarn8		= (8,10)
 	imm6		= (0,5)
 	imm7		= (0,6)
@@ -36,6 +41,7 @@ attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
 attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
 attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
 attach variables xarn8 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
+attach variables [ arn0 arn3 ] [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 ];
 
 ################################################################
 # Macros
@@ -205,3 +211,39 @@ cond: "UNC" is cond0_4=0b1111 {}
 
 # p.158
 :asr ax0, T is op1_15=0b111111110110010 & ax0 & T {}
+
+# p.159
+:asr64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {}
+
+# p.160
+:asr64 ACC:P, T is objmode=1 & op0_16=0b0101011000101100 & ACC & P & T {}
+
+# p.161
+:asrl ACC, T is objmode=1 & op0_16=0b0101011000010000 & ACC & T {}
+
+# p.162
+:b simm16, cond is op4_12=0b111111111110 & cond; simm16 {}
+
+# p.163
+:banz simm16,arn0-- is op3_13=0b0000000000001 & arn0; simm16 {}
+
+# p.164
+:bar simm16, arn3, arn0, "EQ" is objmode=1 & op6_10=0b1000111110 & arn3 & arn0; simm16 {}
+
+# p.164
+:bar simm16, arn3, arn0, "NEQ" is objmode=1 & op6_10=0b1000111111 & arn3 & arn0; simm16 {}
+
+# p.165
+:bf simm16, cond is objmode=1 & op4_12=0b010101101100 & cond; simm16 {}
+
+# p.166
+:clrc "M0M1MAP" is op0_16=0b0101011000111111 {} # c27map
+
+# p.167
+:clrc "OBJMODE" is op0_16=0b0101011000110110 {} # c27obj
+
+# p.168
+:clrc "AMODE" is op0_16=0b0101011000010110 {} # c28addr
+
+# p. 169
+:setc "M0M1MAP" is op0_16=0b0101011000011010 {} # c28map
