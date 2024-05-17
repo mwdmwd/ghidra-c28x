@@ -73,6 +73,23 @@ loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
 loc32: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
 loc32: reg32 is amode=0 & op4_4=0b1010 & reg32 {}
 
+cond: "NEQ" is cond0_4=0b0000 {}
+cond: "EQ" is cond0_4=0b0001 {}
+cond: "GT" is cond0_4=0b0010 {}
+cond: "GEQ" is cond0_4=0b0011 {}
+cond: "LT" is cond0_4=0b0100 {}
+cond: "LEQ" is cond0_4=0b0101 {}
+cond: "HI" is cond0_4=0b0110 {}
+cond: "HIS" is cond0_4=0b0111 {}
+cond: "LO" is cond0_4=0b1000 {}
+cond: "LOS" is cond0_4=0b1001 {}
+cond: "NOV" is cond0_4=0b1010 {}
+cond: "OV" is cond0_4=0b1011 {}
+cond: "NTC" is cond0_4=0b1100 {}
+cond: "TC" is cond0_4=0b1101 {}
+cond: "NBIO" is cond0_4=0b1110 {}
+cond: "UNC" is cond0_4=0b1111 {}
+
 ################################################################
 
 # p.124
