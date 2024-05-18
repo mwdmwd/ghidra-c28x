@@ -253,3 +253,56 @@ cond: "UNC" is cond0_4=0b1111 {}
 
 # p.174, p.471 (ZAP OVC)
 :clrc "OVC" is objmode=1 & op0_16=0b0101011001011100 {}
+
+# p.175
+:clrc "XF" is op0_16=0b0101011000011011 {}
+
+# p.176
+:clrc imm8 is op8_8=0b00101001 & imm8 {} # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP
+
+# p.177
+:cmp ax8, loc16 is op9_7=0b0101010 & ax8 & loc16 {}
+
+# p.178
+:cmp loc16, #simm16 is op8_8=0b00011011 & loc16; simm16 {}
+
+# p.179
+:cmp64 ACC:P is objmode=1 & op0_16=0b0101011001011110 & ACC & P {}
+
+# p.180
+:cmpb ax8, #imm8 is op9_7=0b0101001 & ax8 & imm8 {}
+
+# p.181
+:cmpl ACC, loc32 is op8_8=0b00001111 & ACC & loc32 {}
+
+# p.182
+:cmpl ACC, P << PM is op0_16=0b1111111101011001 & ACC & P & PM {}
+
+with : objmode=1 {
+# p.183
+:cmpr "0" is op0_16=0b0101011000011101 {}
+# p.183
+:cmpr "1" is op0_16=0b0101011000011001 {}
+# p.183
+:cmpr "2" is op0_16=0b0101011000011000 {}
+# p.183
+:cmpr "3" is op0_16=0b0101011000011100 {}
+}
+
+# p.184
+:csb ACC is objmode=1 & op0_16=0b0101011000110101 & ACC {}
+
+# p.185
+:dec loc16 is op8_8=0b00001011 & loc16 {}
+
+# p.403, p.186 (DINT)
+:setc "INTM" is op0_16=0b0011101100010000 {}	
+
+# p.187
+:dmac ACC:P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001011; op8_8=0b11000111 & ACC & P & loc32 & XAR7 {}
+
+# p.187
+:dmac ACC:P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001011; op8_8=0b10000111 & ACC & P & loc32 & XAR7 {}
+
+# p.189
+:dmov loc16 is objmode=1 & op8_8=0b10100101 & loc16 {}

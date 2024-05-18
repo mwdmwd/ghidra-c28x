@@ -66,5 +66,23 @@
 	SETC         OBJMODE
 	CLRC         OVC
 	ZAP          OVC
+	CLRC         XF
+	;CLRC         0xff ; formatting difference
+	CMP          AH, PL
+	CMP          PL, #0x859
+	CMP64        ACC:P
+	CMPB         AH, #0x81
+	CMPL         ACC, @0x3f
+	CMPL         ACC, P<<PM
+	CMPR         0
+	CMPR         1
+	CMPR         2
+	CMPR         3
+	CSB          ACC
+	DEC          PL
+	DINT
+	DMAC         ACC:P, @0x11, *XAR7
+	DMAC         ACC:P, @0x11, *XAR7++
+	DMOV         @0x3a
 	;MOV          ACC, PL
 	.endasmfunc
