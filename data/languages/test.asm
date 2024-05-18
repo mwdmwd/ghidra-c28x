@@ -84,5 +84,10 @@
 	DMAC         ACC:P, @0x11, *XAR7
 	DMAC         ACC:P, @0x11, *XAR7++
 	DMOV         @0x3a
+	EALLOW
+	EDIS
+	;EINT ; CLRC INTM
+	ESTOP0
+	ESTOP1
 	;MOV          ACC, PL
 	.endasmfunc

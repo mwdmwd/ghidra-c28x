@@ -306,3 +306,18 @@ with : objmode=1 {
 
 # p.189
 :dmov loc16 is objmode=1 & op8_8=0b10100101 & loc16 {}
+
+# p.190
+:eallow is op0_16=0b0111011000100010 {}
+
+# p.191
+:edis is op0_16=0b0111011000011010 {}
+
+# p.192
+#:eint # CLRC INTM
+
+# p.193
+:estop0 is op0_16=0b0111011000100101 {}
+
+# p.194
+:estop1 is op0_16=0b0111011000100100 {}
