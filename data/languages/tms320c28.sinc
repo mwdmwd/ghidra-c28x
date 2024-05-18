@@ -236,14 +236,20 @@ cond: "UNC" is cond0_4=0b1111 {}
 # p.165
 :bf simm16, cond is objmode=1 & op4_12=0b010101101100 & cond; simm16 {}
 
-# p.166
-:clrc "M0M1MAP" is op0_16=0b0101011000111111 {} # c27map
+# p.172, p.166 (C27MAP)
+:clrc "M0M1MAP" is op0_16=0b0101011000111111 {}
 
-# p.167
-:clrc "OBJMODE" is op0_16=0b0101011000110110 {} # c27obj
+# p.173, p.167 (C27OBJ)
+:clrc "OBJMODE" is op0_16=0b0101011000110110 {}
 
-# p.168
-:clrc "AMODE" is op0_16=0b0101011000010110 {} # c28addr
+# p.171, p.168 (C28ADDR)
+:clrc "AMODE" is op0_16=0b0101011000010110 {}
 
-# p. 169
-:setc "M0M1MAP" is op0_16=0b0101011000011010 {} # c28map
+# p.405, p.169 (C28MAP)
+:setc "M0M1MAP" is op0_16=0b0101011000011010 {}
+
+# p.406, p.170 (C28OBJ)
+:setc "OBJMODE" is op0_16=0b0101011000011111 {}
+
+# p.174, p.471 (ZAP OVC)
+:clrc "OVC" is objmode=1 & op0_16=0b0101011001011100 {}

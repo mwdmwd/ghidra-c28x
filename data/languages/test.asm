@@ -62,5 +62,9 @@
 	CLRC         AMODE
 	C28MAP
 	SETC         M0M1MAP
+	C28OBJ
+	SETC         OBJMODE
+	CLRC         OVC
+	ZAP          OVC
 	;MOV          ACC, PL
 	.endasmfunc
