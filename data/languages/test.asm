@@ -110,5 +110,6 @@
 	INTR         NMI
 	INTR         EMU
 	IRET
+	LB           *XAR7
 	;MOV          ACC, PL
 	.endasmfunc
