@@ -453,3 +453,11 @@ with : objmode=1 {
 # p.241
 :lsrl ACC, T is objmode=1 & op0_16=0b0101011000100010 & ACC & T {}
 
+# p.242
+:mac P, loc16, 0:imm16 is op8_8=0b00010100 & P & loc16; imm16 {}
+
+# p.244
+:mac P, loc16, *XAR7 is objmode=1 & op0_16=0b0101011000000111; op8_8=0b11000111 & P & loc16 & XAR7 {}
+
+# p.244
+:mac P, loc16, *XAR7++ is objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 {}

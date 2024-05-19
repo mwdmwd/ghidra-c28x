@@ -134,5 +134,8 @@
 	LSR64		ACC:P, 6
 	LSR64		ACC:P, T
 	LSRL		ACC, T
+	MAC			P, AR2, 0:0x859
+	MAC			P, AR1, *XAR7
+	MAC			P, AR1, *XAR7++
 	;MOV			ACC, PL
 	.endasmfunc
