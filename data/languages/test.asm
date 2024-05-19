@@ -102,5 +102,13 @@
 	IMPYSL       P, XT, XAR3
 	IMPYXUL      P, XT, ACC
 	IN           PL, *(0x300)
+	INTR         INT1
+	INTR         INT2
+	INTR         INT14
+	INTR         DLOGINT
+	INTR         RTOSINT
+	INTR         NMI
+	INTR         EMU
+	IRET
 	;MOV          ACC, PL
 	.endasmfunc

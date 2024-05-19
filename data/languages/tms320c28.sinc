@@ -26,6 +26,7 @@ define token opcode (16)
 	arn0		= (0,2)
 	arn3		= (3,5)
 	xarn8		= (8,10)
+	imm4		= (0,3)
 	imm6		= (0,5)
 	imm7		= (0,6)
 	imm8		= (0,7)
@@ -359,3 +360,20 @@ with : objmode=1 {
 
 # p.209
 :in loc16, *(imm16) is objmode=1 & op8_8=0b10110100 & loc16; imm16 {}
+
+# p.211
+:inc loc16 is op8_8=0b00001010 & loc16 {}
+
+# p.212
+:intr "INT"^intno is op4_12=0b000000000001 & imm4 [ intno = imm4 + 1; ] {}
+# p.212
+:intr "DLOGINT" is op4_12=0b000000000001 & imm4=0b1110 {}
+# p.212
+:intr "RTOSINT" is op4_12=0b000000000001 & imm4=0b1111 {}
+# p.212
+:intr "NMI" is op0_16=0b0111011000010110 {}
+# p.212
+:intr "EMU" is op0_16=0b0111011000011100 {}
+
+# p.214
+:iret is op0_16=0b0111011000000010 {}
