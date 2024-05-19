@@ -482,3 +482,6 @@ with : objmode=1 {
 
 # p.252
 :mov *(0:imm16), loc16 is op8_8=0b11110100 & loc16; imm16 {}
+
+# p.253
+:mov ACC, #imm16 << #shift0_4 is op4_12=0b111111110010 & shift0_4; ACC & imm16 {}

@@ -144,5 +144,6 @@
 	MINCUL		P, XAR1
 	MINL		ACC, XAR5
 	MOV			*(0:0x859), @0x21
+	MOV			ACC, #0x859 << #14
 	;MOV			ACC, PL
 	.endasmfunc
