@@ -386,3 +386,6 @@ with : objmode=1 {
 
 # p.218
 :lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {}
+
+# p.219
+:lc imm22 is op6_10=0b0000000010 & $(imm22) {}
