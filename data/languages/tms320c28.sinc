@@ -461,3 +461,10 @@ with : objmode=1 {
 
 # p.244
 :mac P, loc16, *XAR7++ is objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 {}
+
+# p.245
+:max ax0, loc16 is objmode=1 & op1_15=0b010101100111001 & ax0; op8_8=0b00000000 & loc16 {} # MAX AL, @AH has the @ on ah
+
+# p.246
+:maxcul P, loc32 is objmode=1 & op0_16=0b0101011001010001; op8_8=0b00000000 & P & loc32 {}
+

@@ -137,5 +137,7 @@
 	MAC			P, AR2, 0:0x859
 	MAC			P, AR1, *XAR7
 	MAC			P, AR1, *XAR7++
+	MAX			AL, @0x10
+	MAXCUL		P, XAR1
 	;MOV			ACC, PL
 	.endasmfunc
