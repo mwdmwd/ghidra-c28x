@@ -89,5 +89,7 @@
 	;EINT ; CLRC INTM
 	ESTOP0
 	ESTOP1
+	FFC          XAR7, 0x3fffff
+	FFC          XAR7, 0x1
 	;MOV          ACC, PL
 	.endasmfunc
