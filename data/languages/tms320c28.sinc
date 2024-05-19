@@ -24,6 +24,7 @@ define token opcode (16)
 	reg16		= (0,3)
 	reg32		= (0,3)
 	arn0		= (0,2)
+	xarn0		= (0,2)
 	arn3		= (3,5)
 	xarn8		= (8,10)
 	imm4		= (0,3)
@@ -41,7 +42,7 @@ attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
 # T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH
 attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
 attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
-attach variables xarn8 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
+attach variables [ xarn0 xarn8 ] [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
 attach variables [ arn0 arn3 ] [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 ];
 
 ################################################################
@@ -389,3 +390,9 @@ with : objmode=1 {
 
 # p.219
 :lc imm22 is op6_10=0b0000000010 & $(imm22) {}
+
+# p.220
+:lcr imm22 is objmode=1 & op6_10=0b0111011001 & $(imm22) {}
+
+# p.221
+:lcr *xarn0 is objmode=1 & op3_13=0b0011111001100 & xarn0 {}

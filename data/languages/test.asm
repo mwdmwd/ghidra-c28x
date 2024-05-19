@@ -116,5 +116,7 @@
 	LC			*XAR7
 	LC			#0x859
 	LC			#0x3fffff
+	LCR			#0x859
+	LCR			*XAR6
 	;MOV			ACC, PL
 	.endasmfunc
