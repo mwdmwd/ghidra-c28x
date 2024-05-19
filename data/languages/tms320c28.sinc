@@ -326,3 +326,18 @@ with : objmode=1 {
 
 # p.195
 :ffc XAR7, imm22 is op6_10=0b0000000011 & XAR7 & $(imm22) {}
+
+# p.196
+:flip ax0 is objmode=1 & op1_15=0b010101100111000 & ax0 {}
+
+# p.197
+:iack #imm16 is op0_16=0b0111011000111111; imm16 {}
+
+# p.198
+:idle is op0_16=0b0111011000100001 {}
+
+# p.199
+:imacl P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001101; op8_8=0b11000111 & P & loc32 & XAR7 {}
+
+# p.199
+:imacl P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 {}

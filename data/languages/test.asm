@@ -91,5 +91,10 @@
 	ESTOP1
 	FFC          XAR7, 0x3fffff
 	FFC          XAR7, 0x1
+	FLIP         AH
+	IACK         #0x859
+	IDLE
+	IMACL        P, XT, *XAR7
+	IMACL        P, XT, *XAR7++
 	;MOV          ACC, PL
 	.endasmfunc
