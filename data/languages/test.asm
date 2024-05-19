@@ -111,5 +111,8 @@
 	INTR         EMU
 	IRET
 	LB           *XAR7
+	LB           #0x859
+	LB           #0x3fffff
+	LC           *XAR7
 	;MOV          ACC, PL
 	.endasmfunc
