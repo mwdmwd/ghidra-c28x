@@ -411,3 +411,12 @@ with : objmode=1 {
 
 # p.228
 :lrete is op0_16=0b0111011000010000 {}
+
+# p.229
+:lretr is objmode=1 & op0_16=0b0000000000000110 {}
+
+# p.230
+:lsl ACC, shift0_4_1 is op4_12=0b111111110011 & ACC & shift0_4_1 {}
+
+# p.231
+:lsl ACC, T is op0_16=0b1111111101010000 & ACC & T {}

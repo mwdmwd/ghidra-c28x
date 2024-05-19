@@ -121,5 +121,8 @@
 	LOOPNZ		AR3, #0x859
 	LOOPZ		AR3, #0x859
 	LPADDR
+	LRETR
+	LSL			ACC, #4
+	LSL			ACC, T
 	;MOV			ACC, PL
 	.endasmfunc
