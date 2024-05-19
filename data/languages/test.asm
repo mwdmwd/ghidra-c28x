@@ -124,5 +124,15 @@
 	LRETR
 	LSL			ACC, #4
 	LSL			ACC, T
+	LSL			AH, #3
+	LSL			AL, T
+	LSL64		ACC:P, 5
+	LSL64		ACC:P, T
+	LSLL		ACC, T
+	LSR			AL, 2
+	LSR			AH, T
+	LSR64		ACC:P, 6
+	LSR64		ACC:P, T
+	LSRL		ACC, T
 	;MOV			ACC, PL
 	.endasmfunc

@@ -77,9 +77,11 @@ macro pop8(ret8) {
 # Addressing and stuff
 ################################################################
 
+# TODO
 loc16: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
 loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
 
+# TODO
 loc32: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
 loc32: reg32 is amode=0 & op4_4=0b1010 & reg32 {}
 
@@ -420,3 +422,34 @@ with : objmode=1 {
 
 # p.231
 :lsl ACC, T is op0_16=0b1111111101010000 & ACC & T {}
+
+# p.232
+:lsl ax4, shift0_4_1 is op5_11=0b11111111100 & ax4 & shift0_4_1 {}
+
+# p.233
+:lsl ax0, T is op1_15=0b111111110110011 & ax0 & T {}
+
+# p.234
+:lsl64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101010 & ACC & P & shift0_4_1 {}
+
+# p.235
+:lsl64 ACC:P, T is objmode=1 & op0_16=0b0101011001010010 & ACC & P & T {}
+
+# p.236
+:lsll ACC, T is objmode=1 & op0_16=0b0101011000111011 & ACC & T {}
+
+# p.237
+:lsr ax4, shift0_4_1 is op5_11=0b11111111110 & ax4 & shift0_4_1 {}
+
+# p.238
+:lsr ax0, T is op1_15=0b111111110110001 & ax0 & T {}
+
+# p.239
+:lsr64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101001 & ACC & P & shift0_4_1 {}
+
+# p.240
+:lsr64 ACC:P, T is objmode=1 & op0_16=0b0101011001011011 & ACC & P & T {}
+
+# p.241
+:lsrl ACC, T is objmode=1 & op0_16=0b0101011000100010 & ACC & T {}
+
