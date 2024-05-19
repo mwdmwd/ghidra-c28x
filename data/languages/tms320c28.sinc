@@ -396,3 +396,18 @@ with : objmode=1 {
 
 # p.221
 :lcr *xarn0 is objmode=1 & op3_13=0b0011111001100 & xarn0 {}
+
+# p.222
+:loopnz loc16, #imm16 is op8_8=0b00101110 & loc16; imm16 {}
+
+# p.224
+:loopz loc16, #imm16 is op8_8=0b00101100 & loc16; imm16 {}
+
+# p.226 (LPADDR)
+:setc "AMODE" is op0_16=0b0101011000011110 {}
+
+# p.227
+:lret is op0_16=0b0111011000010100 {}
+
+# p.228
+:lrete is op0_16=0b0111011000010000 {}

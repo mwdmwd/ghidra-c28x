@@ -118,5 +118,8 @@
 	LC			#0x3fffff
 	LCR			#0x859
 	LCR			*XAR6
+	LOOPNZ		AR3, #0x859
+	LOOPZ		AR3, #0x859
+	LPADDR
 	;MOV			ACC, PL
 	.endasmfunc
