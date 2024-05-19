@@ -479,3 +479,6 @@ with : objmode=1 {
 
 # p.251
 :minl ACC, loc32 is objmode=1 & op0_16=0b0101011001010000; op8_8=0b00000000 & ACC & loc32 {}
+
+# p.252
+:mov *(0:imm16), loc16 is op8_8=0b11110100 & loc16; imm16 {}
