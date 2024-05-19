@@ -341,3 +341,21 @@ with : objmode=1 {
 
 # p.199
 :imacl P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 {}
+
+# p.201
+:impyal P, XT, loc32 is objmode=1 & op0_16=0b0101011001001100; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.203
+:impyl ACC, XT, loc32 is objmode=1 & op0_16=0b0101011001000100; op8_8=0b00000000 & ACC & XT & loc32 {}
+
+# p.204
+:impyl P, XT, loc32 is objmode=1 & op0_16=0b0101011000000101; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.205
+:impysl P, XT, loc32 is objmode=1 & op0_16=0b0101011001000011; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.207
+:impyxul P, XT, loc32 is objmode=1 & op0_16=0b0101011001100101; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.209
+:in loc16, *(imm16) is objmode=1 & op8_8=0b10110100 & loc16; imm16 {}

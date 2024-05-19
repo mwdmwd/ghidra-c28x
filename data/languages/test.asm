@@ -96,5 +96,11 @@
 	IDLE
 	IMACL        P, XT, *XAR7
 	IMACL        P, XT, *XAR7++
+	IMPYAL       P, XT, XT
+	IMPYL        ACC, XT, P
+	IMPYL        P, XT, @0x21
+	IMPYSL       P, XT, XAR3
+	IMPYXUL      P, XT, ACC
+	IN           PL, *(0x300)
 	;MOV          ACC, PL
 	.endasmfunc
