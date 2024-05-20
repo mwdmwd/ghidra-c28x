@@ -162,5 +162,7 @@
 	MOV			AR0, AR1
 	MOV			AR0, AL
 	MOV			PH, AL, NBIO
+	MOV			PH, IER
+	MOV			PH, OVC
 	;MOV			ACC, PL
 	.endasmfunc

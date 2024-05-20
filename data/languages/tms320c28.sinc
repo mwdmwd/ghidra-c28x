@@ -569,3 +569,9 @@ with : objmode=1 {
 
 # p.266
 :mov loc16, ax0, cond8 is objmode=1 & op1_15=0b010101100010101 & ax0; op12_4=0b0000 & cond8 & loc16 {}
+
+# p.268
+:mov loc16, IER is op8_8=0b00100000 & loc16 & IER {}
+
+# p.269
+:mov loc16, "OVC" is objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & loc16 {}
