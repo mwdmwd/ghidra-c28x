@@ -145,5 +145,9 @@
 	MINL		ACC, XAR5
 	MOV			*(0:0x859), @0x21
 	MOV			ACC, #0x859 << #14
+	MOV			ACC, PL << T
+	MOV			ACC, PL
+	MOV			ACC, PL << #12
+	MOV			ACC, PL << #16
 	;MOV			ACC, PL
 	.endasmfunc

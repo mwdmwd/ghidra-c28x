@@ -485,3 +485,21 @@ with : objmode=1 {
 
 # p.253
 :mov ACC, #imm16 << #shift0_4 is op4_12=0b111111110010 & shift0_4; ACC & imm16 {}
+
+# p.254
+:mov ACC, loc16 << T is objmode=1 & op0_16=0b0101011000000110; op8_8=0b00000000 & ACC & loc16 & T {}
+
+# p.255
+:mov ACC, loc16 is objmode=1 & op8_8=0b10000101 & ACC & loc16 {}
+
+# p.255
+:mov ACC, loc16 is objmode=0 & op8_8=0b11100000 & ACC & loc16 {}
+
+# p.255
+:mov ACC, loc16 << #shift8_4 is objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {}
+
+# p.255
+:mov ACC, loc16 << #shift8_4 is objmode=0 & op12_4=0b1110 & ACC & shift8_4 & loc16 {}
+
+# p.255
+:mov ACC, loc16 << #16 is op8_8=0b00100101 & ACC & loc16 {}
