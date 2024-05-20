@@ -159,5 +159,8 @@
 	MOV			PL, #0
 	MOV			T, ACC << #1
 	MOV			SP, ACC << #3
+	MOV			AR0, AR1
+	MOV			AR0, AL
+	MOV			PH, AL, NBIO
 	;MOV			ACC, PL
 	.endasmfunc

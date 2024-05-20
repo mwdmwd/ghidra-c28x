@@ -24,11 +24,13 @@ define token opcode (16)
 	shift8_3_1	= (8,10)
 	shift8_4	= (8,11)
 	cond0_4		= (0,3)
+	cond8_4		= (8,11)
 	reg16		= (0,3)
 	reg32		= (0,3)
 	arn0		= (0,2)
 	xarn0		= (0,2)
 	arn3		= (3,5)
+	arn8		= (8,10)
 	xarn8		= (8,10)
 	imm4		= (0,3)
 	imm6		= (0,5)
@@ -48,7 +50,7 @@ attach values shift8_3_1 [ 1 2 3 4 5 6 7 8 ];
 attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
 attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
 attach variables [ xarn0 xarn8 ] [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
-attach variables [ arn0 arn3 ] [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 ];
+attach variables [ arn0 arn3 arn8 ] [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 ];
 
 ################################################################
 # Macros
@@ -106,6 +108,23 @@ cond: "NTC" is cond0_4=0b1100 {}
 cond: "TC" is cond0_4=0b1101 {}
 cond: "NBIO" is cond0_4=0b1110 {}
 cond: "UNC" is cond0_4=0b1111 {}
+
+cond8: "NEQ" is cond8_4=0b0000 {}
+cond8: "EQ" is cond8_4=0b0001 {}
+cond8: "GT" is cond8_4=0b0010 {}
+cond8: "GEQ" is cond8_4=0b0011 {}
+cond8: "LT" is cond8_4=0b0100 {}
+cond8: "LEQ" is cond8_4=0b0101 {}
+cond8: "HI" is cond8_4=0b0110 {}
+cond8: "HIS" is cond8_4=0b0111 {}
+cond8: "LO" is cond8_4=0b1000 {}
+cond8: "LOS" is cond8_4=0b1001 {}
+cond8: "NOV" is cond8_4=0b1010 {}
+cond8: "OV" is cond8_4=0b1011 {}
+cond8: "NTC" is cond8_4=0b1100 {}
+cond8: "TC" is cond8_4=0b1101 {}
+cond8: "NBIO" is cond8_4=0b1110 {}
+cond8: "UNC" is cond8_4=0b1111 {}
 
 ################################################################
 
@@ -541,3 +560,12 @@ with : objmode=1 {
 
 # p.263
 :mov loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10111 & loc16 & ACC & shift8_3_1 {}
+
+# p.264
+:mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 {}
+
+# p.265
+:mov loc16, ax8 is op9_7=0b1001011 & ax8 & loc16 {}
+
+# p.266
+:mov loc16, ax0, cond8 is objmode=1 & op1_15=0b010101100010101 & ax0; op12_4=0b0000 & cond8 & loc16 {}
