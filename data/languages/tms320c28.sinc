@@ -517,3 +517,15 @@ with : objmode=1 {
 
 # p.258
 :mov DP, #imm10 is op10_6=0b111110 & DP & imm10 {}
+
+# p.259
+:mov IER, loc16 is op8_8=0b00100011 & IER & loc16 {}
+
+# p.260
+:mov loc16, #imm16 is op8_8=0b00101000 & loc16; imm16 {}
+
+# p.261
+:mov loc16, *(0:imm16) is op8_8=0b11110101 & loc16; imm16 {}
+
+# p.262
+:mov loc16, #0 is op8_8=0b00101011 & loc16 {}

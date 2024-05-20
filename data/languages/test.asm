@@ -153,5 +153,9 @@
 	MOV			AR7, @0x34
 	MOV			AL, PL
 	MOV			DP, #0x89
+	MOV			IER, PL
+	MOV			@0x11, #0x859
+	MOV			PH, *(0:0x3721)
+	MOV			PL, #0
 	;MOV			ACC, PL
 	.endasmfunc
