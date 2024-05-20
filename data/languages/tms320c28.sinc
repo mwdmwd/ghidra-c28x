@@ -20,6 +20,8 @@ define token opcode (16)
 
 	shift0_4	= (0,3)
 	shift0_4_1	= (0,3)
+	shift8_3	= (8,10)
+	shift8_3_1	= (8,10)
 	shift8_4	= (8,11)
 	cond0_4		= (0,3)
 	reg16		= (0,3)
@@ -40,6 +42,7 @@ define token opcode (16)
 
 attach variables [ ax0 ax4 ax8 ] [ AL AH ];
 attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
+attach values shift8_3_1 [ 1 2 3 4 5 6 7 8 ];
 
 # T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH
 attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
@@ -529,3 +532,12 @@ with : objmode=1 {
 
 # p.262
 :mov loc16, #0 is op8_8=0b00101011 & loc16 {}
+
+# p.263
+:mov loc16, ACC << #1 is objmode=1 & op8_8=0b10110001 & loc16 & ACC {}
+
+# p.263
+:mov loc16, ACC << #shift8_3_1 is objmode=1 & op0_16=0b0101011000101101; op11_5=0b00000 & loc16 & ACC & shift8_3_1 {}
+
+# p.263
+:mov loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10111 & loc16 & ACC & shift8_3_1 {}
