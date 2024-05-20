@@ -149,5 +149,9 @@
 	MOV			ACC, PL
 	MOV			ACC, PL << #12
 	MOV			ACC, PL << #16
+	MOV			AR6, @0x12
+	MOV			AR7, @0x34
+	MOV			AL, PL
+	MOV			DP, #0x89
 	;MOV			ACC, PL
 	.endasmfunc

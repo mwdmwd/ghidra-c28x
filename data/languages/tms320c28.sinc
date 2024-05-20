@@ -11,6 +11,7 @@ define token opcode (16)
 	op7			= (7,7)
 	op8_8		= (8,15)
 	op9_7		= (9,15)
+	op10_6		= (10,15)
 	ax8			= (8,8)
 	ax4			= (4,4)
 	ax0			= (0,0)
@@ -32,6 +33,7 @@ define token opcode (16)
 	imm7		= (0,6)
 	imm8		= (0,7)
 	simm8		= (0,7) signed
+	imm10		= (0,9)
 	imm16		= (0,15)
 	simm16		= (0,15) signed
 ;
@@ -503,3 +505,15 @@ with : objmode=1 {
 
 # p.255
 :mov ACC, loc16 << #16 is op8_8=0b00100101 & ACC & loc16 {}
+
+# p.256
+:mov AR6, loc16 is op8_8=0b01011110 & AR6 & loc16 {}
+
+# p.256
+:mov AR7, loc16 is op8_8=0b01011111 & AR7 & loc16 {}
+
+# p.257
+:mov ax8, loc16 is op9_7=0b1001001 & ax8 & loc16 {}
+
+# p.258
+:mov DP, #imm10 is op10_6=0b111110 & DP & imm10 {}
