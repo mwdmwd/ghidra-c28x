@@ -754,3 +754,24 @@ with : objmode=1 {
 
 # p.323
 :mpy P, T, loc16 is op8_8=0b00110011 & P & T & loc16 {}
+
+# p.324
+:mpya P, loc16, #imm16 is op8_8=0b00010101 & P & loc16; imm16 {}
+
+# p.325
+:mpya P, T, loc16 is op8_8=0b00010111 & P & T & loc16 {}
+
+# p.326
+:mpyb ACC, T, #imm8 is op8_8=0b00110101 & ACC & T & imm8 {}
+
+# p.327
+:mpyb P, T, #imm8 is op8_8=0b00110001 & P & T & imm8 {}
+
+# p.328
+:mpys P, T, loc16 is op8_8=0b00010011 & P & T & loc16 {}
+
+# p.329
+:mpyu P, T, loc16 is op8_8=0b00110111 & P & T & loc16 {}
+
+# p.330
+:mpyu ACC, T, loc16 is op8_8=0b00110110 & ACC & T & loc16 {}

@@ -238,5 +238,12 @@
 	MPY			ACC, T, #0x2137
 	MPY			P, SP, #0x1122
 	MPY			P, T, SP
+	MPYA		P, SP, #0x1122
+	MPYA		P, T, SP
+	MPYB		ACC, T, #0x21
+	MPYB		P, T, #0xaa
+	MPYS		P, T, SP
+	MPYU		P, T, SP
+	MPYU		ACC, T, SP
 	;MOV			ACC, PL
 	.endasmfunc
