@@ -603,7 +603,7 @@ with : objmode=1 {
 # p.278
 :mov xarn0, PC is objmode=1 & op3_13=0b0011111001011 & xarn0 & PC {}
 
-# p.279 (temporarily disabled)
+# p.279 (temporarily disabled, see PERMISSIVE)
 #:mova T, loc16 is op8_8=0b00010000 & T & loc16 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
 
 # p.280
