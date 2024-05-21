@@ -173,7 +173,7 @@
 	MOV			T, SP
 	MOV			TL, #0
 	MOV			XAR3, PC
-	MOVA		T, PL
+	;MOVA		T, PL ; conflict with addl ACC, P << PM
 	MOVAD		T, @0x11
 	MOVB		ACC, #0x43
 	MOVB		AR7, #0x21
