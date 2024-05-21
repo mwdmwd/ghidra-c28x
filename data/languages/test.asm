@@ -251,5 +251,8 @@
 	NEG			ACC
 	NEG			AL
 	NEG64		ACC:P
+	NEGTC		ACC
+	NOP
+	NOP			XAR1
 	;MOV			ACC, PL
 	.endasmfunc

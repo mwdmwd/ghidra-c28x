@@ -793,3 +793,9 @@ with : objmode=1 {
 
 # p.336
 :neg64 ACC:P is objmode=1 & op0_16=0b0101011001011000 & ACC & P {}
+
+# p.337
+:negtc ACC is objmode=1 & op0_16=0b0101011000110010 & ACC {}
+
+# p.339
+:nop loc16 is op8_8=0b01110111 & loc16 {}
