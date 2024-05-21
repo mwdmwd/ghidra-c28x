@@ -681,3 +681,22 @@ with : objmode=1 {
 :movl loc32, XAR5 is objmode=1 & op8_8=0b10100000 & loc32 & XAR5 {}
 :movl loc32, XAR6 is op8_8=0b11000010 & loc32 & XAR6 {}
 :movl loc32, XAR7 is op8_8=0b11000011 & loc32 & XAR7 {}
+
+# p.305
+:movl loc32, XT is objmode=1 & op8_8=0b10101011 & loc32 & XT {}
+
+# p.306
+:movl P, ACC is op0_16=0b1111111101011010 & P & ACC {}
+
+# p.307
+:movl P, loc32 is objmode=1 & op8_8=0b10100011 & P & loc32 {}
+
+# p.308
+:movl XAR0, loc32 is objmode=1 & op8_8=0b10001110 & XAR0 & loc32 {}
+:movl XAR1, loc32 is objmode=1 & op8_8=0b10001011 & XAR1 & loc32 {}
+:movl XAR2, loc32 is objmode=1 & op8_8=0b10000110 & XAR2 & loc32 {}
+:movl XAR3, loc32 is objmode=1 & op8_8=0b10000010 & XAR3 & loc32 {}
+:movl XAR4, loc32 is objmode=1 & op8_8=0b10001010 & XAR4 & loc32 {}
+:movl XAR5, loc32 is objmode=1 & op8_8=0b10000011 & XAR5 & loc32 {}
+:movl XAR6, loc32 is op8_8=0b11000100 & XAR6 & loc32 {}
+:movl XAR7, loc32 is op8_8=0b11000101 & XAR7 & loc32 {}
