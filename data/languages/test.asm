@@ -245,5 +245,7 @@
 	MPYS		P, T, SP
 	MPYU		P, T, SP
 	MPYU		ACC, T, SP
+	MPYXU		ACC, T, SP
+	MPYXU		P, T, SP
 	;MOV			ACC, PL
 	.endasmfunc

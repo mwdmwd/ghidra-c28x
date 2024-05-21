@@ -775,3 +775,9 @@ with : objmode=1 {
 
 # p.330
 :mpyu ACC, T, loc16 is op8_8=0b00110110 & ACC & T & loc16 {}
+
+# p.331
+:mpyxu ACC, T, loc16 is op8_8=0b00110000 & ACC & T & loc16 {}
+
+# p.332
+:mpyxu P, T, loc16 is op8_8=0b00110010 & P & T & loc16 {}
