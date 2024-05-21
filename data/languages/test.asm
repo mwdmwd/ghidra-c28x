@@ -228,5 +228,14 @@
 	MOVU		ACC, SP
 	MOVU		AR7, OVC
 	MOVU		OVC, AR5
+	MOVW		DP, #0x2137
+	MOVX		TL, AR2
+	MOVZ		AR2, @0x21
+	MOVZ		AR6, @0x21
+	MOVZ		AR7, @0x21
+	MOVZ		DP, #0x123
+	MPY			ACC, AR1, #0x2137
+	MPY			ACC, T, #0x2137
+	MPY			P, SP, #0x1122
 	;MOV			ACC, PL
 	.endasmfunc

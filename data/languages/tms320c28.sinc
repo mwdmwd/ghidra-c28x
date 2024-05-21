@@ -728,3 +728,26 @@ with : objmode=1 {
 
 # p.315
 :movu "OVC", loc16 is objmode=1 & op0_16=0b0101011001100010; op8_8=0b00000000 & loc16 {}
+
+# p.316
+:movw DP, #imm16 is op0_16=0b0111011000011111; DP & imm16 {}
+
+# p.317
+:movx TL, loc16 is objmode=1 & op0_16=0b0101011000100001; TL & loc16 {}
+
+# p.318
+:movz arn8, loc16 is op11_5=0b01011 & arn8 & loc16 {}
+:movz AR6, loc16 is objmode=1 & op8_8=0b10001000 & AR6 & loc16 {}
+:movz AR7, loc16 is objmode=1 & op8_8=0b10000000 & AR7 & loc16 {}
+
+# p.319
+:movz DP, #imm10 is objmode=1 & op10_6=0b101110 & DP & imm10 {}
+
+# p.320
+:mpy ACC, loc16, #imm16 is op8_8=0b00110100 & ACC & loc16; imm16 {}
+
+# p.321
+:mpy ACC, T, loc16 is op8_8=0b00010010 & ACC & T & loc16 {}
+
+# p.322
+:mpy P, loc16, #imm16 is objmode=1 & op8_8=0b10001100 & P & loc16; imm16 {}
