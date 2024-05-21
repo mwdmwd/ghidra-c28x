@@ -31,6 +31,7 @@ define token opcode (16)
 	xarn0		= (0,2)
 	arn3		= (3,5)
 	arn8		= (8,10)
+	ar67_8		= (8,8)
 	xarn8		= (8,10)
 	imm4		= (0,3)
 	imm6		= (0,5)
@@ -51,6 +52,7 @@ attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
 attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
 attach variables [ xarn0 xarn8 ] [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
 attach variables [ arn0 arn3 arn8 ] [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 ];
+attach variables ar67_8 [ AR6 AR7 ];
 
 ################################################################
 # Macros
@@ -529,10 +531,7 @@ with : objmode=1 {
 :mov ACC, loc16 << #16 is op8_8=0b00100101 & ACC & loc16 {}
 
 # p.256
-:mov AR6, loc16 is op8_8=0b01011110 & AR6 & loc16 {}
-
-# p.256
-:mov AR7, loc16 is op8_8=0b01011111 & AR7 & loc16 {}
+:mov ar67_8, loc16 is op9_7=0b0101111 & ar67_8 & loc16 {}
 
 # p.257
 :mov ax8, loc16 is op9_7=0b1001001 & ax8 & loc16 {}
