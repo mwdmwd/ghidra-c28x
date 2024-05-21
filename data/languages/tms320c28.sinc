@@ -641,3 +641,27 @@ with : objmode=1 {
 
 # p.294
 :movb XAR7, #imm8 is objmode=1 & op8_8=0b10110110 & XAR7 & imm8 {}
+
+# p.295
+:movdl XT, loc32 is objmode=1 & op8_8=0b10100110 & XT & loc32 {}
+
+# p.296
+:movh loc16, ACC << #1 is objmode=1 & op8_8=0b10110011 & loc16 & ACC {}
+
+# p.296
+:movh loc16, ACC << #shift8_3_1 is objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & loc16 & ACC {}
+
+# p.296
+:movh loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10110 & shift8_3_1 & loc16 & ACC {}
+
+# p.297
+:movh loc16, P is op8_8=0b01010111 & loc16 & P {}
+
+# p.298
+:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 {}
+
+# p.299
+:movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM {} # alias for `MOVP T, loc16` with `loc16 = @T`
+
+# p. 300
+:movl loc32, ACC is op8_8=0b00011110 & loc32 & ACC {}

@@ -186,5 +186,12 @@
 	MOVB		XAR5, #0xc1
 	MOVB		XAR6, #0xc1
 	MOVB		XAR7, #0xc1
+	MOVDL		XT, @0xcc
+	MOVH		SP, ACC << 1
+	MOVH		SP, ACC << 2
+	MOVH		SP, P
+	MOVL		ACC, @0x10
+	MOVL		ACC, P << PM
+	MOVL		@0x11, ACC
 	;MOV			ACC, PL
 	.endasmfunc
