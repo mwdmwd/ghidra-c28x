@@ -37,6 +37,7 @@ define token opcode (16)
 	imm6		= (0,5)
 	imm7		= (0,6)
 	imm8		= (0,7)
+	imm8_8		= (8,15)
 	simm8		= (0,7) signed
 	imm10		= (0,9)
 	imm16		= (0,15)
@@ -188,7 +189,7 @@ cond8: "UNC" is cond8_4=0b1111 {}
 :addl ACC, loc32 is op8_8=0b00000111 & ACC & loc32 {}
 
 # p.141
-:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM {}
+:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM {} # conflict with `mova T, loc16`
 
 # p.142
 :addl loc32, ACC is objmode=1 & op0_16=0b0101011000000001 & ACC; op8_8=0b00000000 & loc32 {}
@@ -598,3 +599,45 @@ with : objmode=1 {
 
 # p.277
 :mov TL, #0 is objmode=1 & op0_16=0b0101011001010110 & TL {}
+
+# p.278
+:mov xarn0, PC is objmode=1 & op3_13=0b0011111001011 & xarn0 & PC {}
+
+# p.279
+:mova T, loc16 is op8_8=0b00010000 & T & loc16 {}
+
+# p.280
+:movad T, loc16 is objmode=1 & op8_8=0b10100111 & T & loc16 {}
+
+# p.281
+:movb ACC, #imm8 is objmode=1 & op8_8=0b00000010 & ACC & imm8 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+
+# p.282
+:movb ar67_8, #imm8 is op9_7=0b1101011 & ar67_8 & imm8 {}
+
+# p.283
+:movb ax8, #imm8 is op9_7=0b1001101 & ax8 & imm8 {}
+
+# p.284
+:movb ax8".LSB", loc16 is op9_7=0b1100011 & ax8 & loc16 {}
+
+# p.286
+:movb ax8".MSB", loc16 is op9_7=0b0011100 & ax8 & loc16 {}
+
+# p.288
+:movb loc16, #imm8_8, cond is objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & loc16 {}
+
+# p.290
+:movb loc16, ax8".LSB" is op9_7=0b0011110 & ax8 & loc16 {}
+
+# p.292
+:movb loc16, ax8".MSB" is op9_7=0b1100100 & ax8 & loc16 {}
+
+# p.294
+:movb xarn8, #imm8 is op11_5=0b11010 & xarn8 & imm8 {}
+
+# p.294
+:movb XAR6, #imm8 is objmode=1 & op8_8=0b10111110 & XAR6 & imm8 {}
+
+# p.294
+:movb XAR7, #imm8 is objmode=1 & op8_8=0b10110110 & XAR7 & imm8 {}

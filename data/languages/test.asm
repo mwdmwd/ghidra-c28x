@@ -172,5 +172,19 @@
 	MOV			PM, AL
 	MOV			T, SP
 	MOV			TL, #0
+	MOV			XAR3, PC
+	MOVA		T, PL
+	MOVAD		T, @0x11
+	MOVB		ACC, #0x43
+	MOVB		AR7, #0x21
+	MOVB		AL, #0x88
+	MOVB		AL.LSB, PL
+	MOVB		AL.MSB, PL
+	MOVB		PL, #0x2c, NTC
+	MOVB		PL, AL.LSB
+	MOVB		PL, AL.MSB
+	MOVB		XAR5, #0xc1
+	MOVB		XAR6, #0xc1
+	MOVB		XAR7, #0xc1
 	;MOV			ACC, PL
 	.endasmfunc
