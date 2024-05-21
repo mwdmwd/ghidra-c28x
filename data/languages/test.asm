@@ -222,5 +222,10 @@
 	MOVL		XAR5, #0x2137
 	MOVL		XAR6, #0x2137
 	MOVL		XAR7, #0x2137
+	MOVL		XT, XAR3
+	;MOVP		T, AR2 ; conflict with addl ACC, P << PM
+	MOVS		T, @0x11
+	MOVU		ACC, SP
+	MOVU		AR7, OVC
 	;MOV			ACC, PL
 	.endasmfunc

@@ -189,7 +189,7 @@ cond8: "UNC" is cond8_4=0b1111 {}
 :addl ACC, loc32 is op8_8=0b00000111 & ACC & loc32 {}
 
 # p.141
-:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM {} # conflict with `mova T, loc16`
+:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM {} # conflict with `mova T, loc16` and `movp T, loc16`
 
 # p.142
 :addl loc32, ACC is objmode=1 & op0_16=0b0101011000000001 & ACC; op8_8=0b00000000 & loc32 {}
@@ -710,3 +710,18 @@ with : objmode=1 {
 :movl XAR5, #imm22 is objmode=1 & op6_10=0b1000111101 & XAR5 & $(imm22) {}
 :movl XAR6, #imm22 is op6_10=0b0111011010 & XAR6 & $(imm22) {}
 :movl XAR7, #imm22 is op6_10=0b0111011011 & XAR7 & $(imm22) {}
+
+# p.310
+:movl XT, loc32 is objmode=1 & op8_8=0b10000111 & XT & loc32 {}
+
+# p.311 (temporarily disabled, see PERMISSIVE)
+#:movp T, loc16 is op8_8=0b00010110 & T & loc16 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+
+# p.312
+:movs T, loc16 is op8_8=0b00010001 & T & loc16 {}
+
+# p.313
+:movu ACC, loc16 is op8_8=0b00001110 & ACC & loc16 {}
+
+# p.314
+:movu loc16, "OVC" is objmode=1 & op0_16=0b0101011000101000; op8_8=0b00000000 & loc16 {}
