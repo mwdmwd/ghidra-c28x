@@ -604,13 +604,13 @@ with : objmode=1 {
 :mov xarn0, PC is objmode=1 & op3_13=0b0011111001011 & xarn0 & PC {}
 
 # p.279
-:mova T, loc16 is op8_8=0b00010000 & T & loc16 {}
+:mova T, loc16 is op8_8=0b00010000 & T & loc16 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
 
 # p.280
 :movad T, loc16 is objmode=1 & op8_8=0b10100111 & T & loc16 {}
 
 # p.281
-:movb ACC, #imm8 is objmode=1 & op8_8=0b00000010 & ACC & imm8 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+:movb ACC, #imm8 is objmode=1 & op8_8=0b00000010 & ACC & imm8 {}
 
 # p.282
 :movb ar67_8, #imm8 is op9_7=0b1101011 & ar67_8 & imm8 {}
