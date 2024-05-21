@@ -751,3 +751,6 @@ with : objmode=1 {
 
 # p.322
 :mpy P, loc16, #imm16 is objmode=1 & op8_8=0b10001100 & P & loc16; imm16 {}
+
+# p.323
+:mpy P, T, loc16 is op8_8=0b00110011 & P & T & loc16 {}

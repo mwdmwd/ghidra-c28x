@@ -237,5 +237,6 @@
 	MPY			ACC, AR1, #0x2137
 	MPY			ACC, T, #0x2137
 	MPY			P, SP, #0x1122
+	MPY			P, T, SP
 	;MOV			ACC, PL
 	.endasmfunc
