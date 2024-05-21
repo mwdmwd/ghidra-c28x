@@ -227,5 +227,6 @@
 	MOVS		T, @0x11
 	MOVU		ACC, SP
 	MOVU		AR7, OVC
+	MOVU		OVC, AR5
 	;MOV			ACC, PL
 	.endasmfunc

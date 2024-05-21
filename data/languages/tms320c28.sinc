@@ -725,3 +725,6 @@ with : objmode=1 {
 
 # p.314
 :movu loc16, "OVC" is objmode=1 & op0_16=0b0101011000101000; op8_8=0b00000000 & loc16 {}
+
+# p.315
+:movu "OVC", loc16 is objmode=1 & op0_16=0b0101011001100010; op8_8=0b00000000 & loc16 {}
