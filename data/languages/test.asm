@@ -253,6 +253,12 @@
 	NEG64		ACC:P
 	NEGTC		ACC
 	NOP
-	NOP			XAR1
+	;NOP			AR1
+	;NOP			*++, ARP3
+	NORM		ACC, *
+	NORM		ACC, *++
+	NORM		ACC, *--
+	NORM		ACC, *0++
+	NORM		ACC, *0--
 	;MOV			ACC, PL
 	.endasmfunc

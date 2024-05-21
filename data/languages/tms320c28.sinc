@@ -798,4 +798,11 @@ with : objmode=1 {
 :negtc ACC is objmode=1 & op0_16=0b0101011000110010 & ACC {}
 
 # p.339
-:nop loc16 is op8_8=0b01110111 & loc16 {}
+:nop is op8_8=0b01110111 & loc16 {} # TODO ind arpn
+
+# p.340
+:norm ACC, *    is objmode=1 & op0_16=0b0101011000100100 & ACC {}
+:norm ACC, *++  is objmode=1 & op0_16=0b0101011001011010 & ACC {}
+:norm ACC, *--  is objmode=1 & op0_16=0b0101011000100000 & ACC {}
+:norm ACC, *0++ is objmode=1 & op0_16=0b0101011001110111 & ACC {}
+:norm ACC, *0-- is objmode=1 & op0_16=0b0101011000110000 & ACC {}
