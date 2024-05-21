@@ -165,5 +165,12 @@
 	MOV			PH, IER
 	MOV			PH, OVC
 	MOV			PH, P
+	MOV			@0x11, T
+	MOV			OVC, PL
+	MOV			PH, PL
+	MOV			PL, PL
+	MOV			PM, AL
+	MOV			T, SP
+	MOV			TL, #0
 	;MOV			ACC, PL
 	.endasmfunc

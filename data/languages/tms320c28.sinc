@@ -578,3 +578,24 @@ with : objmode=1 {
 
 # p.270
 :mov loc16, P is op8_8=0b00111111 & loc16 & P {}
+
+# p.271
+:mov loc16, T is op8_8=0b00100001 & loc16 & T {}
+
+# p.272
+:mov "OVC", loc16 is objmode=1 & op0_16=0b0101011000000010; op8_8=0b00000000 & loc16 {}
+
+# p.273
+:mov PH, loc16 is op8_8=0b00101111 & PH & loc16 {}
+
+# p.274
+:mov PL, loc16 is op8_8=0b00100111 & PL & loc16 {}
+
+# p.275
+:mov PM, ax0 is objmode=1 & op1_15=0b010101100011100 & PM & ax0 {}
+
+# p.276
+:mov T, loc16 is op8_8=0b00101101 & T & loc16 {}
+
+# p.277
+:mov TL, #0 is objmode=1 & op0_16=0b0101011001010110 & TL {}
