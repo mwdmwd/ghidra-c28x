@@ -247,5 +247,9 @@
 	MPYU		ACC, T, SP
 	MPYXU		ACC, T, SP
 	MPYXU		P, T, SP
+	NASP
+	NEG			ACC
+	NEG			AL
+	NEG64		ACC:P
 	;MOV			ACC, PL
 	.endasmfunc

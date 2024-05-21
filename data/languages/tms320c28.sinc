@@ -781,3 +781,15 @@ with : objmode=1 {
 
 # p.332
 :mpyxu P, T, loc16 is op8_8=0b00110010 & P & T & loc16 {}
+
+# p.333
+:nasp is op0_16=0b0111011000010111 {}
+
+# p.334
+:neg ACC is op0_16=0b1111111101010100 & ACC {}
+
+# p.335
+:neg ax0 is op1_15=0b111111110101110 & ax0 {}
+
+# p.336
+:neg64 ACC:P is objmode=1 & op0_16=0b0101011001011000 & ACC & P {}
