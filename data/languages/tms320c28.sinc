@@ -806,3 +806,7 @@ with : objmode=1 {
 :norm ACC, *--  is objmode=1 & op0_16=0b0101011000100000 & ACC {}
 :norm ACC, *0++ is objmode=1 & op0_16=0b0101011001110111 & ACC {}
 :norm ACC, *0-- is objmode=1 & op0_16=0b0101011000110000 & ACC {}
+
+# p.341
+:norm ACC, xarn0++ is op3_13=0b1111111101111 & ACC & xarn0 {}
+:norm ACC, xarn0-- is op3_13=0b1111111101110 & ACC & xarn0 {}
