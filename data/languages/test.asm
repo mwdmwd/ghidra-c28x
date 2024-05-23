@@ -26,6 +26,7 @@
 	ADDCU			ACC, T
 	ADDL			ACC, XT
 	ADDL			ACC, P << PM
+	MOVA			T, @TH ; ADDL ACC, P << PM in disguise
 	ADDL			XT, ACC
 	ADDU			ACC, T
 	ADDUL			P, XT
@@ -173,7 +174,7 @@
 	MOV			T, SP
 	MOV			TL, #0
 	MOV			XAR3, PC
-	;MOVA		T, PL ; conflict with addl ACC, P << PM
+	MOVA		T, PL ; conflict with addl ACC, P << PM
 	MOVAD		T, @0x11
 	MOVB		ACC, #0x43
 	MOVB		AR7, #0x21
@@ -192,6 +193,7 @@
 	MOVH		SP, P
 	MOVL		ACC, @0x10
 	MOVL		ACC, P << PM
+	MOVP		T, @TH ; MOVL ACC, P << PM in disguise
 	MOVL		@0x11, ACC
 	MOVL		XT, ACC
 	MOVL		XT, ACC, NBIO
@@ -223,7 +225,8 @@
 	MOVL		XAR6, #0x2137
 	MOVL		XAR7, #0x2137
 	MOVL		XT, XAR3
-	;MOVP		T, AR2 ; conflict with addl ACC, P << PM
+	MOVP		T, AR2 ; conflict with movl ACC, P << PM
+	MOVP		T, @SP
 	MOVS		T, @0x11
 	MOVU		ACC, SP
 	MOVU		AR7, OVC
