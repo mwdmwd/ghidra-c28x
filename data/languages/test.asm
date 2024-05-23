@@ -265,5 +265,4 @@
 	NORM		ACC, *0--
 	NORM		ACC, XAR3++
 	NORM		ACC, XAR7--
-	;MOV			ACC, PL
 	.endasmfunc
