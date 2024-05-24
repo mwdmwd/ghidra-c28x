@@ -270,4 +270,16 @@
 	OR			ACC, SP
 	OR			ACC, #0x2137 << #5
 	OR			ACC, #0x2137 << #16
+	OR			AL, SP
+	OR			IER, #0x2137
+	OR			IFR, #0x2137
+	OR			SP, #0x2137
+	OR			@0x21, AH
+	ORB			AL, #0x37
+	OUT			*(0x2137), AR4
+	POP			ACC ; MOVL ACC, *--SP in disguise
+	MOVL		ACC, *--SP
+	POP			AR1:AR0
+	POP			AR3:AR2
+	POP			AR5:AR4
 	.endasmfunc

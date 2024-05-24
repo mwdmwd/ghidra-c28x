@@ -659,7 +659,7 @@ with : objmode=1 {
 :movh loc16, P is op8_8=0b01010111 & loc16 & P {}
 
 # p.298
-:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 {}
+:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 & op0_8!=0b10111110{}
 
 # p.299
 :movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM {} # alias for `MOVP T, loc16` with `loc16 = @T`
@@ -824,3 +824,32 @@ with : objmode=1 {
 # p.345
 :or ACC, #imm16 << #shift0_4 is objmode=1 & op4_12=0b001111100001 & shift0_4; ACC & imm16 {}
 :or ACC, #imm16 << #16 is objmode=1 & op0_16=0b0101011001001010; ACC & imm16 {}
+
+# p.346
+:or ax8, loc16 is op9_7=0b1100101 & ax8 & loc16 {}
+
+# p.347
+:or IER, #imm16 is op0_16=0b0111011000100011; IER & imm16 {}
+
+# p.348
+:or IFR, #imm16 is op0_16=0b0111011000100111; IFR & imm16 {}
+
+# p.349
+:or loc16, #imm16 is op8_8=0b00011010 & loc16; imm16 {}
+
+# p.350
+:or loc16, ax8 is op9_7=0b1001100 & loc16 & ax8 {}
+
+# p.351
+:orb ax8, #imm8 is op9_7=0b0101000 & ax8 & imm8 {}
+
+# p.352
+:out *(imm16), loc16 is objmode=1 & op8_8=0b10111100 & loc16; imm16 {}
+
+# p.353
+:pop ACC is op0_16=0b0000011010111110 & ACC {} # alias for `MOVL ACC, *--SP`
+
+# p.354
+:pop AR1:AR0 is op0_16=0b0111011000000111 & AR1 & AR0 {}
+:pop AR3:AR2 is op0_16=0b0111011000000101 & AR3 & AR2 {}
+:pop AR5:AR4 is op0_16=0b0111011000000110 & AR5 & AR4 {}
