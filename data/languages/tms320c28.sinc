@@ -956,3 +956,6 @@ with : objmode=1 {
 
 # p.383
 :push XT is objmode=1 & op0_16=0b1010101110111101 & XT {} # I really don't see how this can coexist with `add ACC, loc16 << #shift0_4 is op12_4=0b1010 & objmode=0` unless it's objmode=1
+
+# p.384
+:pwrite *XAR7, loc16 is op8_8=0b00100110 & loc16 & XAR7 {}

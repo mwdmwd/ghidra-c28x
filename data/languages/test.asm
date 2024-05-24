@@ -326,4 +326,5 @@
 	PUSH		XAR6
 	PUSH		XAR7
 	PUSH		XT
+	PWRITE		*XAR7, SP
 	.endasmfunc
