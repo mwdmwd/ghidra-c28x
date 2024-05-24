@@ -265,4 +265,9 @@
 	NORM		ACC, *0--
 	NORM		ACC, XAR3++
 	NORM		ACC, XAR7--
+	NOT			ACC
+	NOT			AH
+	OR			ACC, SP
+	OR			ACC, #0x2137 << #5
+	OR			ACC, #0x2137 << #16
 	.endasmfunc

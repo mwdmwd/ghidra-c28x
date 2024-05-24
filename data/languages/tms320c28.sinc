@@ -811,3 +811,16 @@ with : objmode=1 {
 # p.341
 :norm ACC, xarn0++ is op3_13=0b1111111101111 & ACC & xarn0 {}
 :norm ACC, xarn0-- is op3_13=0b1111111101110 & ACC & xarn0 {}
+
+# p.342
+:not ACC is op0_16=0b1111111101010101 & ACC {}
+
+# p.343
+:not ax0 is op1_15=0b111111110101111 & ax0 {}
+
+# p.344
+:or ACC, loc16 is objmode=1 & op8_8=0b10101111 & ACC & loc16 {}
+
+# p.345
+:or ACC, #imm16 << #shift0_4 is objmode=1 & op4_12=0b001111100001 & shift0_4; ACC & imm16 {}
+:or ACC, #imm16 << #16 is objmode=1 & op0_16=0b0101011001001010; ACC & imm16 {}
