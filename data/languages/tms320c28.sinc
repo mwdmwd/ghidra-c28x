@@ -665,7 +665,7 @@ with : objmode=1 {
 :movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM {} # alias for `MOVP T, loc16` with `loc16 = @T`
 
 # p. 300
-:movl loc32, ACC is op8_8=0b00011110 & loc32 & ACC {}
+:movl loc32, ACC is op8_8=0b00011110 & op0_8!=0b10111110 & loc32 & ACC {}
 
 # p.301
 :movl loc32, ACC, cond8 is op0_16=0b0101011001001000; op12_4=0b0000 & loc32 & ACC & cond8 {}
@@ -674,17 +674,17 @@ with : objmode=1 {
 :movl loc32, P is objmode=1 & op8_8=0b10101001 & loc32 & P {}
 
 # p.304
-:movl loc32, XAR0 is objmode=1 & op8_8=0b00111010 & loc32 & XAR0 {}
-:movl loc32, XAR1 is objmode=1 & op8_8=0b10110010 & loc32 & XAR1 {}
-:movl loc32, XAR2 is objmode=1 & op8_8=0b10101010 & loc32 & XAR2 {}
-:movl loc32, XAR3 is objmode=1 & op8_8=0b10100010 & loc32 & XAR3 {}
-:movl loc32, XAR4 is objmode=1 & op8_8=0b10101000 & loc32 & XAR4 {}
-:movl loc32, XAR5 is objmode=1 & op8_8=0b10100000 & loc32 & XAR5 {}
-:movl loc32, XAR6 is op8_8=0b11000010 & loc32 & XAR6 {}
-:movl loc32, XAR7 is op8_8=0b11000011 & loc32 & XAR7 {}
+:movl loc32, XAR0 is objmode=1 & op8_8=0b00111010 & op0_8!=0b10111101 & loc32 & XAR0 {}
+:movl loc32, XAR1 is objmode=1 & op8_8=0b10110010 & op0_8!=0b10111101 & loc32 & XAR1 {}
+:movl loc32, XAR2 is objmode=1 & op8_8=0b10101010 & op0_8!=0b10111101 & loc32 & XAR2 {}
+:movl loc32, XAR3 is objmode=1 & op8_8=0b10100010 & op0_8!=0b10111101 & loc32 & XAR3 {}
+:movl loc32, XAR4 is objmode=1 & op8_8=0b10101000 & op0_8!=0b10111101 & loc32 & XAR4 {}
+:movl loc32, XAR5 is objmode=1 & op8_8=0b10100000 & op0_8!=0b10111101 & loc32 & XAR5 {}
+:movl loc32, XAR6 is op8_8=0b11000010 & op0_8!=0b10111101 & loc32 & XAR6 {}
+:movl loc32, XAR7 is op8_8=0b11000011 & op0_8!=0b10111101 & loc32 & XAR7 {}
 
 # p.305
-:movl loc32, XT is objmode=1 & op8_8=0b10101011 & loc32 & XT {}
+:movl loc32, XT is objmode=1 & op8_8=0b10101011 & op0_8!=0b10111101 & loc32 & XT {}
 
 # p.306
 :movl P, ACC is op0_16=0b1111111101011010 & P & ACC {}
@@ -902,3 +902,57 @@ with : objmode=1 {
 
 # p.368
 :pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {}
+
+# p.369
+:push ACC is op0_16=0b0001111010111110 & ACC {} # alias for `MOVL *SP++, ACC`
+
+# p.370
+:push AR1:AR0 is op0_16=0b0111011000001101 & AR1 & AR0 {}
+:push AR3:AR2 is op0_16=0b0111011000001111 & AR3 & AR2 {}
+:push AR5:AR4 is op0_16=0b0111011000001100 & AR5 & AR4 {}
+
+# p.371
+:push AR1H:AR0H is op0_16=0b0000000000000101 & AR1H & AR0H {}
+
+# p.372
+:push DBGIER is op0_16=0b0111011000001110 & DBGIER {}
+
+# p.373
+:push DP is op0_16=0b0111011000001011 & DP {}
+
+# p.374
+:push DP:ST1 is op0_16=0b0111011000001001 & DP & ST1 {}
+
+# p.375
+:push IFR is op0_16=0b0111011000001010 & IFR {}
+
+# p.376
+:push loc16 is op8_8=0b00100010 & loc16 {}
+
+# p.377
+:push P is op0_16=0b0111011000011101 & P {}
+
+# p.378
+:push RPC is op0_16=0b0000000000000100 & RPC {}
+
+# p.379
+:push ST0 is op0_16=0b0111011000011000 & ST0 {}
+
+# p.380
+:push ST1 is op0_16=0b0111011000001000 & ST1 {}
+
+# p.381
+:push T:ST0 is op0_16=0b0111011000011001 & T & ST0 {}
+
+# p.382
+:push XAR0 is objmode=1 & op0_16=0b0011101010111101 & XAR0 {}
+:push XAR1 is objmode=1 & op0_16=0b1011001010111101 & XAR1 {}
+:push XAR2 is objmode=1 & op0_16=0b1010101010111101 & XAR2 {}
+:push XAR3 is objmode=1 & op0_16=0b1010001010111101 & XAR3 {}
+:push XAR4 is objmode=1 & op0_16=0b1010100010111101 & XAR4 {}
+:push XAR5 is objmode=1 & op0_16=0b1010000010111101 & XAR5 {}
+:push XAR6 is op0_16=0b1100001010111101 & XAR6 {}
+:push XAR7 is op0_16=0b1100001110111101 & XAR7 {}
+
+# p.383
+:push XT is objmode=1 & op0_16=0b1010101110111101 & XT {} # I really don't see how this can coexist with `add ACC, loc16 << #shift0_4 is op12_4=0b1010 & objmode=0` unless it's objmode=1
