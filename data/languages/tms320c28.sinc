@@ -693,14 +693,14 @@ with : objmode=1 {
 :movl P, loc32 is objmode=1 & op8_8=0b10100011 & P & loc32 {}
 
 # p.308
-:movl XAR0, loc32 is objmode=1 & op8_8=0b10001110 & XAR0 & loc32 {}
-:movl XAR1, loc32 is objmode=1 & op8_8=0b10001011 & XAR1 & loc32 {}
-:movl XAR2, loc32 is objmode=1 & op8_8=0b10000110 & XAR2 & loc32 {}
-:movl XAR3, loc32 is objmode=1 & op8_8=0b10000010 & XAR3 & loc32 {}
-:movl XAR4, loc32 is objmode=1 & op8_8=0b10001010 & XAR4 & loc32 {}
-:movl XAR5, loc32 is objmode=1 & op8_8=0b10000011 & XAR5 & loc32 {}
-:movl XAR6, loc32 is op8_8=0b11000100 & XAR6 & loc32 {}
-:movl XAR7, loc32 is op8_8=0b11000101 & XAR7 & loc32 {}
+:movl XAR0, loc32 is objmode=1 & op8_8=0b10001110 & op0_8!=0b10111110 & XAR0 & loc32 {}
+:movl XAR1, loc32 is objmode=1 & op8_8=0b10001011 & op0_8!=0b10111110 & XAR1 & loc32 {}
+:movl XAR2, loc32 is objmode=1 & op8_8=0b10000110 & op0_8!=0b10111110 & XAR2 & loc32 {}
+:movl XAR3, loc32 is objmode=1 & op8_8=0b10000010 & op0_8!=0b10111110 & XAR3 & loc32 {}
+:movl XAR4, loc32 is objmode=1 & op8_8=0b10001010 & op0_8!=0b10111110 & XAR4 & loc32 {}
+:movl XAR5, loc32 is objmode=1 & op8_8=0b10000011 & op0_8!=0b10111110 & XAR5 & loc32 {}
+:movl XAR6, loc32 is op8_8=0b11000100 & op0_8!=0b10111110 & XAR6 & loc32 {}
+:movl XAR7, loc32 is op8_8=0b11000101 & op0_8!=0b10111110 & XAR7 & loc32 {}
 
 # p.309
 :movl XAR0, #imm22 is objmode=1 & op6_10=0b1000110100 & XAR0 & $(imm22) {}
@@ -853,3 +853,46 @@ with : objmode=1 {
 :pop AR1:AR0 is op0_16=0b0111011000000111 & AR1 & AR0 {}
 :pop AR3:AR2 is op0_16=0b0111011000000101 & AR3 & AR2 {}
 :pop AR5:AR4 is op0_16=0b0111011000000110 & AR5 & AR4 {}
+
+# p.355
+:pop AR1H:AR0H is op0_16=0b0000000000000011 & AR1H & AR0H {}
+
+# p.356
+:pop DBGIER is op0_16=0b0111011000010010 & DBGIER {}
+
+# p.357
+:pop DP is op0_16=0b0111011000000011 & DP {}
+
+# p.358
+:pop DP:ST1 is op0_16=0b0111011000000001 & DP & ST1 {}
+
+# p.359
+:pop IFR is op0_16=0b0000000000000010 & IFR {}
+
+# p.360
+:pop loc16 is op8_8=0b00101010 & loc16 {}
+
+# p.361
+:pop P is op0_16=0b0111011000010001 & P {}
+
+# p.362
+:pop RPC is op0_16=0b0000000000000111 & RPC {}
+
+# p.363
+:pop ST0 is op0_16=0b0111011000010011 & ST0 {}
+
+# p.364
+:pop ST1 is op0_16=0b0111011000000000 & ST1 {}
+
+# p.365
+:pop T:ST0 is op0_16=0b0111011000010101 & T & ST0 {}
+
+# p.366
+:pop XAR0 is objmode=1 & op0_16=0b1000111010111110 & XAR0 {}
+:pop XAR1 is objmode=1 & op0_16=0b1000101110111110 & XAR1 {}
+:pop XAR2 is objmode=1 & op0_16=0b1000011010111110 & XAR2 {}
+:pop XAR3 is objmode=1 & op0_16=0b1000001010111110 & XAR3 {}
+:pop XAR4 is objmode=1 & op0_16=0b1000101010111110 & XAR4 {}
+:pop XAR5 is objmode=1 & op0_16=0b1000001110111110 & XAR5 {}
+:pop XAR6 is op0_16=0b1100010010111110 & XAR6 {}
+:pop XAR7 is op0_16=0b1100010110111110 & XAR7 {}
