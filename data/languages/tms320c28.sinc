@@ -713,7 +713,7 @@ with : objmode=1 {
 :movl XAR7, #imm22 is op6_10=0b0111011011 & XAR7 & $(imm22) {}
 
 # p.310
-:movl XT, loc32 is objmode=1 & op8_8=0b10000111 & XT & loc32 {}
+:movl XT, loc32 is objmode=1 & op8_8=0b10000111 & op0_8!=0b10111110 & XT & loc32 {}
 
 # p.311
 :movp T, loc16 is op8_8=0b00010110 & op0_8!=0b10101100 & T & loc16 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
@@ -896,3 +896,9 @@ with : objmode=1 {
 :pop XAR5 is objmode=1 & op0_16=0b1000001110111110 & XAR5 {}
 :pop XAR6 is op0_16=0b1100010010111110 & XAR6 {}
 :pop XAR7 is op0_16=0b1100010110111110 & XAR7 {}
+
+# p.367
+:pop XT is op0_16=0b1000011110111110 & XT {}
+
+# p.368
+:pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {}

@@ -301,4 +301,6 @@
 	POP			XAR5
 	POP			XAR6
 	POP			XAR7
+	POP			XT
+	PREAD		SP, *XAR7
 	.endasmfunc
