@@ -994,3 +994,18 @@ with : objmode=1 {
 
 # p.396
 :sat ACC is op0_16=0b1111111101010111 & ACC {}
+
+# p.397
+:sat64 ACC:P is objmode=1 & op0_16=0b0101011000111110 & ACC & P {}
+
+# p.399 Need description here
+:sb simm8, cond8 is op12_4=0b0110 & simm8 & cond8 {}
+
+# p.400
+:sbbu ACC, loc16 is op8_8=0b00011101 & ACC & loc16 {}
+
+# p.401
+:sbf simm8, "EQ"  is objmode=1 & op8_8=0b11101100 & simm8 {}
+:sbf simm8, "NEQ" is objmode=1 & op8_8=0b11101101 & simm8 {}
+:sbf simm8, "TC"  is objmode=1 & op8_8=0b11101110 & simm8 {}
+:sbf simm8, "NTC" is objmode=1 & op8_8=0b11101111 & simm8 {}

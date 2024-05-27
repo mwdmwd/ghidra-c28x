@@ -340,4 +340,11 @@
 	RPT			#0x21
 	RPT			SP
 	SAT			ACC
+	SAT64		ACC:P
+	SB			-1, HIS
+	SBBU		ACC, SP
+	SBF			0x41, EQ
+	SBF			0x41, NEQ
+	SBF			0x41, TC
+	SBF			0x41, NTC
 	.endasmfunc
