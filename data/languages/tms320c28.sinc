@@ -1035,3 +1035,9 @@ with : objmode=1 {
 :spm  #4 is amode=1 & op0_16=0b1111111101101101 {}
 :spm #-5 is           op0_16=0b1111111101101110 {}
 :spm #-6 is           op0_16=0b1111111101101111 {}
+
+# p.412
+:sqra loc16 is objmode=1 & op0_16=0b0101011000010101; op8_8=0b00000000 & loc16 {}
+
+# p.413
+:sqrs loc16 is objmode=1 & op0_16=0b0101011000010001; loc16 {}

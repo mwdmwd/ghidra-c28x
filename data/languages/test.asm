@@ -366,4 +366,6 @@
 	.c28_amode
 	SPM			#-5
 	SPM			#-6
+	SQRA		AR4
+	SQRS		SP
 	.endasmfunc
