@@ -368,4 +368,10 @@
 	SPM			#-6
 	SQRA		AR4
 	SQRS		SP
+	SUB			ACC, AR2 << #0
+	SUB			ACC, AR2 << #1
+	SUB			ACC, AR2 << #2
+	SUB			ACC, AR2 << #14
+	SUB			ACC, AR2 << #15
+	SUB			ACC, AR2 << #16
 	.endasmfunc

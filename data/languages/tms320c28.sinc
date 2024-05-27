@@ -1041,3 +1041,10 @@ with : objmode=1 {
 
 # p.413
 :sqrs loc16 is objmode=1 & op0_16=0b0101011000010001; loc16 {}
+
+# p.414
+:sub ACC, loc16 is objmode=1 & op8_8=0b10101110 & ACC & loc16 {}
+:sub ACC, loc16 is objmode=0 & op8_8=0b10000000 & ACC & loc16 {}
+:sub ACC, loc16 << #shift8_4 is objmode=1 & op0_16=0b0101011000000000; op12_4=0b0000 & ACC & loc16 & shift8_4 {}
+#:sub ACC, loc16 << #shift8_4 is objmode=0 & op12_4=0b1000 & ACC & loc16 & shift8_4 {} # TODO conflict with `POP XT`
+:sub ACC, loc16 << #16 is op8_8=0b00000100 & ACC & loc16 {}
