@@ -347,4 +347,23 @@
 	SBF			0x41, NEQ
 	SBF			0x41, TC
 	SBF			0x41, NTC
+	SBRK		#0x41
+	;SETC		0xff ; formatting difference
+	SETC		XF
+	SFR			ACC, 1
+	SFR			ACC, 5
+	SFR			ACC, 15
+	SFR			ACC, 16
+	SFR			ACC, T
+	SPM			#+1
+	SPM			#0
+	SPM			#-1
+	SPM			#-2
+	SPM			#-3
+	SPM			#-4
+	.lp_amode
+	SPM			#+4
+	.c28_amode
+	SPM			#-5
+	SPM			#-6
 	.endasmfunc

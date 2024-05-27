@@ -1009,3 +1009,29 @@ with : objmode=1 {
 :sbf simm8, "NEQ" is objmode=1 & op8_8=0b11101101 & simm8 {}
 :sbf simm8, "TC"  is objmode=1 & op8_8=0b11101110 & simm8 {}
 :sbf simm8, "NTC" is objmode=1 & op8_8=0b11101111 & simm8 {}
+
+# p.402
+:sbrk #imm8 is op8_8=0b11111101 & imm8 {}
+
+# p.403
+:setc imm8 is op8_8=0b00111011 & imm8 {} # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP 
+
+# p.407
+:setc "XF" is op0_16=0b0101011000100110 {}
+
+# p.408
+:sfr ACC, shift0_4_1 is op4_12=0b111111110100 & ACC & shift0_4_1 {}
+
+# p.409
+:sfr ACC, T is op0_16=0b1111111101010001 & ACC & T {}
+
+# p.410
+:spm  #1 is           op0_16=0b1111111101101000 {}
+:spm  #0 is           op0_16=0b1111111101101001 {}
+:spm #-1 is           op0_16=0b1111111101101010 {}
+:spm #-2 is           op0_16=0b1111111101101011 {}
+:spm #-3 is           op0_16=0b1111111101101100 {}
+:spm #-4 is amode=0 & op0_16=0b1111111101101101 {}
+:spm  #4 is amode=1 & op0_16=0b1111111101101101 {}
+:spm #-5 is           op0_16=0b1111111101101110 {}
+:spm #-6 is           op0_16=0b1111111101101111 {}
