@@ -959,3 +959,38 @@ with : objmode=1 {
 
 # p.384
 :pwrite *XAR7, loc16 is op8_8=0b00100110 & loc16 & XAR7 {}
+
+# p.385
+:qmacl P, loc32, *XAR7   is objmode=1 & op0_16=0b0101011001001111; op8_8=0b11000111 & P & loc32 & XAR7 {}
+:qmacl P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001111; op8_8=0b10000111 & P & loc32 & XAR7 {}
+
+# p.387
+:qmpyal P, XT, loc32 is objmode=1 & op0_16=0b0101011001000110; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.388
+:qmpyl P, XT, loc32 is objmode=1 & op0_16=0b0101011001100111; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.389
+:qmpyl ACC, XT, loc32 is objmode=1 & op0_16=0b0101011001100011; op8_8=0b00000000 & ACC & XT & loc32 {}
+
+# p.390
+:qmpysl P, XT, loc32 is objmode=1 & op0_16=0b0101011001000101; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.391
+:qmpyul P, XT, loc32 is objmode=1 & op0_16=0b0101011001000111; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.392
+:qmpyxul P, XT, loc32 is objmode=1 & op0_16=0b0101011001000010; op8_8=0b00000000 & P & XT & loc32 {}
+
+# p.393
+:rol ACC is op0_16=0b1111111101010011 & ACC {}
+
+# p.394
+:ror ACC is op0_16=0b1111111101010010 & ACC {}
+
+# p.395
+:rpt #imm8 is op8_8=0b11110110 & imm8 {} # TODO oof
+:rpt loc16 is op8_8=0b11110111 & loc16 {} # TODO oof
+
+# p.396
+:sat ACC is op0_16=0b1111111101010111 & ACC {}
