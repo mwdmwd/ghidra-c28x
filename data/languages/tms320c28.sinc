@@ -38,6 +38,7 @@ define token opcode (16)
 	imm6		= (0,5)
 	imm7		= (0,6)
 	imm8		= (0,7)
+	imm8_4		= (8,11)
 	imm8_8		= (8,15)
 	simm8		= (0,7) signed
 	imm10		= (0,9)
@@ -1087,3 +1088,21 @@ with : objmode=1 {
 
 # p.430
 :subl loc32, ACC is objmode=1 & op0_16=0b0101011001000001; op8_8=0b00000000 & loc32 & ACC {}
+
+# p.431
+:subr loc16, ax8 is objmode=1 & op9_7=0b1110101 & ax8 & loc16 {}
+
+# p.432
+:subrl loc32, ACC is objmode=1 & op0_16=0b0101011001001001; op8_8=0b00000000 & loc32 & ACC {}
+
+# p.433
+:subu ACC, loc16 is op8_8=0b00000001 & ACC & loc16 {}
+
+# p.434
+:subul ACC, loc32 is objmode=1 & op0_16=0b0101011001010101; op8_8=0b00000000 & ACC & loc32 {}
+
+# p.435
+:subul P, loc32 is op0_16=0b0101011001011101; op8_8=0b00000000 & P & loc32 {}
+
+# p.436
+:tbit loc16, #imm8_4 is op12_4=0b0100 & imm8_4 & loc16 {}

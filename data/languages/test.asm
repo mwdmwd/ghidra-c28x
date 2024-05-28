@@ -388,4 +388,10 @@
 	SUBL		ACC, P<<PM ; conflict with movs T, T
 	MOVS		T, T
 	SUBL		XT, ACC
+	SUBR		T, AL
+	SUBRL		XAR3, ACC
+	SUBU		ACC, SP
+	SUBUL		ACC, XT
+	SUBUL		P, P
+	TBIT		SP, #3
 	.endasmfunc
