@@ -381,4 +381,11 @@
 	SUBB		ACC, #0xfe
 	SUBB		SP, #0x7f
 	SUBB		XAR3, #0x7e
+	SUBBL		ACC, XAR2
+	SUBCU		ACC, PH
+	SUBCUL		ACC, XT
+	SUBL		ACC, ACC
+	SUBL		ACC, P<<PM ; conflict with movs T, T
+	MOVS		T, T
+	SUBL		XT, ACC
 	.endasmfunc

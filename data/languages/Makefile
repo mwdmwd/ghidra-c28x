@@ -25,6 +25,7 @@ dis: test.obj
 	$(DIS) $(DISFLAGS) $< | tail -n+5 | sed -E -e 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' -e 's/ADDL      ACC/ADDL         ACC/g' -e 's/MOVL      ACC/MOVL         ACC/g' \
 	-e 's/MOVL         ([A-Z0-9]+), \*--SP/POP          \1/g' -e 's/MOVL         \*SP\+\+, ([A-Z0-9]+)/PUSH         \1/g' \
 	-e 's/\|\|/  /g' \
+	-e 's/SUBL      ACC/SUBL         ACC/' \
 	| ./unhex_immediate.py
 
 .PHONY: test

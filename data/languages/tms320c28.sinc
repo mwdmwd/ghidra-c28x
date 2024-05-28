@@ -719,7 +719,7 @@ with : objmode=1 {
 :movp T, loc16 is op8_8=0b00010110 & op0_8!=0b10101100 & T & loc16 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
 
 # p.312
-:movs T, loc16 is op8_8=0b00010001 & T & loc16 {}
+:movs T, loc16 is op8_8=0b00010001 & op0_8!=0b10101100 & T & loc16 {}
 
 # p.313
 :movu ACC, loc16 is op8_8=0b00001110 & ACC & loc16 {}
@@ -1069,3 +1069,21 @@ with : objmode=1 {
 
 # p.422
 :subb xarn8, #imm7 is op11_5=0b11011 & op7=0b1 & xarn8 & imm7 {}
+
+# p.423
+:subbl ACC, loc32 is objmode=1 & op0_16=0b0101011001010100; op8_8=0b00000000 & ACC & loc32 {}
+
+# p.424
+:subcu ACC, loc16 is op8_8=0b00011111 & ACC & loc16 {}
+
+# p.426
+:subcul ACC, loc32 is objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {}
+
+# p.428
+:subl ACC, loc32 is objmode=1 & op8_8=0b00000011 & ACC & loc32 {}
+
+# p.429
+:subl ACC, P << PM is op0_16=0b0001000110101100 & ACC & P & PM {} # conflict with MOVS T, T
+
+# p.430
+:subl loc32, ACC is objmode=1 & op0_16=0b0101011001000001; op8_8=0b00000000 & loc32 & ACC {}
