@@ -1048,3 +1048,24 @@ with : objmode=1 {
 :sub ACC, loc16 << #shift8_4 is objmode=1 & op0_16=0b0101011000000000; op12_4=0b0000 & ACC & loc16 & shift8_4 {}
 #:sub ACC, loc16 << #shift8_4 is objmode=0 & op12_4=0b1000 & ACC & loc16 & shift8_4 {} # TODO conflict with `POP XT`
 :sub ACC, loc16 << #16 is op8_8=0b00000100 & ACC & loc16 {}
+
+# p.416
+:sub ACC, loc16 << T is objmode=1 & op0_16=0b0101011000100111; op8_8=0b00000000 & ACC & loc16 & T {}
+
+# p.417
+:sub ACC, #imm16 << #shift0_4 is op4_12=0b111111110000 & shift0_4; ACC & imm16 {}
+
+# p.418
+:sub ax8, loc16 is op9_7=0b1001111 & ax8 & loc16 {}
+
+# p.419
+:sub loc16, ax8 is op9_7=0b0111010 & ax8 & loc16 {}
+
+# p.420
+:subb ACC, #imm8 is op8_8=0b00011001 & ACC & imm8 {}
+
+# p.421
+:subb SP, #imm7 is op7_9=0b111111101 & SP & imm7 {}
+
+# p.422
+:subb xarn8, #imm7 is op11_5=0b11011 & op7=0b1 & xarn8 & imm7 {}

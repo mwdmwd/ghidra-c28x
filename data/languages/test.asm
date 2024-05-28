@@ -374,4 +374,11 @@
 	SUB			ACC, AR2 << #14
 	SUB			ACC, AR2 << #15
 	SUB			ACC, AR2 << #16
+	SUB			ACC, SP << T
+	SUB			ACC, #0x2137 << #13
+	SUB			AL, AR2
+	SUB			AR3, AH
+	SUBB		ACC, #0xfe
+	SUBB		SP, #0x7f
+	SUBB		XAR3, #0x7e
 	.endasmfunc
