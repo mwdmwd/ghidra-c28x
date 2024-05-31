@@ -2,6 +2,7 @@ define token opcode (16)
 	op0_16		= (0,15)
 	op0_8		= (0,7)
 	op1_15		= (1,15)
+	op3_5		= (3,7)
 	op3_13		= (3,15)
 	op4_12		= (4,15)
 	op4_4		= (4,7)
@@ -35,6 +36,7 @@ define token opcode (16)
 	ar67_8		= (8,8)
 	xarn8		= (8,10)
 	imm3		= (0,2)
+	imm3_3		= (3,5)
 	imm4		= (0,3)
 	imm5		= (0,4)
 	imm6		= (0,5)
@@ -95,9 +97,22 @@ macro pop8(ret8) {
 loc16: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
 loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
 
-# TODO
-loc32: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
-loc32: reg32 is amode=0 & op4_4=0b1010 & reg32 {}
+# Direct Addressing Modes (DP)
+loc32: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
+# Stack Addressing Modes (SP)
+loc32: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 {}
+loc32: *SP++           is amode=0 & op0_8=0b10111101 & SP {}
+loc32: *--SP           is amode=0 & op0_8=0b10111110 & SP {}
+# C28x Indirect Addressing Modes (XAR0 to XAR7)
+loc32: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 {}
+loc32: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 {}
+loc32: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 {}
+loc32: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 {}
+loc32: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 {}
+# C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
+loc32: *               is amode=0 & op0_8=0b10111000 {}
+# 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
+loc32: reg32           is amode=0 & op4_4=0b1010 & reg32 {}
 
 cond: "NEQ" is cond0_4=0b0000 {}
 cond: "EQ" is cond0_4=0b0001 {}
