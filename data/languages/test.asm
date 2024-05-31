@@ -402,4 +402,15 @@
 	UOUT		*(0x1234), SP
 	XB			*AL
 	XB			0x1234, *, ARP2
+	XB			0x2137, NTC
+	XBANZ		0x1234, *
+	XBANZ		0x1234, *++
+	XBANZ		0x1234, *--
+	XBANZ		0x1234, *0++
+	XBANZ		0x1234, *0--
+	XBANZ		0x1234, *, ARP0
+	XBANZ		0x1234, *++, ARP0
+	XBANZ		0x1234, *--, ARP1
+	XBANZ		0x1234, *0++, ARP2
+	XBANZ		0x1234, *0--, ARP4
 	.endasmfunc

@@ -1132,3 +1132,18 @@ with : objmode=1 {
 
 # p.445
 :xb imm16, *, "ARP"^imm3 is objmode=1 & op3_13=0b0011111001110 & imm3; imm16 {}
+
+# p.446
+:xb imm16, cond is objmode=1 & op4_12=0b010101101101 & cond; imm16 {}
+
+# p.448
+:xbanz imm16, *                   is objmode=1 & op0_16=0b0101011000001100; imm16 {}
+:xbanz imm16, *++                 is objmode=1 & op0_16=0b0101011000001010; imm16 {}
+:xbanz imm16, *--                 is objmode=1 & op0_16=0b0101011000001011; imm16 {}
+:xbanz imm16, *0++                is objmode=1 & op0_16=0b0101011000001110; imm16 {}
+:xbanz imm16, *0--                is objmode=1 & op0_16=0b0101011000001111; imm16 {}
+:xbanz imm16, *"ARP"^imm3         is objmode=1 & op3_13=0b0011111000110 & imm3; imm16 {}
+:xbanz imm16, *++,  "ARP"^imm3    is objmode=1 & op3_13=0b0011111000111 & imm3; imm16 {}
+:xbanz imm16, *--,  "ARP"^imm3    is objmode=1 & op3_13=0b0011111001000 & imm3; imm16 {}
+:xbanz imm16, *0++, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001001 & imm3; imm16 {}
+:xbanz imm16, *0--, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001010 & imm3; imm16 {}
