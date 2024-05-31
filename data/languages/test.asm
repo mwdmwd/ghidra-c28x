@@ -438,7 +438,30 @@
 	ZALR		ACC, @0x11
 	ZAP			OVC
 	ZAPA
-	; addressing modes
+	; addressing modes (16-bit)
+	MOV			@63, AR4
+	MOV			*-SP[2], AR4
+	MOV			*SP++, AR4
+	MOV			*--SP, AR4
+	MOV			*XAR4++, AR4
+	MOV			*--XAR4, AR4
+	MOV			*+XAR4[AR0], AR4
+	MOV			*+XAR4[AR1], AR4
+	MOV			*+XAR4[0], AR4
+	MOV			*+XAR4[1], AR4
+	MOV			*+XAR4[7], AR4
+	MOV			*, AR4
+	MOV			*++, AR4
+	MOV			*--, AR4
+	MOV			*0++, AR4
+	MOV			*0--, AR4
+	MOV			*BR0++, AR4
+	MOV			*BR0--, AR4
+	MOV			ACC, *ARP2
+	MOV			ACC, *AR6%++
+	MOV			ACC, T
+	; addressing modes (32-bit)
+	MOVL		@63, XAR4
 	MOVL		*-SP[2], XAR4
 	MOVL		*SP++, XAR4
 	MOVL		*--SP, XAR4
@@ -457,4 +480,6 @@
 	MOVL		*BR0++, XAR4
 	MOVL		*BR0--, XAR4
 	MOVL		ACC, *ARP2
+	MOVL		ACC, *AR6%++
+	MOVL		ACC, XT
 	.endasmfunc

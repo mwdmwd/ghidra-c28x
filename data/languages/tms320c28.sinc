@@ -54,7 +54,7 @@ attach variables [ ax0 ax4 ax8 ] [ AL AH ];
 attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
 attach values shift8_3_1 [ 1 2 3 4 5 6 7 8 ];
 
-# T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH
+# T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH, we call it T throughout as this matches dis2000
 attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
 attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
 attach variables [ xarn0 xarn8 ] [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
@@ -93,9 +93,31 @@ macro pop8(ret8) {
 # Addressing and stuff
 ################################################################
 
-# TODO
-loc16: @imm6 is amode=0 & op6_2=0b00 & imm6 {}
-loc16: reg16 is amode=0 & op4_4=0b1010 & reg16 {}
+# Direct Addressing Modes (DP)
+loc16: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
+# Stack Addressing Modes (SP)
+loc16: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 {}
+loc16: *SP++           is amode=0 & op0_8=0b10111101 & SP {}
+loc16: *--SP           is amode=0 & op0_8=0b10111110 & SP {}
+# C28x Indirect Addressing Modes (XAR0 to XAR7)
+loc16: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 {}
+loc16: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 {}
+loc16: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 {}
+loc16: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 {}
+loc16: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 {}
+# C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
+loc16: *               is amode=0 & op0_8=0b10111000 {}
+loc16: *++             is amode=0 & op0_8=0b10111001 {}
+loc16: *--             is amode=0 & op0_8=0b10111010 {}
+loc16: *0++            is amode=0 & op0_8=0b10111011 {}
+loc16: *0--            is amode=0 & op0_8=0b10111100 {}
+loc16: *"BR0"++        is amode=0 & op0_8=0b10101110 {}
+loc16: *"BR0"--        is amode=0 & op0_8=0b10101111 {}
+loc16: *"ARP"^imm3     is amode=0 & op3_5=0b10110 & imm3 {}
+# Circular Indirect Addressing Modes (XAR6, XAR1)
+loc16: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 {}
+# 16-Bit Register Addressing Modes (AR0 to AR7, AH, AL, PH, PL, TH, SP)
+loc16: reg16           is amode=0 & op4_4=0b1010 & reg16 {}
 
 # Direct Addressing Modes (DP)
 loc32: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
@@ -119,7 +141,7 @@ loc32: *"BR0"++        is amode=0 & op0_8=0b10101110 {}
 loc32: *"BR0"--        is amode=0 & op0_8=0b10101111 {}
 loc32: *"ARP"^imm3     is amode=0 & op3_5=0b10110 & imm3 {}
 # Circular Indirect Addressing Modes (XAR6, XAR1)
-
+loc32: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 {}
 # 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
 loc32: reg32           is amode=0 & op4_4=0b1010 & reg32 {}
 
