@@ -450,4 +450,11 @@
 	MOVL		*+XAR4[1], XAR4
 	MOVL		*+XAR4[7], XAR4
 	MOVL		*, XAR4
+	MOVL		*++, XAR4
+	MOVL		*--, XAR4
+	MOVL		*0++, XAR4
+	MOVL		*0--, XAR4
+	MOVL		*BR0++, XAR4
+	MOVL		*BR0--, XAR4
+	MOVL		ACC, *ARP2
 	.endasmfunc

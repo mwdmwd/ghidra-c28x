@@ -111,6 +111,15 @@ loc32: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 {}
 loc32: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 {}
 # C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
 loc32: *               is amode=0 & op0_8=0b10111000 {}
+loc32: *++             is amode=0 & op0_8=0b10111001 {}
+loc32: *--             is amode=0 & op0_8=0b10111010 {}
+loc32: *0++            is amode=0 & op0_8=0b10111011 {}
+loc32: *0--            is amode=0 & op0_8=0b10111100 {}
+loc32: *"BR0"++        is amode=0 & op0_8=0b10101110 {}
+loc32: *"BR0"--        is amode=0 & op0_8=0b10101111 {}
+loc32: *"ARP"^imm3     is amode=0 & op3_5=0b10110 & imm3 {}
+# Circular Indirect Addressing Modes (XAR6, XAR1)
+
 # 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
 loc32: reg32           is amode=0 & op4_4=0b1010 & reg32 {}
 
