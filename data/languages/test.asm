@@ -398,4 +398,6 @@
 	TCLR		AR4, #11
 	TEST		ACC
 	TRAP		#5
+	TSET		AR1, #11
+	UOUT		*(0x1234), SP
 	.endasmfunc

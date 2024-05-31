@@ -1119,3 +1119,9 @@ with : objmode=1 {
 
 # p.440
 :trap #imm5 is op5_11=0b00000000001 & imm5 {}
+
+# p.442
+:tset loc16, #imm8_4 is objmode=1 & op0_16=0b0101011000001101; op12_4=0b0000 & loc16 & imm8_4 {}
+
+# p.443
+:uout *(imm16), loc16 is objmode=1 & op8_8=0b10110000 & loc16; imm16 {}
