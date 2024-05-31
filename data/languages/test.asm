@@ -394,4 +394,8 @@
 	SUBUL		ACC, XT
 	SUBUL		P, P
 	TBIT		SP, #3
+	TBIT		SP, T
+	TCLR		AR4, #11
+	TEST		ACC
+	TRAP		#5
 	.endasmfunc

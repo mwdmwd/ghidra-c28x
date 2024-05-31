@@ -35,6 +35,7 @@ define token opcode (16)
 	ar67_8		= (8,8)
 	xarn8		= (8,10)
 	imm4		= (0,3)
+	imm5		= (0,4)
 	imm6		= (0,5)
 	imm7		= (0,6)
 	imm8		= (0,7)
@@ -1106,3 +1107,15 @@ with : objmode=1 {
 
 # p.436
 :tbit loc16, #imm8_4 is op12_4=0b0100 & imm8_4 & loc16 {}
+
+# p.437
+:tbit loc16, T is objmode=1 & op0_16=0b0101011000100101; op8_8=0b00000000 & loc16 & T {}
+
+# p.438
+:tclr loc16, #imm8_4 is objmode=1 & op0_16=0b0101011000001001; op12_4=0b0000 & imm8_4 & loc16 {}
+
+# p.439
+:test ACC is op0_16=0b1111111101011000 & ACC {}
+
+# p.440
+:trap #imm5 is op5_11=0b00000000001 & imm5 {}
