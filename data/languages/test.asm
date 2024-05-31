@@ -400,4 +400,6 @@
 	TRAP		#5
 	TSET		AR1, #11
 	UOUT		*(0x1234), SP
+	XB			*AL
+	XB			0x1234, *, ARP2
 	.endasmfunc

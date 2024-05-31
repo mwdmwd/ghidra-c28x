@@ -34,6 +34,7 @@ define token opcode (16)
 	arn8		= (8,10)
 	ar67_8		= (8,8)
 	xarn8		= (8,10)
+	imm3		= (0,2)
 	imm4		= (0,3)
 	imm5		= (0,4)
 	imm6		= (0,5)
@@ -1125,3 +1126,9 @@ with : objmode=1 {
 
 # p.443
 :uout *(imm16), loc16 is objmode=1 & op8_8=0b10110000 & loc16; imm16 {}
+
+# p.444
+:xb *AL is objmode=1 & op0_16=0b0101011000010100 & AL {}
+
+# p.445
+:xb imm16, *, "ARP"^imm3 is objmode=1 & op3_13=0b0011111001110 & imm3; imm16 {}

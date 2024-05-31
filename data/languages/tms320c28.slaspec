@@ -15,16 +15,19 @@ define register offset=0 size=4      [  ACC    XAR0      XAR1      XAR2      XAR
 define register offset=0 size=2      [  AL AH  AR0 AR0H  AR1 AR1H  AR2 AR2H  AR3 AR3H  AR4 AR4H  AR5 AR5H  AR6 AR6H  AR7 AR7H  PL PH  TL T  ];
 define register offset=0 size=1      [  AL.LSB AL.MSB AH.LSB AH.MSB  ];
 
-# Really a ST0 field
-define register offset=0x100 size=1  [                            PM  ];
+# ST0 fields
+define register offset=0x100 size=1  [  OVC PM V N Z C TC OVM SXM  ];
+# ST1 fields
+define register offset=0x110 size=1  [  ARP XF M0M1MAP OBJMODE AMODE IDLESTAT EALLOW LOOP SPA VMAP PAGE0 DBGM INTM  ];
+
 define register offset=0x200 size=2  [  DP  IFR  IER  DBGIER  SP  ST0  ST1  STF  ];
 
 # Define context bits (if defined, size must be multiple of 4-bytes)
 define register offset=0xf00 size=4   contextreg;
 
 define context contextreg
-  amode	  = (0,0)
-  objmode	= (1,1)
+  amode	  = (0,0) # ST0
+  objmode	= (1,1) # ST0
 ;
 
 # SXM sign extension mode
