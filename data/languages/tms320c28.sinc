@@ -1169,3 +1169,36 @@ with : objmode=1 {
 # p.459
 :xor ACC, #imm16 << #shift0_4 is objmode=1 & op4_12=0b001111100010 & shift0_4; ACC & imm16 {}
 :xor ACC, #imm16 << #16       is objmode=1 & op0_16=0b0101011001001110; ACC & imm16 {}
+
+# p.460
+:xor ax8, loc16 is op9_7=0b0111000 & ax8 & loc16 {}
+
+# p.461
+:xor loc16, ax8 is op9_7=0b1111001 & ax8 & loc16 {}
+
+# p.462
+:xor loc16, #imm16 is op8_8=0b00011100 & loc16; imm16 {}
+
+# p. 463
+:xorb ax8, #imm8 is op9_7=0b1111000 & ax8 & imm8 {}
+
+# p.464
+:xpread loc16, *(imm16) is objmode=1 & op8_8=0b10101100 & loc16; imm16 {}
+
+# p.465
+:xpread loc16, *AL is objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & loc16 & AL {}
+
+# p.466
+:xpwrite *AL, loc16 is objmode=1 & op0_16=0b0101011000111101; op8_8=0b00000000 & AL & loc16 {}
+
+# p.467
+:xret is objmode=1 & op0_16=0b0101011011111111 {}
+
+# p.468
+:xretc cond is objmode=1 & op4_12=0b010101101111 & cond {}
+
+# p.470
+:zalr ACC, loc16 is objmode=1 & op0_16=0b0101011000010011; op8_8=0b00000000 & ACC & loc16 {}
+
+# p.472
+:zapa is objmode=1 & op0_16=0b0101011000110011 {}

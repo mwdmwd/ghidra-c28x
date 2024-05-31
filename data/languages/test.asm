@@ -421,4 +421,21 @@
 	XOR			ACC, @0x11
 	XOR			ACC, #0x1234 << 15
 	XOR			ACC, #0x4321 << 16
+	XOR			AL, SP
+	XOR			SP, AH
+	XOR			AR2, #0x1234
+	XORB		AL, #0x4a
+	XPREAD		SP, *(0x859)
+	XOR			AL, SP
+	XOR			SP, AL
+	XOR			AR2, #0x12
+	XORB		AH, #0xfc
+	XPREAD		SP, *(0x29a)
+	XPREAD		SP, *AL
+	XPWRITE		*AL, SP
+	XRET
+	XRETC		NBIO
+	ZALR		ACC, @0x11
+	ZAP			OVC
+	ZAPA
 	.endasmfunc

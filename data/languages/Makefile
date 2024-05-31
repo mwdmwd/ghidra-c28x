@@ -26,6 +26,7 @@ dis: test.obj
 	-e 's/MOVL         ([A-Z0-9]+), \*--SP/POP          \1/g' -e 's/MOVL         \*SP\+\+, ([A-Z0-9]+)/PUSH         \1/g' \
 	-e 's/\|\|/  /g' \
 	-e 's/SUBL      ACC/SUBL         ACC/' \
+	-e 's/XRETC        UNC/XRET         /g' \
 	| ./unhex_immediate.py
 
 .PHONY: test
