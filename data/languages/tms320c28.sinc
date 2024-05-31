@@ -68,30 +68,22 @@ attach variables ar67_8 [ AR6 AR7 ];
 @define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) + imm16; ]"
 
 macro push16(val16) {
-	SP = SP - 2;
 	*:2 SP = val16;
+	SP = SP + 1;
 }
 
 macro pop16(ret16) {
-	ret16 = *:2 SP;
-	SP = SP + 2;
-}
-
-macro push8(val8) {
 	SP = SP - 1;
-	ptr:2 = SP;
-	*:1 ptr = val8;
-}
-
-macro pop8(ret8) {
-	ptr:2 = SP;
-	ret8 = *:1 ptr;
-	SP = SP + 1;
+	ret16 = *:2 SP;
 }
 
 ################################################################
 # Addressing and stuff
 ################################################################
+
+dest22: imm22 is $(imm22) {
+	export *[code]:4 imm22;
+}
 
 # Direct Addressing Modes (DP)
 loc16: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
@@ -459,10 +451,10 @@ with : objmode=1 {
 :iret is op0_16=0b0111011000000010 {}
 
 # p.216
-:lb *XAR7 is op0_16=0b0111011000100000 & XAR7 {}
+:lb *XAR7 is op0_16=0b0111011000100000 & XAR7 { goto XAR7; }
 
 # p.217
-:lb imm22 is op6_10=0b0000000001 & $(imm22) {}
+:lb dest22 is op6_10=0b0000000001 ... & dest22 { goto dest22; }
 
 # p.218
 :lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {}

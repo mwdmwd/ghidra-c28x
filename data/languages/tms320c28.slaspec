@@ -6,8 +6,8 @@
 define endian=little;
 define alignment=2;
 
-define space code    type=ram_space size=4 wordsize=2 default;
-define space ram     type=ram_space size=4 wordsize=2;
+define space ram     type=ram_space size=4 wordsize=2 default;
+define space code    type=ram_space size=4 wordsize=2;
 define space register type=register_space size=4;
 
 # Actually, PC is 22 bits
