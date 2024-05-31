@@ -1147,3 +1147,25 @@ with : objmode=1 {
 :xbanz imm16, *--,  "ARP"^imm3    is objmode=1 & op3_13=0b0011111001000 & imm3; imm16 {}
 :xbanz imm16, *0++, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001001 & imm3; imm16 {}
 :xbanz imm16, *0--, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001010 & imm3; imm16 {}
+
+# p.450
+:xcall *AL is objmode=1 & op0_16=0b0101011000110100 & AL {}
+
+# p.451
+:xcall imm16, *, "ARP"^imm3 is objmode=1 & op3_13=0b0011111001101 & imm3; imm16 {}
+
+# p.452
+:xcall imm16, cond is objmode=1 & op4_12=0b010101101110 & cond; imm16 {}
+
+# p.454
+:xmac P, loc16, *(imm16) is objmode=1 & op8_8=0b10000100 & P & loc16; imm16 {}
+
+# p.456
+:xmacd P, loc16, *(imm16) is objmode=1 & op8_8=0b10100100 & P & loc16; imm16 {}
+
+# p.458
+:xor ACC, loc16 is objmode=1 & op8_8=0b10110111 & ACC & loc16 {}
+
+# p.459
+:xor ACC, #imm16 << #shift0_4 is objmode=1 & op4_12=0b001111100010 & shift0_4; ACC & imm16 {}
+:xor ACC, #imm16 << #16       is objmode=1 & op0_16=0b0101011001001110; ACC & imm16 {}

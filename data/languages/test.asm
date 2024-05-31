@@ -413,4 +413,12 @@
 	XBANZ		0x1234, *--, ARP1
 	XBANZ		0x1234, *0++, ARP2
 	XBANZ		0x1234, *0--, ARP4
+	XCALL		*AL
+	XCALL		0x2137, *, ARP5
+	XCALL		0xfefe, NBIO
+	XMAC		P, SP, *(0xcafe)
+	XMACD		P, @0xff, *(0xface)
+	XOR			ACC, @0x11
+	XOR			ACC, #0x1234 << 15
+	XOR			ACC, #0x4321 << 16
 	.endasmfunc
