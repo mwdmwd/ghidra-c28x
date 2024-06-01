@@ -451,7 +451,7 @@ with : objmode=1 {
 :iret is op0_16=0b0111011000000010 {}
 
 # p.216
-:lb *XAR7 is op0_16=0b0111011000100000 & XAR7 { goto XAR7; }
+:lb *XAR7 is op0_16=0b0111011000100000 & XAR7 { goto [XAR7]; }
 
 # p.217
 :lb dest22 is op6_10=0b0000000001 ... & dest22 { goto dest22; }
