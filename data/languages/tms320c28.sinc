@@ -82,7 +82,7 @@ macro pop16(ret16) {
 ################################################################
 
 dest22: imm22 is $(imm22) {
-	export *[code]:4 imm22;
+	export *:4 imm22;
 }
 
 # Direct Addressing Modes (DP)

@@ -5,10 +5,10 @@
 <processor_spec>
   <programcounter register="PC"/>
   <default_symbols>
-    <symbol name="RESET" address="code:30000" entry="true"/>  <!-- 00000? -->
+    <symbol name="RESET" address="ram:30000" entry="true"/>  <!-- 00000? -->
   </default_symbols>
   <context_data>
-    <context_set space="code">
+    <context_set space="ram">
         <set name="objmode" val="1" description="TODO"/>
         <set name="amode" val="0" description="TODO"/>
     </context_set>

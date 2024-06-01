@@ -7,7 +7,6 @@
 	<pointer_size value="4" />
   </data_organization>
   <global>
-    <range space="code"/>
     <range space="ram"/>
   </global>
   <stackpointer register="SP" space="ram"/>
