@@ -27,6 +27,7 @@ dis: test.obj
 	-e 's/\|\|/  /g' \
 	-e 's/SUBL      ACC/SUBL         ACC/' \
 	-e 's/XRETC        UNC/XRET         /g' \
+	-e 's/BANZ         (.*),/BANZ         \1, /g' \
 	| ./unhex_immediate.py
 
 .PHONY: test
