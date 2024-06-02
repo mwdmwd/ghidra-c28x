@@ -46,6 +46,7 @@ define token opcode (16)
 	imm8_8		= (8,15)
 	simm8		= (0,7) signed
 	imm10		= (0,9)
+	imm11		= (0,10)
 	imm16		= (0,15)
 	simm16		= (0,15) signed
 ;

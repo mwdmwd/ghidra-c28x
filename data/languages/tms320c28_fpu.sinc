@@ -1,0 +1,9 @@
+################################################################
+
+# All FPU instructions have objmode=1
+with : objmode=1 {
+
+# p.128
+:setflg "FLAG_TODO", imm11 is op6_10=0b1110011000; imm11 {}
+
+}

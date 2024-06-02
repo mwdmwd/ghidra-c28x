@@ -43,3 +43,4 @@ define context contextreg
 
 # Include contents of tms320c28.sinc file
 @include "tms320c28.sinc"
+@include "tms320c28_fpu.sinc"
