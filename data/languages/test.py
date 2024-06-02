@@ -24,6 +24,22 @@ for ins in dx.instructions:
     words = ib.hex(" ", 2).split()
     # print(f"{ins.addr.offset:#x}/{ins.length}: {words[0]} {ins.mnem} {ins.body}")
     wordOffset = ins.addr.offset // 2
-    print(f"{wordOffset:08x}   {words[0]}   {ins.mnem.upper():13}{ins.body}")
+    mnem = ins.mnem.upper()
+    body = ins.body
+    if mnem in (
+        "B",
+        "BANZ",
+        "BF",
+        "SB",
+        "SBF",
+    ):
+        args = [a.strip() for a in body.split(",")]
+        for i, arg in enumerate(args):
+            try:
+                args[i] = str(int(arg, 0) - wordOffset)
+            except Exception as e:
+                pass
+        body = ", ".join(args)
+    print(f"{wordOffset:08x}   {words[0]}   {mnem:13}{body}")
     for i, word in enumerate(words[1:], start=1):
         print(f"{wordOffset + i:08x}   {word}")
