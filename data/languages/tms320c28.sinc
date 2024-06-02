@@ -85,6 +85,14 @@ dest22: imm22 is $(imm22) {
 	export *:4 imm22;
 }
 
+off16: rel is simm16 [ rel = inst_start + simm16; ] {
+	export *:4 rel;
+}
+
+off8: rel is simm8 [ rel = inst_start + simm8; ] {
+	export *:4 rel;
+}
+
 # Direct Addressing Modes (DP)
 loc16: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
 # Stack Addressing Modes (SP)
@@ -137,39 +145,39 @@ loc32: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 {}
 # 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
 loc32: reg32           is amode=0 & op4_4=0b1010 & reg32 {}
 
-cond: "NEQ" is cond0_4=0b0000 {}
-cond: "EQ" is cond0_4=0b0001 {}
-cond: "GT" is cond0_4=0b0010 {}
-cond: "GEQ" is cond0_4=0b0011 {}
-cond: "LT" is cond0_4=0b0100 {}
-cond: "LEQ" is cond0_4=0b0101 {}
-cond: "HI" is cond0_4=0b0110 {}
-cond: "HIS" is cond0_4=0b0111 {}
-cond: "LO" is cond0_4=0b1000 {}
-cond: "LOS" is cond0_4=0b1001 {}
-cond: "NOV" is cond0_4=0b1010 {}
-cond: "OV" is cond0_4=0b1011 {}
-cond: "NTC" is cond0_4=0b1100 {}
-cond: "TC" is cond0_4=0b1101 {}
-cond: "NBIO" is cond0_4=0b1110 {}
-cond: "UNC" is cond0_4=0b1111 {}
+cond:  "NEQ"  is cond0_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
+cond:  "EQ"   is cond0_4=0b0001 { local cnd:1 = Z   == 1; export cnd; }
+cond:  "GT"   is cond0_4=0b0010 { local cnd:1 = Z   == 0 && N == 0; export cnd; }
+cond:  "GEQ"  is cond0_4=0b0011 { local cnd:1 = N   == 0; export cnd; }
+cond:  "LT"   is cond0_4=0b0100 { local cnd:1 = N   == 1; export cnd; }
+cond:  "LEQ"  is cond0_4=0b0101 { local cnd:1 = Z   == 1 || N == 1; export cnd; }
+cond:  "HI"   is cond0_4=0b0110 { local cnd:1 = C   == 1 && Z == 0; export cnd; }
+cond:  "HIS"  is cond0_4=0b0111 { local cnd:1 = C   == 1; export cnd; }
+cond:  "LO"   is cond0_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
+cond:  "LOS"  is cond0_4=0b1001 { local cnd:1 = C   == 0 || Z == 1; export cnd; }
+cond:  "NOV"  is cond0_4=0b1010 { local cnd:1 = V   == 0; export cnd; }
+cond:  "OV"   is cond0_4=0b1011 { local cnd:1 = V   == 1; export cnd; }
+cond:  "NTC"  is cond0_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
+cond:  "TC"   is cond0_4=0b1101 { local cnd:1 = TC  == 1; export cnd; }
+cond:  "NBIO" is cond0_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
+cond:  "UNC"  is cond0_4=0b1111 { local cnd:1 = 1; export cnd; }
 
-cond8: "NEQ" is cond8_4=0b0000 {}
-cond8: "EQ" is cond8_4=0b0001 {}
-cond8: "GT" is cond8_4=0b0010 {}
-cond8: "GEQ" is cond8_4=0b0011 {}
-cond8: "LT" is cond8_4=0b0100 {}
-cond8: "LEQ" is cond8_4=0b0101 {}
-cond8: "HI" is cond8_4=0b0110 {}
-cond8: "HIS" is cond8_4=0b0111 {}
-cond8: "LO" is cond8_4=0b1000 {}
-cond8: "LOS" is cond8_4=0b1001 {}
-cond8: "NOV" is cond8_4=0b1010 {}
-cond8: "OV" is cond8_4=0b1011 {}
-cond8: "NTC" is cond8_4=0b1100 {}
-cond8: "TC" is cond8_4=0b1101 {}
-cond8: "NBIO" is cond8_4=0b1110 {}
-cond8: "UNC" is cond8_4=0b1111 {}
+cond8: "NEQ"  is cond8_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
+cond8: "EQ"   is cond8_4=0b0001 { local cnd:1 = Z   == 1; export cnd; }
+cond8: "GT"   is cond8_4=0b0010 { local cnd:1 = Z   == 0 && N == 0; export cnd; }
+cond8: "GEQ"  is cond8_4=0b0011 { local cnd:1 = N   == 0; export cnd; }
+cond8: "LT"   is cond8_4=0b0100 { local cnd:1 = N   == 1; export cnd; }
+cond8: "LEQ"  is cond8_4=0b0101 { local cnd:1 = Z   == 1 || N == 1; export cnd; }
+cond8: "HI"   is cond8_4=0b0110 { local cnd:1 = C   == 1 && Z == 0; export cnd; }
+cond8: "HIS"  is cond8_4=0b0111 { local cnd:1 = C   == 1; export cnd; }
+cond8: "LO"   is cond8_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
+cond8: "LOS"  is cond8_4=0b1001 { local cnd:1 = C   == 0 || Z == 1; export cnd; }
+cond8: "NOV"  is cond8_4=0b1010 { local cnd:1 = V   == 0; export cnd; }
+cond8: "OV"   is cond8_4=0b1011 { local cnd:1 = V   == 1; export cnd; }
+cond8: "NTC"  is cond8_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
+cond8: "TC"   is cond8_4=0b1101 { local cnd:1 = TC  == 1; export cnd; }
+cond8: "NBIO" is cond8_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
+cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 ################################################################
 
@@ -297,10 +305,15 @@ cond8: "UNC" is cond8_4=0b1111 {}
 :asrl ACC, T is objmode=1 & op0_16=0b0101011000010000 & ACC & T {}
 
 # p.162
-:b simm16, cond is op4_12=0b111111111110 & cond; simm16 {}
+:b off16, cond is op4_12=0b111111111110 & cond; off16 {
+	if (cond) goto off16;
+}
 
 # p.163
-:banz simm16, arn0-- is op3_13=0b0000000000001 & arn0; simm16 {}
+:banz off16, arn0-- is op3_13=0b0000000000001 & arn0; off16 {
+	if (arn0 != 0) goto off16;
+	arn0 = arn0 - 1;
+}
 
 # p.164
 :bar simm16, arn3, arn0, "EQ" is objmode=1 & op6_10=0b1000111110 & arn3 & arn0; simm16 {}
@@ -309,7 +322,9 @@ cond8: "UNC" is cond8_4=0b1111 {}
 :bar simm16, arn3, arn0, "NEQ" is objmode=1 & op6_10=0b1000111111 & arn3 & arn0; simm16 {}
 
 # p.165
-:bf simm16, cond is objmode=1 & op4_12=0b010101101100 & cond; simm16 {}
+:bf off16, cond is objmode=1 & op4_12=0b010101101100 & cond; off16 {
+	if (cond) goto off16;
+}
 
 # p.172, p.166 (C27MAP)
 :clrc "M0M1MAP" is op0_16=0b0101011000111111 {}
@@ -1040,16 +1055,26 @@ with : objmode=1 {
 :sat64 ACC:P is objmode=1 & op0_16=0b0101011000111110 & ACC & P {}
 
 # p.399 Need description here
-:sb simm8, cond8 is op12_4=0b0110 & simm8 & cond8 {}
+:sb off8, cond8 is op12_4=0b0110 & off8 & cond8 {
+	if (cond8) goto off8;
+}
 
 # p.400
 :sbbu ACC, loc16 is op8_8=0b00011101 & ACC & loc16 {}
 
 # p.401
-:sbf simm8, "EQ"  is objmode=1 & op8_8=0b11101100 & simm8 {}
-:sbf simm8, "NEQ" is objmode=1 & op8_8=0b11101101 & simm8 {}
-:sbf simm8, "TC"  is objmode=1 & op8_8=0b11101110 & simm8 {}
-:sbf simm8, "NTC" is objmode=1 & op8_8=0b11101111 & simm8 {}
+:sbf off8, "EQ"  is objmode=1 & op8_8=0b11101100 & off8 {
+	if (Z == 0) goto off8;
+}
+:sbf off8, "NEQ" is objmode=1 & op8_8=0b11101101 & off8 {
+	if (Z == 1) goto off8;
+}
+:sbf off8, "TC"  is objmode=1 & op8_8=0b11101110 & off8 {
+	if (TC == 0) goto off8;
+}
+:sbf off8, "NTC" is objmode=1 & op8_8=0b11101111 & off8 {
+	if (TC == 1) goto off8;
+}
 
 # p.402
 :sbrk #imm8 is op8_8=0b11111101 & imm8 {}
