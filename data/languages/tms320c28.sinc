@@ -78,6 +78,22 @@ macro pop16(ret16) {
 	ret16 = *:2 SP;
 }
 
+macro packst0(res) {
+	res = zext((OVC << 10) | (PM << 7) | (V << 6) | (N << 5) | (Z << 4) | (C << 3) | (TC << 2) | (OVM << 1) | SXM);
+}
+
+macro unpackst0(in) {
+	OVC = in[10,6];
+	PM  = in[7,3];
+	V   = (in & 0b1000000) != 0;
+	N   = (in & 0b100000)  != 0;
+	Z   = (in & 0b10000)   != 0;
+	C   = (in & 0b1000)    != 0;
+	TC  = (in & 0b100)     != 0;
+	OVM = (in & 0b10)      != 0;
+	SXM = (in & 0b1)       != 0;
+}
+
 ################################################################
 # Addressing and stuff
 ################################################################
@@ -317,10 +333,14 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.164
-:bar simm16, arn3, arn0, "EQ" is objmode=1 & op6_10=0b1000111110 & arn3 & arn0; simm16 {}
+:bar off16, arn3, arn0, "EQ" is objmode=1 & op6_10=0b1000111110 & arn3 & arn0; off16 {
+	if (arn3 == arn0) goto off16;
+}
 
 # p.164
-:bar simm16, arn3, arn0, "NEQ" is objmode=1 & op6_10=0b1000111111 & arn3 & arn0; simm16 {}
+:bar off16, arn3, arn0, "NEQ" is objmode=1 & op6_10=0b1000111111 & arn3 & arn0; off16 {
+	if (arn3 != arn0) goto off16;
+}
 
 # p.165
 :bf off16, cond is objmode=1 & op4_12=0b010101101100 & cond; off16 {
@@ -340,7 +360,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :setc "M0M1MAP" is op0_16=0b0101011000011010 {}
 
 # p.406, p.170 (C28OBJ)
-:setc "OBJMODE" is op0_16=0b0101011000011111 {}
+:setc "OBJMODE" is op0_16=0b0101011000011111 {} # here the objmode does not show up in the ghidra listing for some reason, it does in test.py
 
 # p.174, p.471 (ZAP OVC)
 :clrc "OVC" is objmode=1 & op0_16=0b0101011001011100 {}
@@ -936,7 +956,12 @@ with : objmode=1 {
 :pop RPC is op0_16=0b0000000000000111 & RPC {}
 
 # p.363
-:pop ST0 is op0_16=0b0111011000010011 & ST0 {}
+:pop ST0 is op0_16=0b0111011000010011 & ST0 {
+	local tmp:2;
+	#pop16(tmp);
+	#ST0 = tmp; # TODO
+	#unpackst0(tmp);
+}
 
 # p.364
 :pop ST1 is op0_16=0b0111011000000000 & ST1 {}
@@ -993,7 +1018,10 @@ with : objmode=1 {
 :push RPC is op0_16=0b0000000000000100 & RPC {}
 
 # p.379
-:push ST0 is op0_16=0b0111011000011000 & ST0 {}
+:push ST0 is op0_16=0b0111011000011000 & ST0 {
+	#packst0(ST0); # TODO
+	#push16(ST0);
+}
 
 # p.380
 :push ST1 is op0_16=0b0111011000001000 & ST1 {}
@@ -1093,18 +1121,40 @@ with : objmode=1 {
 :sfr ACC, T is op0_16=0b1111111101010001 & ACC & T {}
 
 # p.410
-:spm  #1 is           op0_16=0b1111111101101000 {}
-:spm  #0 is           op0_16=0b1111111101101001 {}
-:spm #-1 is           op0_16=0b1111111101101010 {}
-:spm #-2 is           op0_16=0b1111111101101011 {}
-:spm #-3 is           op0_16=0b1111111101101100 {}
-:spm #-4 is amode=0 & op0_16=0b1111111101101101 {}
-:spm  #4 is amode=1 & op0_16=0b1111111101101101 {}
-:spm #-5 is           op0_16=0b1111111101101110 {}
-:spm #-6 is           op0_16=0b1111111101101111 {}
+:spm  #1 is           op0_16=0b1111111101101000 {
+	PM = 1;
+}
+:spm  #0 is           op0_16=0b1111111101101001 {
+	PM = 0;
+}
+:spm #-1 is           op0_16=0b1111111101101010 {
+	PM = -1;
+}
+:spm #-2 is           op0_16=0b1111111101101011 {
+	PM = -2;
+}
+:spm #-3 is           op0_16=0b1111111101101100 {
+	PM = -3;
+}
+:spm #-4 is amode=0 & op0_16=0b1111111101101101 {
+	PM = -4;
+}
+:spm  #4 is amode=1 & op0_16=0b1111111101101101 {
+	PM = 4;
+}
+:spm #-5 is           op0_16=0b1111111101101110 {
+	PM = -5;
+}
+:spm #-6 is           op0_16=0b1111111101101111 {
+	PM = -6;
+}
 
 # p.412
-:sqra loc16 is objmode=1 & op0_16=0b0101011000010101; op8_8=0b00000000 & loc16 {}
+:sqra loc16 is objmode=1 & op0_16=0b0101011000010101; op8_8=0b00000000 & loc16 {
+	ACC = ACC + P << PM;
+	#T = loc16; # TODO
+	#P = T * T;
+}
 
 # p.413
 :sqrs loc16 is objmode=1 & op0_16=0b0101011000010001; loc16 {}
