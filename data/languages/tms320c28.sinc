@@ -68,6 +68,15 @@ attach variables ar67_8 [ AR6 AR7 ];
 
 @define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) + imm16; ]"
 
+macro mext(in, out) {
+	if (SXM) goto <sext>;
+	out = zext(in);
+	goto <ret>;
+	<sext>
+	out = sext(in);
+	<ret>
+}
+
 macro push16(val16) {
 	local sp4:4 = zext(SP);
 	*:2 sp4 = val16;
@@ -125,30 +134,30 @@ off8: rel is simm8 [ rel = inst_start + simm8; ] {
 }
 
 # Direct Addressing Modes (DP)
-loc16: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
+loc16: @imm6           is amode=0 & op6_2=0b00 & imm6 {local addr:4 = (zext(DP) << 6) | imm6; export *:2 addr;}
 # Stack Addressing Modes (SP)
-loc16: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 {}
-loc16: *SP++           is amode=0 & op0_8=0b10111101 & SP {}
-loc16: *--SP           is amode=0 & op0_8=0b10111110 & SP {}
-# C28x Indirect Addressing Modes (XAR0 to XAR7)
-loc16: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 {}
-loc16: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 {}
-loc16: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 {}
-loc16: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 {}
-loc16: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 {}
+loc16: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 {local addr = SP - imm6; export *:2 addr;}
+loc16: *SP++           is amode=0 & op0_8=0b10111101 & SP {local addr = SP; SP = SP + 1; export *:2 addr;}
+loc16: *--SP           is amode=0 & op0_8=0b10111110 & SP {SP = SP - 1; export *:2 SP;}
+# C28x Indirect Addressing Modes (XAR0 to XAR7). imm3 is the raw numeric value of xarn0 to set ARP
+loc16: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 & imm3 {ARP = imm3; local addr = xarn0; xarn0 = xarn0 + 1; export *:2 addr;}
+loc16: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 & imm3 {ARP = imm3; xarn0 = xarn0 - 1; export *:2 xarn0;}
+loc16: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR0); export *:2 addr;}
+loc16: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR1); export *:2 addr;}
+loc16: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {ARP = imm3; local addr = xarn0 + imm3_3; export *:2 addr;}
 # C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
-loc16: *               is amode=0 & op0_8=0b10111000 {}
-loc16: *++             is amode=0 & op0_8=0b10111001 {}
-loc16: *--             is amode=0 & op0_8=0b10111010 {}
-loc16: *0++            is amode=0 & op0_8=0b10111011 {}
-loc16: *0--            is amode=0 & op0_8=0b10111100 {}
-loc16: *"BR0"++        is amode=0 & op0_8=0b10101110 {}
-loc16: *"BR0"--        is amode=0 & op0_8=0b10101111 {}
-loc16: *"ARP"^imm3     is amode=0 & op3_5=0b10110 & imm3 {}
+loc16: *               is amode=0 & op0_8=0b10111000 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; export *:2 rv;}
+loc16: *++             is amode=0 & op0_8=0b10111001 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv + 1; export *:2 rv;}
+loc16: *--             is amode=0 & op0_8=0b10111010 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv - 1; export *:2 rv;} # manual says post *increment* here too, sigh
+loc16: *0++            is amode=0 & op0_8=0b10111011 {local tmp:2 = 0; export tmp;} # TODO
+loc16: *0--            is amode=0 & op0_8=0b10111100 {local tmp:2 = 0; export tmp;} # TODO
+loc16: *"BR0"++        is amode=0 & op0_8=0b10101110 {local tmp:2 = 0; export tmp;} # TODO
+loc16: *"BR0"--        is amode=0 & op0_8=0b10101111 {local tmp:2 = 0; export tmp;} # TODO
+loc16: *"ARP"^imm3     is amode=0 & op3_5=0b10110 & imm3 {local tmp:2 = 0; export tmp;} # TODO
 # Circular Indirect Addressing Modes (XAR6, XAR1)
-loc16: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 {}
+loc16: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 {local tmp:2 = 0; export tmp;} # TODO
 # 16-Bit Register Addressing Modes (AR0 to AR7, AH, AL, PH, PL, TH, SP)
-loc16: reg16           is amode=0 & op4_4=0b1010 & reg16 {}
+loc16: reg16           is amode=0 & op4_4=0b1010 & reg16 {local tmp:2 = 0; export tmp;} # TODO
 
 # Direct Addressing Modes (DP)
 loc32: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
@@ -644,10 +653,14 @@ with : objmode=1 {
 :mov ACC, loc16 << T is objmode=1 & op0_16=0b0101011000000110; op8_8=0b00000000 & ACC & loc16 & T {}
 
 # p.255
-:mov ACC, loc16 is objmode=1 & op8_8=0b10000101 & ACC & loc16 {}
+:mov ACC, loc16 is objmode=1 & op8_8=0b10000101 & ACC & loc16 {
+	mext(loc16, ACC);
+}
 
 # p.255
-:mov ACC, loc16 is objmode=0 & op8_8=0b11100000 & ACC & loc16 {}
+:mov ACC, loc16 is objmode=0 & op8_8=0b11100000 & ACC & loc16 {
+	mext(loc16, ACC);
+}
 
 # p.255
 :mov ACC, loc16 << #shift8_4 is objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {}
@@ -665,19 +678,29 @@ with : objmode=1 {
 :mov ax8, loc16 is op9_7=0b1001001 & ax8 & loc16 {}
 
 # p.258
-:mov DP, #imm10 is op10_6=0b111110 & DP & imm10 {}
+:mov DP, #imm10 is op10_6=0b111110 & DP & imm10 {
+	local dph:2 = DP[10,6];
+	DP = dph | imm10;
+}
 
 # p.259
 :mov IER, loc16 is op8_8=0b00100011 & IER & loc16 {}
 
 # p.260
-:mov loc16, #imm16 is op8_8=0b00101000 & loc16; imm16 {}
+:mov loc16, #imm16 is op8_8=0b00101000 & loc16; imm16 {
+	loc16 = imm16;
+}
 
 # p.261
-:mov loc16, *(0:imm16) is op8_8=0b11110101 & loc16; imm16 {}
+:mov loc16, *(0:imm16) is op8_8=0b11110101 & loc16; imm16 {
+	local addr:4 = imm16;
+	loc16 = *:2 addr;
+}
 
 # p.262
-:mov loc16, #0 is op8_8=0b00101011 & loc16 {}
+:mov loc16, #0 is op8_8=0b00101011 & loc16 {
+	loc16 = 0;
+}
 
 # p.263
 :mov loc16, ACC << #1 is objmode=1 & op8_8=0b10110001 & loc16 & ACC {}
@@ -848,7 +871,11 @@ with : objmode=1 {
 :movs T, loc16 is op8_8=0b00010001 & op0_8!=0b10101100 & T & loc16 {}
 
 # p.313
-:movu ACC, loc16 is op8_8=0b00001110 & ACC & loc16 {}
+:movu ACC, loc16 is op8_8=0b00001110 & ACC & loc16 {
+	#ACC = loc16;
+	N = 0;
+	Z = (ACC == 0);
+}
 
 # p.314
 :movu loc16, "OVC" is objmode=1 & op0_16=0b0101011000101000; op8_8=0b00000000 & loc16 {}
@@ -857,7 +884,9 @@ with : objmode=1 {
 :movu "OVC", loc16 is objmode=1 & op0_16=0b0101011001100010; op8_8=0b00000000 & loc16 {}
 
 # p.316
-:movw DP, #imm16 is op0_16=0b0111011000011111; DP & imm16 {}
+:movw DP, #imm16 is op0_16=0b0111011000011111; DP & imm16 {
+	DP = imm16;
+}
 
 # p.317
 :movx TL, loc16 is objmode=1 & op0_16=0b0101011000100001; TL & loc16 {}
