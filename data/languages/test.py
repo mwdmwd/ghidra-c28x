@@ -29,6 +29,7 @@ for ins in dx.instructions:
     if mnem in (
         "B",
         "BANZ",
+        "BAR",
         "BF",
         "SB",
         "SBF",

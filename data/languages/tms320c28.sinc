@@ -69,13 +69,15 @@ attach variables ar67_8 [ AR6 AR7 ];
 @define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) + imm16; ]"
 
 macro push16(val16) {
-	*:2 SP = val16;
+	local sp4:4 = zext(SP);
+	*:2 sp4 = val16;
 	SP = SP + 1;
 }
 
 macro pop16(ret16) {
 	SP = SP - 1;
-	ret16 = *:2 SP;
+	local sp4:4 = zext(SP);
+	ret16 = *:2 sp4;
 }
 
 macro packst0(res) {
@@ -493,13 +495,29 @@ with : objmode=1 {
 :lb dest22 is op6_10=0b0000000001 ... & dest22 { goto dest22; }
 
 # p.218
-:lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {}
+:lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {
+	local tmp:4 = inst_next;
+	push16(tmp[0,16]);
+	push16(tmp[16,16]);
+	call [XAR7];
+}
 
 # p.219
-:lc imm22 is op6_10=0b0000000010 & $(imm22) {}
+:lc dest22 is op6_10=0b0000000010 ... & dest22 {
+	local tmp:4 = inst_next;
+	push16(tmp[0,16]);
+	push16(tmp[16,16]);
+	call dest22;
+}
 
 # p.220
-:lcr imm22 is objmode=1 & op6_10=0b0111011001 & $(imm22) {}
+:lcr dest22 is objmode=1 & op6_10=0b0111011001 ... & dest22 {
+	local tmp:4 = RPC;
+	push16(tmp[0,16]);
+	push16(tmp[16,16]);
+	RPC = inst_next;
+	call dest22;
+}
 
 # p.221
 :lcr *xarn0 is objmode=1 & op3_13=0b0011111001100 & xarn0 {}
