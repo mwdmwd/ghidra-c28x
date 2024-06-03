@@ -80,6 +80,18 @@ macro pop16(ret16) {
 	ret16 = *:2 sp4;
 }
 
+macro push32(val32) {
+	local sp4:4 = zext(SP);
+	*:4 sp4 = val32;
+	SP = SP + 2;
+}
+
+macro pop32(ret32) {
+	SP = SP - 2;
+	local sp4:4 = zext(SP);
+	ret32 = *:4 sp4;
+}
+
 macro packst0(res) {
 	res = zext((OVC << 10) | (PM << 7) | (V << 6) | (N << 5) | (Z << 4) | (C << 3) | (TC << 2) | (OVM << 1) | SXM);
 }
@@ -538,13 +550,26 @@ with : objmode=1 {
 :setc "AMODE" is op0_16=0b0101011000011110 {}
 
 # p.227
-:lret is op0_16=0b0111011000010100 {}
+:lret is op0_16=0b0111011000010100 {
+	local tmp:4;
+	pop32(tmp); # TODO verify if push16(x[0,16]) + push16(x[16,16]) is compatible with pop32
+	return [tmp];
+}
 
 # p.228
-:lrete is op0_16=0b0111011000010000 {}
+:lrete is op0_16=0b0111011000010000 {
+	local tmp:4;
+	pop32(tmp); # TODO verify if push16(x[0,16]) + push16(x[16,16]) is compatible with pop32
+	INTM = 0;
+	return [tmp];
+}
 
 # p.229
-:lretr is objmode=1 & op0_16=0b0000000000000110 {}
+:lretr is objmode=1 & op0_16=0b0000000000000110 {
+	local tmp = RPC;
+	pop32(RPC); # TODO verify if push16(x[0,16]) + push16(x[16,16]) is compatible with pop32
+	return [tmp];
+}
 
 # p.230
 :lsl ACC, shift0_4_1 is op4_12=0b111111110011 & ACC & shift0_4_1 {}
@@ -1330,10 +1355,21 @@ with : objmode=1 {
 :xpwrite *AL, loc16 is objmode=1 & op0_16=0b0101011000111101; op8_8=0b00000000 & AL & loc16 {}
 
 # p.467
-:xret is objmode=1 & op0_16=0b0101011011111111 {}
+:xret is objmode=1 & op0_16=0b0101011011111111 {
+	local tmp:4;
+	pop16(tmp);
+	tmp = tmp | 0x3f0000;
+	return [tmp];
+}
 
 # p.468
-:xretc cond is objmode=1 & op4_12=0b010101101111 & cond {}
+:xretc cond is objmode=1 & op4_12=0b010101101111 & cond {
+	if (!cond) goto inst_next;
+	local tmp:4;
+	pop16(tmp);
+	tmp = tmp | 0x3f0000;
+	return [tmp];
+}
 
 # p.470
 :zalr ACC, loc16 is objmode=1 & op0_16=0b0101011000010011; op8_8=0b00000000 & ACC & loc16 {}
