@@ -68,7 +68,7 @@ attach variables ar67_8 [ AR6 AR7 ];
 
 @define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) + imm16; ]"
 
-macro mext(in, out) {
+macro mext(out, in) {
 	if (SXM) goto <sext>;
 	out = zext(in);
 	goto <ret>;
@@ -654,12 +654,12 @@ with : objmode=1 {
 
 # p.255
 :mov ACC, loc16 is objmode=1 & op8_8=0b10000101 & ACC & loc16 {
-	mext(loc16, ACC);
+	mext(ACC, loc16);
 }
 
 # p.255
 :mov ACC, loc16 is objmode=0 & op8_8=0b11100000 & ACC & loc16 {
-	mext(loc16, ACC);
+	mext(ACC, loc16);
 }
 
 # p.255
