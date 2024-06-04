@@ -117,6 +117,11 @@ macro unpackst0(in) {
 	SXM = (in & 0b1)       != 0;
 }
 
+macro flagnz(in) {
+	N = in s< 0;
+	Z = in == 0;
+}
+
 ################################################################
 # Addressing and stuff
 ################################################################
@@ -647,35 +652,67 @@ with : objmode=1 {
 :mov *(0:imm16), loc16 is op8_8=0b11110100 & loc16; imm16 {}
 
 # p.253
-:mov ACC, #imm16 << #shift0_4 is op4_12=0b111111110010 & shift0_4; ACC & imm16 {}
+:mov ACC, #imm16 << #shift0_4 is op4_12=0b111111110010 & shift0_4; ACC & imm16 {
+	local tmp:4;
+	mext(tmp, imm16:2);
+	ACC = tmp << shift0_4;
+	flagnz(ACC);
+}
 
 # p.254
-:mov ACC, loc16 << T is objmode=1 & op0_16=0b0101011000000110; op8_8=0b00000000 & ACC & loc16 & T {}
+:mov ACC, loc16 << T is objmode=1 & op0_16=0b0101011000000110; op8_8=0b00000000 & ACC & loc16 & T {
+	local tmp:4;
+	mext(tmp, loc16);
+	ACC = tmp << T[0,4];
+	flagnz(ACC);
+}
 
 # p.255
 :mov ACC, loc16 is objmode=1 & op8_8=0b10000101 & ACC & loc16 {
 	mext(ACC, loc16);
+	flagnz(ACC);
 }
 
 # p.255
 :mov ACC, loc16 is objmode=0 & op8_8=0b11100000 & ACC & loc16 {
 	mext(ACC, loc16);
+	flagnz(ACC);
 }
 
 # p.255
-:mov ACC, loc16 << #shift8_4 is objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {}
+:mov ACC, loc16 << #shift8_4 is objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	ACC = tmp << shift8_4;
+	flagnz(ACC);
+}
 
 # p.255
-:mov ACC, loc16 << #shift8_4 is objmode=0 & op12_4=0b1110 & ACC & shift8_4 & loc16 {}
+:mov ACC, loc16 << #shift8_4 is objmode=0 & op12_4=0b1110 & ACC & shift8_4 & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	ACC = tmp << shift8_4;
+	flagnz(ACC);
+}
 
 # p.255
-:mov ACC, loc16 << #16 is op8_8=0b00100101 & ACC & loc16 {}
+:mov ACC, loc16 << #16 is op8_8=0b00100101 & ACC & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	ACC = tmp << 16;
+	flagnz(ACC);
+}
 
 # p.256
-:mov ar67_8, loc16 is op9_7=0b0101111 & ar67_8 & loc16 {}
+:mov ar67_8, loc16 is op9_7=0b0101111 & ar67_8 & loc16 {
+	ar67_8 = loc16;
+}
 
 # p.257
-:mov ax8, loc16 is op9_7=0b1001001 & ax8 & loc16 {}
+:mov ax8, loc16 is op9_7=0b1001001 & ax8 & loc16 {
+	ax8 = loc16;
+	flagnz(ax8);
+}
 
 # p.258
 :mov DP, #imm10 is op10_6=0b111110 & DP & imm10 {
@@ -684,22 +721,36 @@ with : objmode=1 {
 }
 
 # p.259
-:mov IER, loc16 is op8_8=0b00100011 & IER & loc16 {}
+:mov IER, loc16 is op8_8=0b00100011 & IER & loc16 {
+	IER = loc16;
+}
 
 # p.260
 :mov loc16, #imm16 is op8_8=0b00101000 & loc16; imm16 {
 	loc16 = imm16;
+	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
+	goto inst_next;
+	<flag>
+	flagnz(loc16);
 }
 
 # p.261
 :mov loc16, *(0:imm16) is op8_8=0b11110101 & loc16; imm16 {
 	local addr:4 = imm16;
 	loc16 = *:2 addr;
+	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
+	goto inst_next;
+	<flag>
+	flagnz(loc16);
 }
 
 # p.262
 :mov loc16, #0 is op8_8=0b00101011 & loc16 {
 	loc16 = 0;
+	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
+	goto inst_next;
+	<flag>
+	flagnz(loc16);
 }
 
 # p.263
@@ -712,10 +763,22 @@ with : objmode=1 {
 :mov loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10111 & loc16 & ACC & shift8_3_1 {}
 
 # p.264
-:mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 {}
+:mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 {
+	loc16 = arn8;
+	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
+	goto inst_next;
+	<flag>
+	flagnz(loc16);
+}
 
 # p.265
-:mov loc16, ax8 is op9_7=0b1001011 & ax8 & loc16 {}
+:mov loc16, ax8 is op9_7=0b1001011 & ax8 & loc16 {
+	loc16 = ax8;
+	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
+	goto inst_next;
+	<flag>
+	flagnz(loc16);
+}
 
 # p.266
 :mov loc16, ax0, cond8 is objmode=1 & op1_15=0b010101100010101 & ax0; op12_4=0b0000 & cond8 & loc16 {}
@@ -897,7 +960,9 @@ with : objmode=1 {
 :movz AR7, loc16 is objmode=1 & op8_8=0b10000000 & AR7 & loc16 {}
 
 # p.319
-:movz DP, #imm10 is objmode=1 & op10_6=0b101110 & DP & imm10 {}
+:movz DP, #imm10 is objmode=1 & op10_6=0b101110 & DP & imm10 {
+	DP = imm10;
+}
 
 # p.320
 :mpy ACC, loc16, #imm16 is op8_8=0b00110100 & ACC & loc16; imm16 {}
@@ -1187,10 +1252,22 @@ with : objmode=1 {
 :sbrk #imm8 is op8_8=0b11111101 & imm8 {}
 
 # p.403
-:setc imm8 is op8_8=0b00111011 & imm8 {} # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP 
+:setc imm8 is op8_8=0b00111011 & imm8 { # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP in dasm
+	local bimm8:1 = imm8;
+	SXM   = SXM   || (bimm8[0,1] != 0);
+	OVM   = OVM   || (bimm8[1,1] != 0);
+	TC    = TC    || (bimm8[2,1] != 0);
+	C     = C     || (bimm8[3,1] != 0);
+	INTM  = INTM  || (bimm8[4,1] != 0);
+	DBGM  = DBGM  || (bimm8[5,1] != 0);
+	PAGE0 = PAGE0 || (bimm8[6,1] != 0);
+	VMAP  = VMAP  || (bimm8[7,1] != 0);
+} 
 
 # p.407
-:setc "XF" is op0_16=0b0101011000100110 {}
+:setc "XF" is op0_16=0b0101011000100110 {
+	XF = 1;
+}
 
 # p.408
 :sfr ACC, shift0_4_1 is op4_12=0b111111110100 & ACC & shift0_4_1 {}
