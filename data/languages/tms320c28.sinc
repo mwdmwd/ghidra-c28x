@@ -263,13 +263,23 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :add loc16, #simm16 is op8_8=0b00001000 & loc16; simm16 {}
 
 # p.134
-:addb ACC, #imm8 is op8_8=0b00001001 & ACC & imm8 {}
+:addb ACC, #imm8 is op8_8=0b00001001 & ACC & imm8 {
+	ACC = ACC + imm8;
+	flagnz(ACC);
+	# TODO C V OVC OVM (saturate)
+}
 
 # p.135
-:addb ax8, #simm8 is op9_7=0b1001110 & ax8 & simm8 {}
+:addb ax8, #simm8 is op9_7=0b1001110 & ax8 & simm8 {
+	ax8 = ax8 + simm8;
+	flagnz(ax8);
+	# TODO C  V
+}
 
 # p.136
-:addb SP, #imm7 is op7_9=0b111111100 & SP & imm7 {}
+:addb SP, #imm7 is op7_9=0b111111100 & SP & imm7 {
+	SP = SP + imm7;
+}
 
 # p.137
 :addb xarn8, #imm7 is op11_5=0b11011 & xarn8 & op7=0 & imm7 {}
