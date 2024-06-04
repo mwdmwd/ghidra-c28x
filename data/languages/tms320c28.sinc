@@ -1179,7 +1179,13 @@ with : objmode=1 {
 :pop XT is op0_16=0b1000011110111110 & XT {}
 
 # p.368
-:pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {}
+:pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {
+	loc16 = *:2 XAR7;
+	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
+	goto inst_next;
+	<flag>
+	flagnz(loc16);
+}
 
 # p.369
 :push ACC is op0_16=0b0001111010111110 & ACC {} # alias for `MOVL *SP++, ACC`
