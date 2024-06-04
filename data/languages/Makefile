@@ -9,7 +9,7 @@ ifdef PERMISSIVE
 SLEIGH_REPORT_CONFLICTS :=
 endif
 
-tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec tms320c28.sinc tms320c28.slaspec
+tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec $(wildcard tms320c28*.sinc) tms320c28.slaspec
 	/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -o -a $$PWD # -f unused fields
 
 test.obj: test.asm
