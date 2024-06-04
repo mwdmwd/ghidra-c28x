@@ -412,7 +412,17 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :clrc "XF" is op0_16=0b0101011000011011 {}
 
 # p.176
-:clrc imm8 is op8_8=0b00101001 & imm8 {} # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP
+:clrc imm8 is op8_8=0b00101001 & imm8 { # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP
+	local bimm8:1 = imm8;
+	SXM   = SXM   && (bimm8[0,1] == 0);
+	OVM   = OVM   && (bimm8[1,1] == 0);
+	TC    = TC    && (bimm8[2,1] == 0);
+	C     = C     && (bimm8[3,1] == 0);
+	INTM  = INTM  && (bimm8[4,1] == 0);
+	DBGM  = DBGM  && (bimm8[5,1] == 0);
+	PAGE0 = PAGE0 && (bimm8[6,1] == 0);
+	VMAP  = VMAP  && (bimm8[7,1] == 0);
+}
 
 # p.177
 :cmp ax8, loc16 is op9_7=0b0101010 & ax8 & loc16 {}
