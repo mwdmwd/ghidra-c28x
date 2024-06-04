@@ -332,7 +332,10 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :andb ax8, #imm8 is op9_7=0b1001000 & ax8 & imm8 {}
 
 # p.156
-:asp is op0_16=0b0111011000011011 {}
+:asp is op0_16=0b0111011000011011 {
+	if ((SP % 2) == 0) goto inst_next;
+	SP = SP + 1;
+}
 
 # p.157
 :asr ax4, shift0_4_1 is op5_11=0b11111111101 & ax4 & shift0_4_1 {}
