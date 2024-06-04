@@ -376,22 +376,34 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.172, p.166 (C27MAP)
-:clrc "M0M1MAP" is op0_16=0b0101011000111111 {}
+:clrc M0M1MAP is op0_16=0b0101011000111111 & M0M1MAP {
+	M0M1MAP = 0;
+}
 
 # p.173, p.167 (C27OBJ)
-:clrc "OBJMODE" is op0_16=0b0101011000110110 {}
+:clrc OBJMODE is op0_16=0b0101011000110110 & OBJMODE {
+	OBJMODE = 0;
+}
 
 # p.171, p.168 (C28ADDR)
-:clrc "AMODE" is op0_16=0b0101011000010110 {}
+:clrc AMODE is op0_16=0b0101011000010110 & AMODE {
+	AMODE = 0;
+}
 
 # p.405, p.169 (C28MAP)
-:setc "M0M1MAP" is op0_16=0b0101011000011010 {}
+:setc M0M1MAP is op0_16=0b0101011000011010 & M0M1MAP {
+	M0M1MAP = 1;
+}
 
 # p.406, p.170 (C28OBJ)
-:setc "OBJMODE" is op0_16=0b0101011000011111 {} # here the objmode does not show up in the ghidra listing for some reason, it does in test.py
+:setc OBJMODE is op0_16=0b0101011000011111 & OBJMODE {
+	OBJMODE = 1;
+}
 
 # p.174, p.471 (ZAP OVC)
-:clrc "OVC" is objmode=1 & op0_16=0b0101011001011100 {}
+:clrc OVC is objmode=1 & op0_16=0b0101011001011100 & OVC {
+	OVC = 0;
+}
 
 # p.175
 :clrc "XF" is op0_16=0b0101011000011011 {}
@@ -561,7 +573,9 @@ with : objmode=1 {
 :loopz loc16, #imm16 is op8_8=0b00101100 & loc16; imm16 {}
 
 # p.226 (LPADDR)
-:setc "AMODE" is op0_16=0b0101011000011110 {}
+:setc AMODE is op0_16=0b0101011000011110 & AMODE {
+	AMODE = 1;
+}
 
 # p.227
 :lret is op0_16=0b0111011000010100 {
