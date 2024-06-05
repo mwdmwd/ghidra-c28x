@@ -1,5 +1,6 @@
 TIBIN := /home/user/re/inverter/tms320/ti-cgt-c2000_22.6.1.LTS/bin/
 AS := $(TIBIN)cl2000
+ASFLAGS := --float_support=fpu32
 DIS := $(TIBIN)dis2000
 DISFLAGS ?=
 HEX := $(TIBIN)hex2000
@@ -13,7 +14,7 @@ tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec
 	/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -o -a $$PWD # -f unused fields
 
 test.obj: test.asm
-	$(AS) $<
+	$(AS) $(ASFLAGS) $<
 
 test.bin: test.obj
 	$(HEX) $< --binary -o $@
