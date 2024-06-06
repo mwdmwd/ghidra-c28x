@@ -942,14 +942,30 @@ with : objmode=1 {
 :movl P, loc32 is objmode=1 & op8_8=0b10100011 & P & loc32 {}
 
 # p.308
-:movl XAR0, loc32 is objmode=1 & op8_8=0b10001110 & op0_8!=0b10111110 & XAR0 & loc32 {}
-:movl XAR1, loc32 is objmode=1 & op8_8=0b10001011 & op0_8!=0b10111110 & XAR1 & loc32 {}
-:movl XAR2, loc32 is objmode=1 & op8_8=0b10000110 & op0_8!=0b10111110 & XAR2 & loc32 {}
-:movl XAR3, loc32 is objmode=1 & op8_8=0b10000010 & op0_8!=0b10111110 & XAR3 & loc32 {}
-:movl XAR4, loc32 is objmode=1 & op8_8=0b10001010 & op0_8!=0b10111110 & XAR4 & loc32 {}
-:movl XAR5, loc32 is objmode=1 & op8_8=0b10000011 & op0_8!=0b10111110 & XAR5 & loc32 {}
-:movl XAR6, loc32 is op8_8=0b11000100 & op0_8!=0b10111110 & XAR6 & loc32 {}
-:movl XAR7, loc32 is op8_8=0b11000101 & op0_8!=0b10111110 & XAR7 & loc32 {}
+:movl XAR0, loc32 is objmode=1 & op8_8=0b10001110 & op0_8!=0b10111110 & XAR0 & loc32 {
+	XAR0 = loc32;
+}
+:movl XAR1, loc32 is objmode=1 & op8_8=0b10001011 & op0_8!=0b10111110 & XAR1 & loc32 {
+	XAR1 = loc32;
+}
+:movl XAR2, loc32 is objmode=1 & op8_8=0b10000110 & op0_8!=0b10111110 & XAR2 & loc32 {
+	XAR2 = loc32;
+}
+:movl XAR3, loc32 is objmode=1 & op8_8=0b10000010 & op0_8!=0b10111110 & XAR3 & loc32 {
+	XAR3 = loc32;
+}
+:movl XAR4, loc32 is objmode=1 & op8_8=0b10001010 & op0_8!=0b10111110 & XAR4 & loc32 {
+	XAR4 = loc32;
+}
+:movl XAR5, loc32 is objmode=1 & op8_8=0b10000011 & op0_8!=0b10111110 & XAR5 & loc32 {
+	XAR5 = loc32;
+}
+:movl XAR6, loc32 is op8_8=0b11000100 & op0_8!=0b10111110 & XAR6 & loc32 {
+	XAR6 = loc32;
+}
+:movl XAR7, loc32 is op8_8=0b11000101 & op0_8!=0b10111110 & XAR7 & loc32 {
+	XAR7 = loc32;
+}
 
 # p.309
 :movl XAR0, #imm22 is objmode=1 & op6_10=0b1000110100 & XAR0 & $(imm22) {
