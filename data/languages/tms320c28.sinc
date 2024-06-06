@@ -447,7 +447,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :cmpb ax8, #imm8 is op9_7=0b0101001 & ax8 & imm8 {}
 
 # p.181
-:cmpl ACC, loc32 is op8_8=0b00001111 & ACC & loc32 {}
+:cmpl ACC, loc32 is op8_8=0b00001111 & ACC & loc32 {
+	local tmp:5 = zext(ACC) - zext(loc32); # 5 bytes so it behaves like infinite precision in all cases
+	flagnz(tmp);
+	# TODO C flag
+}
 
 # p.182
 :cmpl ACC, P << PM is op0_16=0b1111111101011001 & ACC & P & PM {}
@@ -860,7 +864,10 @@ with : objmode=1 {
 :movad T, loc16 is objmode=1 & op8_8=0b10100111 & T & loc16 {}
 
 # p.281
-:movb ACC, #imm8 is objmode=1 & op8_8=0b00000010 & ACC & imm8 {}
+:movb ACC, #imm8 is objmode=1 & op8_8=0b00000010 & ACC & imm8 {
+	ACC = imm8;
+	flagnz(ACC);
+}
 
 # p.282
 :movb ar67_8, #imm8 is op9_7=0b1101011 & ar67_8 & imm8 {}
@@ -914,7 +921,10 @@ with : objmode=1 {
 :movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM {} # alias for `MOVP T, loc16` with `loc16 = @T`
 
 # p. 300
-:movl loc32, ACC is op8_8=0b00011110 & op0_8!=0b10111110 & loc32 & ACC {}
+:movl loc32, ACC is op8_8=0b00011110 & op0_8!=0b10111110 & loc32 & ACC {
+	# TODO flags in case someone had the bright idea to actually use this with loc32=ACC
+	loc32 = ACC;
+}
 
 # p.301
 :movl loc32, ACC, cond8 is op0_16=0b0101011001001000; op12_4=0b0000 & loc32 & ACC & cond8 {}
@@ -1417,7 +1427,9 @@ with : objmode=1 {
 :subb SP, #imm7 is op7_9=0b111111101 & SP & imm7 {}
 
 # p.422
-:subb xarn8, #imm7 is op11_5=0b11011 & op7=0b1 & xarn8 & imm7 {}
+:subb xarn8, #imm7 is op11_5=0b11011 & op7=0b1 & xarn8 & imm7 {
+	xarn8 = xarn8 - imm7;
+}
 
 # p.423
 :subbl ACC, loc32 is objmode=1 & op0_16=0b0101011001010100; op8_8=0b00000000 & ACC & loc32 {}
