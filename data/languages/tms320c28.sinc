@@ -1462,7 +1462,9 @@ with : objmode=1 {
 :tclr loc16, #imm8_4 is objmode=1 & op0_16=0b0101011000001001; op12_4=0b0000 & imm8_4 & loc16 {}
 
 # p.439
-:test ACC is op0_16=0b1111111101011000 & ACC {}
+:test ACC is op0_16=0b1111111101011000 & ACC {
+	flagnz(ACC);
+}
 
 # p.440
 :trap #imm5 is op5_11=0b00000000001 & imm5 {}
