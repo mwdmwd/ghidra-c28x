@@ -165,30 +165,30 @@ loc16: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 unimpl # TODO p.97
 loc16: reg16           is amode=0 & op4_4=0b1010 & reg16 {export reg16;}
 
 # Direct Addressing Modes (DP)
-loc32: @imm6           is amode=0 & op6_2=0b00 & imm6 {}
+loc32: @imm6           is amode=0 & op6_2=0b00 & imm6 {local addr:4 = (zext(DP) << 6) | imm6; export *:4 addr;}
 # Stack Addressing Modes (SP)
-loc32: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 {}
-loc32: *SP++           is amode=0 & op0_8=0b10111101 & SP {}
-loc32: *--SP           is amode=0 & op0_8=0b10111110 & SP {}
+loc32: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 unimpl
+loc32: *SP++           is amode=0 & op0_8=0b10111101 & SP unimpl
+loc32: *--SP           is amode=0 & op0_8=0b10111110 & SP unimpl
 # C28x Indirect Addressing Modes (XAR0 to XAR7)
-loc32: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 {}
-loc32: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 {}
-loc32: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 {}
-loc32: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 {}
-loc32: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 {}
+loc32: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 unimpl
+loc32: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 unimpl
+loc32: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 unimpl
+loc32: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 unimpl
+loc32: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 unimpl
 # C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
-loc32: *               is amode=0 & op0_8=0b10111000 {}
-loc32: *++             is amode=0 & op0_8=0b10111001 {}
-loc32: *--             is amode=0 & op0_8=0b10111010 {}
-loc32: *0++            is amode=0 & op0_8=0b10111011 {}
-loc32: *0--            is amode=0 & op0_8=0b10111100 {}
-loc32: *"BR0"++        is amode=0 & op0_8=0b10101110 {}
-loc32: *"BR0"--        is amode=0 & op0_8=0b10101111 {}
-loc32: *"ARP"^imm3     is amode=0 & op3_5=0b10110 & imm3 {}
+loc32: *               is amode=0 & op0_8=0b10111000 unimpl
+loc32: *++             is amode=0 & op0_8=0b10111001 unimpl
+loc32: *--             is amode=0 & op0_8=0b10111010 unimpl
+loc32: *0++            is amode=0 & op0_8=0b10111011 unimpl
+loc32: *0--            is amode=0 & op0_8=0b10111100 unimpl
+loc32: *"BR0"++        is amode=0 & op0_8=0b10101110 unimpl
+loc32: *"BR0"--        is amode=0 & op0_8=0b10101111 unimpl
+loc32: *"ARP"^imm3     is amode=0 & op3_5=0b10110 & imm3 unimpl
 # Circular Indirect Addressing Modes (XAR6, XAR1)
-loc32: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 {}
+loc32: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 unimpl
 # 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
-loc32: reg32           is amode=0 & op4_4=0b1010 & reg32 {}
+loc32: reg32           is amode=0 & op4_4=0b1010 & reg32 {export reg32;}
 
 cond:  "NEQ"  is cond0_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
 cond:  "EQ"   is cond0_4=0b0001 { local cnd:1 = Z   == 1; export cnd; }
