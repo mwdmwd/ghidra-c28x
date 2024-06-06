@@ -1409,7 +1409,9 @@ with : objmode=1 {
 :sub loc16, ax8 is op9_7=0b0111010 & ax8 & loc16 {}
 
 # p.420
-:subb ACC, #imm8 is op8_8=0b00011001 & ACC & imm8 {}
+:subb ACC, #imm8 is op8_8=0b00011001 & ACC & imm8 {
+	ACC = ACC - imm8;
+}
 
 # p.421
 :subb SP, #imm7 is op7_9=0b111111101 & SP & imm7 {}
