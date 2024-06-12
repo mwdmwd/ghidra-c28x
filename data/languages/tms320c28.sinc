@@ -282,7 +282,9 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.137
-:addb xarn8, #imm7 is op11_5=0b11011 & xarn8 & op7=0 & imm7 {}
+:addb xarn8, #imm7 is op11_5=0b11011 & xarn8 & op7=0 & imm7 {
+	xarn8 = xarn8 + imm7;
+}
 
 # p.138
 :addcl ACC, loc32 is objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {}
