@@ -1064,9 +1064,15 @@ with : objmode=1 {
 :movx TL, loc16 is objmode=1 & op0_16=0b0101011000100001; TL & loc16 {}
 
 # p.318
-:movz arn8, loc16 is op11_5=0b01011 & arn8 & loc16 {}
-:movz AR6, loc16 is objmode=1 & op8_8=0b10001000 & AR6 & loc16 {}
-:movz AR7, loc16 is objmode=1 & op8_8=0b10000000 & AR7 & loc16 {}
+:movz arn8, loc16 is op11_5=0b01011 & arn8 & xarn8 & loc16 {
+	xarn8 = zext(loc16);
+}
+:movz AR6, loc16 is objmode=1 & op8_8=0b10001000 & AR6 & loc16 {
+	XAR6 = zext(loc16);
+}
+:movz AR7, loc16 is objmode=1 & op8_8=0b10000000 & AR7 & loc16 {
+	XAR7 = zext(loc16);
+}
 
 # p.319
 :movz DP, #imm10 is objmode=1 & op10_6=0b101110 & DP & imm10 {
