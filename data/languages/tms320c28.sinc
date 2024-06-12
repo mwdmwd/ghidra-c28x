@@ -767,31 +767,49 @@ with : objmode=1 {
 }
 
 # p.260
-:mov loc16, #imm16 is op8_8=0b00101000 & loc16; imm16 {
+:mov loc16, #imm16 is op8_8=0b00101000 & loc16 & imm8!=0b10101000 & imm8!=0b10101001; imm16 { # TODO improve AH/AL flags special case
 	loc16 = imm16;
-	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
-	goto inst_next;
-	<flag>
-	flagnz(loc16);
+}
+:mov AH, #imm16 is op8_8=0b00101000 & imm8=0b10101000 & AH; imm16 { # loc16 = AH
+	AH = imm16;
+	flagnz(AH);
+}
+:mov AL, #imm16 is op8_8=0b00101000 & imm8=0b10101001 & AL; imm16 { # loc16 = AL
+	AL = imm16;
+	flagnz(AL);
 }
 
 # p.261
-:mov loc16, *(0:imm16) is op8_8=0b11110101 & loc16; imm16 {
+:mov loc16, *(0:imm16) is op8_8=0b11110101 & loc16 & imm8!=0b10101000 & imm8!=0b10101001; imm16 { # TODO improve AH/AL flags special case
 	local addr:4 = imm16;
 	loc16 = *:2 addr;
-	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
-	goto inst_next;
-	<flag>
-	flagnz(loc16);
+}
+
+:mov AH, *(0:imm16) is op8_8=0b11110101 & imm8=0b10101000 & AH; imm16 {
+	local addr:4 = imm16;
+	AH = *:2 addr;
+	flagnz(AH);
+}
+
+:mov AL, *(0:imm16) is op8_8=0b11110101 & imm8=0b10101001 & AL; imm16 {
+	local addr:4 = imm16;
+	AL = *:2 addr;
+	flagnz(AL);
 }
 
 # p.262
-:mov loc16, #0 is op8_8=0b00101011 & loc16 {
+:mov loc16, #0 is op8_8=0b00101011 & loc16 & imm8!=0b10101000 & imm8!=0b10101001 { # TODO improve AH/AL flags special case
 	loc16 = 0;
-	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
-	goto inst_next;
-	<flag>
-	flagnz(loc16);
+}
+
+:mov AH, #0 is op8_8=0b00101011 & imm8=0b10101000 & AH {
+	AH = 0;
+	flagnz(AH);
+}
+
+:mov AL, #0 is op8_8=0b00101011 & imm8=0b10101001 & AL {
+	AL = 0;
+	flagnz(AL);
 }
 
 # p.263
@@ -804,21 +822,33 @@ with : objmode=1 {
 :mov loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10111 & loc16 & ACC & shift8_3_1 {}
 
 # p.264
-:mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 {
+:mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 & imm8!=0b10101000 & imm8!=0b10101001 { # TODO improve AH/AL flags special case
 	loc16 = arn8;
-	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
-	goto inst_next;
-	<flag>
-	flagnz(loc16);
+}
+
+:mov AH, arn8 is op11_5=0b01111 & arn8 & imm8=0b10101000 & AH {
+	AH = arn8;
+	flagnz(AH);
+}
+
+:mov AL, arn8 is op11_5=0b01111 & arn8 & imm8=0b10101001 & AL {
+	AL = arn8;
+	flagnz(AL);
 }
 
 # p.265
-:mov loc16, ax8 is op9_7=0b1001011 & ax8 & loc16 {
+:mov loc16, ax8 is op9_7=0b1001011 & ax8 & loc16 & imm8!=0b10101000 & imm8!=0b10101001 { # TODO improve AH/AL flags special case
 	loc16 = ax8;
-	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
-	goto inst_next;
-	<flag>
-	flagnz(loc16);
+}
+
+:mov AH, ax8 is op9_7=0b1001011 & ax8 & imm8=0b10101000 & AH {
+	AH = ax8;
+	flagnz(AH);
+}
+
+:mov AL, ax8 is op9_7=0b1001011 & ax8 & imm8=0b10101001 & AL {
+	AL = ax8;
+	flagnz(AL);
 }
 
 # p.266
@@ -1205,12 +1235,18 @@ with : objmode=1 {
 :pop XT is op0_16=0b1000011110111110 & XT {}
 
 # p.368
-:pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {
+:pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & imm8!=0b10101000 & imm8!=0b10101001 & XAR7 { # TODO improve AH/AL flags special case
 	loc16 = *:2 XAR7;
-	if (&loc16 == &AL || &loc16 == &AH) goto <flag>;
-	goto inst_next;
-	<flag>
-	flagnz(loc16);
+}
+
+:pread AH, *XAR7 is op8_8=0b00100100 & imm8=0b10101000 & AH & XAR7 {
+	AH = *:2 XAR7;
+	flagnz(AH);
+}
+
+:pread AL, *XAR7 is op8_8=0b00100100 & imm8=0b10101001 & AL & XAR7 {
+	AL = *:2 XAR7;
+	flagnz(AL);
 }
 
 # p.369
