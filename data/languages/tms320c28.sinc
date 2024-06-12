@@ -1302,7 +1302,7 @@ with : objmode=1 {
 :ror ACC is op0_16=0b1111111101010010 & ACC {}
 
 # p.395
-:rpt #imm8 is op8_8=0b11110110 & imm8 {} # TODO oof
+:rpt #imm8 is op8_8=0b11110110 & imm8 {} # TODO oof, see https://github.com/NationalSecurityAgency/ghidra/discussions/5584
 :rpt loc16 is op8_8=0b11110111 & loc16 {} # TODO oof
 
 # p.396
