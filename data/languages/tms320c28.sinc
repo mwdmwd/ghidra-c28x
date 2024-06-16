@@ -919,13 +919,19 @@ with : objmode=1 {
 :movb loc16, ax8".MSB" is op9_7=0b1100100 & ax8 & loc16 {}
 
 # p.294
-:movb xarn8, #imm8 is op11_5=0b11010 & xarn8 & imm8 {}
+:movb xarn8, #imm8 is op11_5=0b11010 & xarn8 & imm8 {
+	xarn8 = imm8;
+}
 
 # p.294
-:movb XAR6, #imm8 is objmode=1 & op8_8=0b10111110 & XAR6 & imm8 {}
+:movb XAR6, #imm8 is objmode=1 & op8_8=0b10111110 & XAR6 & imm8 {
+	XAR6 = imm8;
+}
 
 # p.294
-:movb XAR7, #imm8 is objmode=1 & op8_8=0b10110110 & XAR7 & imm8 {}
+:movb XAR7, #imm8 is objmode=1 & op8_8=0b10110110 & XAR7 & imm8 {
+	XAR7 = imm8;
+}
 
 # p.295
 :movdl XT, loc32 is objmode=1 & op8_8=0b10100110 & XT & loc32 {}
