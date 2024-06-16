@@ -564,24 +564,21 @@ with : objmode=1 {
 # p.218
 :lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {
 	local tmp:4 = inst_next;
-	push16(tmp[0,16]);
-	push16(tmp[16,16]);
+	push32(tmp);
 	call [XAR7];
 }
 
 # p.219
 :lc dest22 is op6_10=0b0000000010 ... & dest22 {
 	local tmp:4 = inst_next;
-	push16(tmp[0,16]);
-	push16(tmp[16,16]);
+	push32(tmp);
 	call dest22;
 }
 
 # p.220
 :lcr dest22 is objmode=1 & op6_10=0b0111011001 ... & dest22 {
 	local tmp:4 = RPC;
-	push16(tmp[0,16]);
-	push16(tmp[16,16]);
+	push32(tmp);
 	RPC = inst_next;
 	call dest22;
 }
@@ -589,8 +586,7 @@ with : objmode=1 {
 # p.221
 :lcr *xarn0 is objmode=1 & op3_13=0b0011111001100 & xarn0 {
 	local tmp:4 = RPC;
-	push16(tmp[0,16]);
-	push16(tmp[16,16]);
+	push32(tmp);
 	RPC = inst_next;
 	call [xarn0];
 }
@@ -609,14 +605,14 @@ with : objmode=1 {
 # p.227
 :lret is op0_16=0b0111011000010100 {
 	local tmp:4;
-	pop32(tmp); # TODO verify if push16(x[0,16]) + push16(x[16,16]) is compatible with pop32
+	pop32(tmp);
 	return [tmp];
 }
 
 # p.228
 :lrete is op0_16=0b0111011000010000 {
 	local tmp:4;
-	pop32(tmp); # TODO verify if push16(x[0,16]) + push16(x[16,16]) is compatible with pop32
+	pop32(tmp);
 	INTM = 0;
 	return [tmp];
 }
@@ -624,7 +620,7 @@ with : objmode=1 {
 # p.229
 :lretr is objmode=1 & op0_16=0b0000000000000110 {
 	local tmp = RPC;
-	pop32(RPC); # TODO verify if push16(x[0,16]) + push16(x[16,16]) is compatible with pop32
+	pop32(RPC);
 	return [tmp];
 }
 
