@@ -171,11 +171,11 @@ loc32: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 unimpl
 loc32: *SP++           is amode=0 & op0_8=0b10111101 & SP unimpl
 loc32: *--SP           is amode=0 & op0_8=0b10111110 & SP unimpl
 # C28x Indirect Addressing Modes (XAR0 to XAR7)
-loc32: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 unimpl
-loc32: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 unimpl
-loc32: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 unimpl
-loc32: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 unimpl
-loc32: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 unimpl
+loc32: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 & imm3 {ARP = imm3; local addr = xarn0; xarn0 = xarn0 + 2; export *:4 addr;}
+loc32: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 & imm3 {ARP = imm3; xarn0 = xarn0 - 2; export *:4 xarn0;}
+loc32: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR0); export *:4 addr;}
+loc32: *+xarn0[AR1]    is amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR1); export *:4 addr;}
+loc32: *+xarn0[imm3_3] is amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {ARP = imm3; local addr = xarn0 + imm3_3; export *:4 addr;}
 # C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
 loc32: *               is amode=0 & op0_8=0b10111000 unimpl
 loc32: *++             is amode=0 & op0_8=0b10111001 unimpl
