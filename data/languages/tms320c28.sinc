@@ -446,7 +446,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :cmp64 ACC:P is objmode=1 & op0_16=0b0101011001011110 & ACC & P {}
 
 # p.180
-:cmpb ax8, #imm8 is op9_7=0b0101001 & ax8 & imm8 {}
+:cmpb ax8, #imm8 is op9_7=0b0101001 & ax8 & imm8 {
+	local tmp:3 = zext(ax8) - imm8; # 3 bytes so it behaves like infinite precision in all cases
+	flagnz(tmp);
+	# TODO C flag
+}
 
 # p.181
 :cmpl ACC, loc32 is op8_8=0b00001111 & ACC & loc32 {
