@@ -117,6 +117,27 @@ macro unpackst0(in) {
 	SXM = (in & 0b1)       != 0;
 }
 
+macro packst1(res) {
+	res = zext((ARP << 13) | (XF << 12) | (M0M1MAP << 11) | (OBJMODE << 9) | (AMODE << 8) | (IDLESTAT << 7) | (EALLOW << 6) | (LOOP << 5) | (SPA << 4) | (VMAP << 3) | (PAGE0 << 2) | (DBGM << 1) | (INTM << 0));
+}
+
+macro unpackst1(in) {
+	ARP      = in[13,3];
+	XF       = (in & 0b0000000000001) != 0;
+	M0M1MAP  = (in & 0b000000000001) != 0;
+	# bit 10 reserved
+	OBJMODE  = (in & 0b0000000001) != 0;
+	AMODE    = (in & 0b000000001) != 0;
+	IDLESTAT = (in & 0b00000001) != 0;
+	EALLOW   = (in & 0b0000001) != 0;
+	LOOP     = (in & 0b000001) != 0;
+	SPA      = (in & 0b00001) != 0;
+	VMAP     = (in & 0b0001) != 0;
+	PAGE0    = (in & 0b001) != 0;
+	DBGM     = (in & 0b01) != 0;
+	INTM     = (in & 0b1) != 0;
+}
+
 macro flagnz(in) {
 	N = in s< 0;
 	Z = in == 0;
@@ -1302,7 +1323,10 @@ with : objmode=1 {
 }
 
 # p.380
-:push ST1 is op0_16=0b0111011000001000 & ST1 {}
+:push ST1 is op0_16=0b0111011000001000 & ST1 {
+	packst1(ST1);
+	push16(ST1);
+}
 
 # p.381
 :push T:ST0 is op0_16=0b0111011000011001 & T & ST0 {}
