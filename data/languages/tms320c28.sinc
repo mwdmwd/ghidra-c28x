@@ -1234,7 +1234,9 @@ with : objmode=1 {
 :pop IFR is op0_16=0b0000000000000010 & IFR {}
 
 # p.360
-:pop loc16 is op8_8=0b00101010 & loc16 {}
+:pop loc16 is op8_8=0b00101010 & loc16 {
+	pop16(loc16);
+}
 
 # p.361
 :pop P is op0_16=0b0111011000010001 & P {}
