@@ -461,7 +461,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :cmp ax8, loc16 is op9_7=0b0101010 & ax8 & loc16 {}
 
 # p.178
-:cmp loc16, #simm16 is op8_8=0b00011011 & loc16; simm16 {}
+:cmp loc16, #simm16 is op8_8=0b00011011 & loc16; simm16 {
+	local tmp:3 = zext(loc16) - simm16;
+	flagnz(tmp);
+	# TODO C flag
+}
 
 # p.179
 :cmp64 ACC:P is objmode=1 & op0_16=0b0101011001011110 & ACC & P {}
