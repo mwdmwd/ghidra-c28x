@@ -930,7 +930,10 @@ with : objmode=1 {
 :movb ar67_8, #imm8 is op9_7=0b1101011 & ar67_8 & imm8 {}
 
 # p.283
-:movb ax8, #imm8 is op9_7=0b1001101 & ax8 & imm8 {}
+:movb ax8, #imm8 is op9_7=0b1001101 & ax8 & imm8 {
+	ax8 = imm8;
+	flagnz(ax8);
+}
 
 # p.284
 :movb ax8".LSB", loc16 is op9_7=0b1100011 & ax8 & loc16 {}
