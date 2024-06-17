@@ -323,7 +323,14 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :addl loc32, ACC is objmode=1 & op0_16=0b0101011000000001 & ACC; op8_8=0b00000000 & loc32 {}
 
 # p.143
-:addu ACC, loc16 is op8_8=0b00001101 & ACC & loc16 {}
+:addu ACC, loc16 is op8_8=0b00001101 & ACC & loc16 {
+	ACC = ACC + zext(loc16);
+	flagnz(ACC);
+	# TODO C flag
+	# TODO V flag
+	# TODO OVC overflow counter
+	# TODO OVM saturation
+}
 
 # p.144
 :addul P, loc32 is objmode=1 & op0_16=0b0101011001010111 & P; op8_8=0b00000000 & loc32 {}
