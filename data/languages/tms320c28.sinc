@@ -1334,14 +1334,30 @@ with : objmode=1 {
 :push T:ST0 is op0_16=0b0111011000011001 & T & ST0 {}
 
 # p.382
-:push XAR0 is objmode=1 & op0_16=0b0011101010111101 & XAR0 {}
-:push XAR1 is objmode=1 & op0_16=0b1011001010111101 & XAR1 {}
-:push XAR2 is objmode=1 & op0_16=0b1010101010111101 & XAR2 {}
-:push XAR3 is objmode=1 & op0_16=0b1010001010111101 & XAR3 {}
-:push XAR4 is objmode=1 & op0_16=0b1010100010111101 & XAR4 {}
-:push XAR5 is objmode=1 & op0_16=0b1010000010111101 & XAR5 {}
-:push XAR6 is op0_16=0b1100001010111101 & XAR6 {}
-:push XAR7 is op0_16=0b1100001110111101 & XAR7 {}
+:push XAR0 is objmode=1 & op0_16=0b0011101010111101 & XAR0 {
+	push32(XAR0);
+}
+:push XAR1 is objmode=1 & op0_16=0b1011001010111101 & XAR1 {
+	push32(XAR1);
+}
+:push XAR2 is objmode=1 & op0_16=0b1010101010111101 & XAR2 {
+	push32(XAR2);
+}
+:push XAR3 is objmode=1 & op0_16=0b1010001010111101 & XAR3 {
+	push32(XAR3);
+}
+:push XAR4 is objmode=1 & op0_16=0b1010100010111101 & XAR4 {
+	push32(XAR4);
+}
+:push XAR5 is objmode=1 & op0_16=0b1010000010111101 & XAR5 {
+	push32(XAR5);
+}
+:push XAR6 is op0_16=0b1100001010111101 & XAR6 {
+	push32(XAR6);
+}
+:push XAR7 is op0_16=0b1100001110111101 & XAR7 {
+	push32(XAR7);
+}
 
 # p.383
 :push XT is objmode=1 & op0_16=0b1010101110111101 & XT {} # I really don't see how this can coexist with `add ACC, loc16 << #shift0_4 is op12_4=0b1010 & objmode=0` unless it's objmode=1
