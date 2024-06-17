@@ -505,7 +505,9 @@ with : objmode=1 {
 :dec loc16 is op8_8=0b00001011 & loc16 {}
 
 # p.403, p.186 (DINT)
-:setc "INTM" is op0_16=0b0011101100010000 {}	
+:setc "INTM" is op0_16=0b0011101100010000 {
+	INTM = 1;
+}
 
 # p.187
 :dmac ACC:P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001011; op8_8=0b11000111 & ACC & P & loc32 & XAR7 {}
