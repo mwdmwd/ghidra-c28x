@@ -38,3 +38,7 @@ test: tms320c28.sla test.bin
 .PHONY: diff
 diff: tms320c28.sla test.bin
 	diff --side-by-side --left-column <(make --silent dis) <(make --silent test)
+
+.PHONY: qdiff
+qdiff: tms320c28.sla test.bin
+	@diff -u <(make --silent dis) <(make --silent test)
