@@ -246,6 +246,7 @@ cond8: "NBIO" is cond8_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
 cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 ################################################################
+# SPRU430F - August 2001 - Revised April 2015
 
 # p.124
 :aborti is op0_16=0b0000000000000001 {}

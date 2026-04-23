@@ -1,12 +1,13 @@
 ################################################################
+# SPRUEO2B - June 2007 - Revised January 2015
 
 # All FPU instructions have objmode=1
 with : objmode=1 {
 
-# p.84
+# p.86
 :mov32 "mem32", "RaH" is op0_16=0b1110001000000011; op11_5=0b00000 {} # TODO mem32 rah
 
-# p.88 (MOV32 RaH, ACC), p.91 (MOV32 RaH, P), p.93 (MOV32 RaH, XARn), p.94 (MOV32 RaH, XT)
+# p.90 (MOV32 RaH, ACC), p.93 (MOV32 RaH, P), p.96 (MOV32 RaH, XARn), p.97 (MOV32 RaH, XT)
 :mov32 "R0H", loc32 is op8_8=0b10111101 & loc32; op0_16=0b0000111100010010 {}
 :mov32 "R1H", loc32 is op8_8=0b10111101 & loc32; op0_16=0b0000111100010110 {}
 :mov32 "R2H", loc32 is op8_8=0b10111101 & loc32; op0_16=0b0000111100011010 {}
@@ -16,7 +17,7 @@ with : objmode=1 {
 :mov32 "R6H", loc32 is op8_8=0b10111101 & loc32; op0_16=0b0000111100101010 {}
 :mov32 "R7H", loc32 is op8_8=0b10111101 & loc32; op0_16=0b0000111100101110 {}
 
-# p.128
+# p.133
 :setflg "FLAG_TODO", imm11 is op6_10=0b1110011000; imm11 {}
 
 }
