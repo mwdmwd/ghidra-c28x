@@ -6,45 +6,207 @@ attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 @define fpu_imm16_add "imm6; fpu_imm10_lo [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ]"
 @define fpu_imm16_cmp "imm3; fpu_imm13_lo [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
 
-cndf: "NEQ"  is cndf4=0b0000 {}
-cndf: "EQ"   is cndf4=0b0001 {}
-cndf: "GT"   is cndf4=0b0010 {}
-cndf: "GEQ"  is cndf4=0b0011 {}
-cndf: "LT"   is cndf4=0b0100 {}
-cndf: "LEQ"  is cndf4=0b0101 {}
-cndf: "TF"   is cndf4=0b1010 {}
-cndf: "NTF"  is cndf4=0b1011 {}
-cndf: "LU"   is cndf4=0b1100 {}
-cndf: "LV"   is cndf4=0b1101 {}
-cndf: "UNC"  is cndf4=0b1110 {}
-cndf: "UNCF" is cndf4=0b1111 {}
+# STF flags
+define bitrange
+	STF_LV = STF[0,1]
+	STF_LU = STF[1,1]
+	STF_NF = STF[2,1]
+	STF_ZF = STF[3,1]
+	STF_TF = STF[4,1]
+;
+
+cndf: "NEQ"  is cndf4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
+cndf: "EQ"   is cndf4=0b0001 { local b:1 = (STF_ZF == 1); export b; }
+cndf: "GT"   is cndf4=0b0010 { local b:1 = (STF_ZF == 0) && (STF_NF == 0); export b; }
+cndf: "GEQ"  is cndf4=0b0011 { local b:1 = (STF_NF == 0); export b; }
+cndf: "LT"   is cndf4=0b0100 { local b:1 = (STF_NF == 1); export b; }
+cndf: "LEQ"  is cndf4=0b0101 { local b:1 = (STF_ZF == 1) || (STF_NF == 1); export b; }
+cndf: "TF"   is cndf4=0b1010 { local b:1 = (STF_TF == 1); export b; }
+cndf: "NTF"  is cndf4=0b1011 { local b:1 = (STF_TF == 0); export b; }
+cndf: "LU"   is cndf4=0b1100 { local b:1 = (STF_LU == 1); export b; }
+cndf: "LV"   is cndf4=0b1101 { local b:1 = (STF_LV == 1); export b; }
+cndf: "UNC"  is cndf4=0b1110 { local b:1 = 1; export b; }
+cndf: "UNCF" is cndf4=0b1111 { local b:1 = 1; export b; }
+
+# p2_ee, p2_d3, p2_a3, p1_*, p2_rdh are defined on 'opcode' token in tms320c28.sinc
+attach variables [ p2_d3 p2_a3 p2_rdh ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
+attach variables [ p1_f3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
 # All FPU instructions have objmode=1
 with : objmode=1 {
 
+fpu_re_low: "R0H" is p2_ee=0 { export R0H; }
+fpu_re_low: "R1H" is p2_ee=1 { export R1H; }
+fpu_re_low: "R2H" is p2_ee=2 { export R2H; }
+fpu_re_low: "R3H" is p2_ee=3 { export R3H; }
+
+fpu_re_high: "R4H" is p2_ee=0 { export R4H; }
+fpu_re_high: "R5H" is p2_ee=1 { export R5H; }
+fpu_re_high: "R6H" is p2_ee=2 { export R6H; }
+fpu_re_high: "R7H" is p2_ee=3 { export R7H; }
+
+macro update_stf(res) {
+	STF_NF = res[31,1];
+	STF_ZF = ((res & 0x7FFFFFFF) == 0);
+}
+
+# Parallel MOV32 instructions - e=0 (R0H-R3H)
+:addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f+ p1_f3;
+	update_stf(p2_d3);
+	loc32 = p2_a3;
+}
+:addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f+ p1_f3;
+	update_stf(p2_d3);
+	p2_a3 = loc32;
+}
+
+:subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f- p1_f3;
+	update_stf(p2_d3);
+	loc32 = p2_a3;
+}
+:subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f- p1_f3;
+	update_stf(p2_d3);
+	p2_a3 = loc32;
+}
+
+:mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f* p1_f3;
+	update_stf(p2_d3);
+	loc32 = p2_a3;
+}
+:mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f* p1_f3;
+	update_stf(p2_d3);
+	p2_a3 = loc32;
+}
+
+:macf32 "R3H, R2H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	R3H = R3H f+ R2H;
+	update_stf(R3H);
+	R2H = fpu_re_low f* p1_f3;
+	p2_a3 = loc32;
+}
+:macf32 "R7H, R6H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	R7H = R7H f+ R6H;
+	update_stf(R7H);
+	R6H = fpu_re_low f* p1_f3;
+	p2_a3 = loc32;
+}
+
+# Parallel MOV32 instructions - e=1 (R4H-R7H)
+:addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f+ p1_f3;
+	update_stf(p2_d3);
+	loc32 = p2_a3;
+}
+:addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f+ p1_f3;
+	update_stf(p2_d3);
+	p2_a3 = loc32;
+}
+
+:subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f- p1_f3;
+	update_stf(p2_d3);
+	loc32 = p2_a3;
+}
+:subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f- p1_f3;
+	update_stf(p2_d3);
+	p2_a3 = loc32;
+}
+
+:mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f* p1_f3;
+	update_stf(p2_d3);
+	loc32 = p2_a3;
+}
+:mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f* p1_f3;
+	update_stf(p2_d3);
+	p2_a3 = loc32;
+}
+
+:macf32 "R3H, R2H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	R3H = R3H f+ R2H;
+	update_stf(R3H);
+	R2H = fpu_re_high f* p1_f3;
+	p2_a3 = loc32;
+}
+:macf32 "R7H, R6H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=1 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	R7H = R7H f+ R6H;
+	update_stf(R7H);
+	R6H = fpu_re_high f* p1_f3;
+	p2_a3 = loc32;
+}
+
+# Parallel MAX/MIN
+:maxf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69c; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
+	if (rah3 f< rbh3) goto <swap>;
+	goto <done>;
+	<swap>
+	rah3 = rbh3;
+	rch3 = p2_rdh;
+	<done>
+}
+:minf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69d; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
+	if (rah3 f> rbh3) goto <swap>;
+	goto <done>;
+	<swap>
+	rah3 = rbh3;
+	rch3 = p2_rdh;
+	<done>
+}
+
 # p.86 MOV32 mem32, RaH (store)
-:mov32 loc32, rah3_8 is op0_16=0b1110001000000011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+:mov32 loc32, rah3_8 is op0_16=0b1110001000000011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	loc32 = rah3_8;
+}
 
 # p.90 (MOV32 RaH, ACC), p.93 (MOV32 RaH, P), p.96 (MOV32 RaH, XARn), p.97 (MOV32 RaH, XT)
-:mov32 rah2, loc32 is op8_8=0b10111101 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {}
+:mov32 rah2, loc32 is op8_8=0b10111101 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
+	rah2 = loc32;
+}
 
 # p.36
-:absf32 rah3, rbh3 is op0_16=0b1110011010010101; op6_10=0b0000000000 & rbh3 & rah3 {}
+:absf32 rah3, rbh3 is op0_16=0b1110011010010101; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = rbh3 & 0x7FFFFFFF;
+}
 
 # p.41
-:addf32 rah3, rbh3, rch3 is op0_16=0b1110011100010000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}
+:addf32 rah3, rbh3, rch3 is op0_16=0b1110011100010000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	rah3 = rbh3 f+ rch3;
+	update_stf(rah3);
+}
 
 # p.37 / p.39 (same encoding)
-:addf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100010 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {}
+:addf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100010 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
+	local imm32:4 = fpu_imm16 << 16;
+	rah3 = rbh3 f+ imm32;
+	update_stf(rah3);
+}
 
 # p.47
-:cmpf32 rah3, rbh3 is op0_16=0b1110011010010100; op6_10=0b0000000000 & rbh3 & rah3 {}
+:cmpf32 rah3, rbh3 is op0_16=0b1110011010010100; op6_10=0b0000000000 & rbh3 & rah3 {
+	local res = rah3 f- rbh3;
+	update_stf(res);
+}
 
 # p.50
-:cmpf32 rah3, "#0.0" is op3_13=0b1110010110100 & rah3 {}
+:cmpf32 rah3, "#0.0" is op3_13=0b1110010110100 & rah3 {
+	update_stf(rah3);
+}
 
 # p.48
-:cmpf32 rah3, #fpu_imm16 is op3_13=0b1110100000010 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+:cmpf32 rah3, #fpu_imm16 is op3_13=0b1110100000010 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+	local imm32:4 = fpu_imm16 << 16;
+	local res = rah3 f- imm32;
+	update_stf(res);
+}
 
 # p.51
 :einvf32 rah3, rbh3 is op0_16=0b1110011010010011; op6_10=0b0000000000 & rbh3 & rah3 {}
@@ -53,16 +215,42 @@ with : objmode=1 {
 :eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {}
 
 # p.76
-:maxf32 rah3, rbh3 is op0_16=0b1110011010010110; op6_10=0b0000000000 & rbh3 & rah3 {}
+:maxf32 rah3, rbh3 is op0_16=0b1110011010010110; op6_10=0b0000000000 & rbh3 & rah3 {
+	if (rah3 f< rbh3) goto <swap>;
+	goto <done>;
+	<swap>
+	rah3 = rbh3;
+	<done>
+}
 
 # p.77
-:maxf32 rah3, #fpu_imm16 is op3_13=0b1110100000100 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+:maxf32 rah3, #fpu_imm16 is op3_13=0b1110100000100 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+	local imm32:4 = fpu_imm16 << 16;
+	if (rah3 f< imm32) goto <swap>;
+	goto <done>;
+	<swap>
+	rah3 = imm32;
+	<done>
+}
 
 # p.79
-:minf32 rah3, rbh3 is op0_16=0b1110011010010111; op6_10=0b0000000000 & rbh3 & rah3 {}
+:minf32 rah3, rbh3 is op0_16=0b1110011010010111; op6_10=0b0000000000 & rbh3 & rah3 {
+	if (rah3 f> rbh3) goto <swap>;
+	goto <done>;
+	<swap>
+	rah3 = rbh3;
+	<done>
+}
 
 # p.80
-:minf32 rah3, #fpu_imm16 is op3_13=0b1110100000110 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+:minf32 rah3, #fpu_imm16 is op3_13=0b1110100000110 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+	local imm32:4 = fpu_imm16 << 16;
+	if (rah3 f> imm32) goto <swap>;
+	goto <done>;
+	<swap>
+	rah3 = imm32;
+	<done>
+}
 
 # p.55
 :f32toi16 rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b0000000000 & rbh3 & rah3 {}
@@ -110,55 +298,104 @@ with : objmode=1 {
 :ui32tof32 rah3, rbh3 is op0_16=0b1110011010001011; op6_10=0b0000000000 & rbh3 & rah3 {}
 
 # p.82
-:mov16 loc16, rah3_8 is op0_16=0b1110001000010011; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {}
+:mov16 loc16, rah3_8 is op0_16=0b1110001000010011; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+	loc16 = rah3_8[0,16];
+}
 
 # p.84 (MOV32 ACC, RaH), p.89 (MOV32 P, RaH), p.99 (MOV32 XARn, RaH), p.100 (MOV32 XT, RaH)
-:mov32 loc32, rah2 is op8_8=0b10111111 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {}
+:mov32 loc32, rah2 is op8_8=0b10111111 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
+	loc32 = rah2;
+}
 
 # p.83 (manual gives MOV32)
-:vmov32 *(0:imm16), loc32 is op8_8=0b10111101 & loc32; imm16 {}
+:vmov32 *(0:imm16), loc32 is op8_8=0b10111101 & loc32; imm16 {
+	local addr:4 = imm16;
+	*:4 addr = loc32;
+}
 
 # p.85 (manual gives MOV32)
-:vmov32 loc32, *(0:imm16) is op8_8=0b10111111 & loc32; imm16 {}
+:vmov32 loc32, *(0:imm16) is op8_8=0b10111111 & loc32; imm16 {
+	local addr:4 = imm16;
+	loc32 = *:4 addr;
+}
 
 # p.88
-:mov32 loc32, "STF" is op0_16=0b1110001000000000; amode=0 & op11_5=0b00000 & loc32 {}
+:mov32 loc32, STF is op0_16=0b1110001000000000; amode=0 & op11_5=0b00000 & loc32 & STF {
+	loc32 = STF;
+}
 
 # p.98
-:mov32 "STF", loc32 is op0_16=0b1110001010000000; amode=0 & op11_5=0b00000 & loc32 {}
+:mov32 STF, loc32 is op0_16=0b1110001010000000; amode=0 & op11_5=0b00000 & loc32 & STF {
+	STF = loc32;
+}
 
 # p.91
-:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	if (!cndf) goto <done>;
+	rah3_8 = loc32;
+	<done>
+}
 
 # p.94
-:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {}
+:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	if (!cndf) goto <done>;
+	rah3 = rbh3;
+	<done>
+}
 
 # p.101
 :movd32 rah3_8, loc32 is op0_16=0b1110001000100011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
 
 # p.104
-:moviz rah3, #fpu_imm16 is op3_13=0b1110100000000 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+:moviz rah3, #fpu_imm16 is op3_13=0b1110100000000 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+	rah3 = fpu_imm16 << 16;
+}
 
 # p.106
-:movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+:movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+	rah3[16,16] = fpu_imm16;
+}
 
 # p.106
 :movst0 #imm8 is op8_8=0b10101101 & imm8 {}
 
 # p.109
-:mpyf32 rah3, rbh3, rch3 is op0_16=0b1110011100000000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}
+:mpyf32 rah3, rbh3, rch3 is op0_16=0b1110011100000000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	rah3 = rbh3 f* rch3;
+	update_stf(rah3);
+}
 
 # p.110/111 (same encoding)
-:mpyf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100001 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {}
+:mpyf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100001 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
+	local imm32:4 = fpu_imm16 << 16;
+	rah3 = rbh3 f* imm32;
+	update_stf(rah3);
+}
 
 # p.117
-:negf32 rah3, rbh3, cndf is op4_12=0b111001101010 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {}
+:negf32 rah3, rbh3, cndf is op4_12=0b111001101010 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	local val = rbh3;
+	if (cndf) goto <true>;
+	goto <done>;
+	<true>
+	val = rbh3 ^ 0x80000000;
+	<done>
+	rah3 = val;
+	update_stf(rah3);
+}
 
 # p.134
-:subf32 rah3, rbh3, rch3 is op0_16=0b1110011100100000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}
+:subf32 rah3, rbh3, rch3 is op0_16=0b1110011100100000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	rah3 = rbh3 f- rch3;
+	update_stf(rah3);
+}
 
 # p.135 (same encoding as SUBF32 imm)
-:subf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100011 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {}
+:subf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100011 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
+	local imm32:4 = fpu_imm16 << 16;
+	rah3 = imm32 f- rbh3;
+	update_stf(rah3);
+}
 
 # p.121
 :pop "RB" is op0_16=0b1111111111110001 {}
@@ -173,16 +410,29 @@ with : objmode=1 {
 :save imm6, op11_5, imm11 is op6_10=0b1110011001 & imm6; op11_5 & imm11 {}
 
 # p.140
-:swapf rah3, rbh3, cndf is op4_12=0b111001101110 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {}
+:swapf rah3, rbh3, cndf is op4_12=0b111001101110 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	if (!cndf) goto <done>;
+	local tmp = rah3;
+	rah3 = rbh3;
+	rbh3 = tmp;
+	<done>
+}
 
 # p.141
 :testtf cndf is op4_12=0b111001011000 & cndf {}
 
 # p.146
-:zero rah3 is op3_13=0b1110010110010 & rah3 {}
+:zero rah3 is op3_13=0b1110010110010 & rah3 {
+	rah3 = 0;
+}
 
 # p.147
-:zeroa is op0_16=0b1110010101100011 {}
+:zeroa is op0_16=0b1110010101100011 {
+	R0H = 0;
+	R1H = 0;
+	R2H = 0;
+	R3H = 0;
+}
 
 # p.133
 :setflg imm6, op11_5, imm11 is op6_10=0b1110011000 & imm6; op11_5 & imm11 {}

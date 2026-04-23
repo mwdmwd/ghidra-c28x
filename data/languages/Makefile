@@ -23,9 +23,16 @@ test.bin: test.obj
 dis: test.obj
 # movl rd, *--sp -> pop is dubious as it is implemented with != which bloats the sla to hell
 # TODO no support for parallel
-	$(DIS) $(DISFLAGS) $< | tail -n+5 | sed -E -e 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' -e 's/ADDL      ACC/ADDL         ACC/g' -e 's/MOVL      ACC/MOVL         ACC/g' \
-	-e 's/MOVL         ([A-Z0-9]+), \*--SP/POP          \1/g' -e 's/MOVL         \*SP\+\+, ([A-Z0-9]+)/PUSH         \1/g' \
-	-e 's/\|\|/  /g' \
+	$(DIS) $(DISFLAGS) $< | tail -n+5 \
+	| perl -0777 -pe 's/\n\s+\|\|/ || /g' \
+	| sed -E -e 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' \
+	-e 's/ADDL      ACC/ADDL         ACC/g' \
+	-e 's/MOVL      ACC/MOVL         ACC/g' \
+	-e 's/\|\|\s+/|| /g' \
+	-e 's/\s+\|\|/ ||/g' \
+	-e 's/\|\|([A-Z])/\1/g' \
+	-e 's/MOVL         ([A-Z0-9]+), \*--SP/POP          \1/g' \
+	-e 's/MOVL         \*SP\+\+, ([A-Z0-9]+)/PUSH         \1/g' \
 	-e 's/SUBL      ACC/SUBL         ACC/' \
 	-e 's/XRETC        UNC/XRET         /g' \
 	-e 's/BANZ         (.*),/BANZ         \1, /g' \
