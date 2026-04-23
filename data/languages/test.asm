@@ -566,4 +566,25 @@
 	NOP
 	MINF32		R2H, #-1.5
 	NOP
+	; FPU32 moves and stores
+	MOV16		@0x21, R0H
+	NOP
+	MOV32		ACC, R0H
+	NOP
+	MOV32		P, R1H
+	NOP
+	MOV32		XAR0, R2H
+	NOP
+	MOV32		XT, R3H
+	NOP
+	MOV32		@0x21, STF
+	NOP
+	MOV32		STF, @0x21
+	NOP
+	MOV32		R0H, @0x21, EQ
+	NOP
+	MOV32		R1H, R2H, GT
+	NOP
+	MOVD32		R3H, @0x21
+	NOP
 	.endasmfunc

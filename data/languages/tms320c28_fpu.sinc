@@ -6,6 +6,19 @@ attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 @define fpu_imm16_add "imm6; fpu_imm10_lo [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ]"
 @define fpu_imm16_cmp "imm3; fpu_imm13_lo [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
 
+cndf: "NEQ"  is cndf4=0b0000 {}
+cndf: "EQ"   is cndf4=0b0001 {}
+cndf: "GT"   is cndf4=0b0010 {}
+cndf: "GEQ"  is cndf4=0b0011 {}
+cndf: "LT"   is cndf4=0b0100 {}
+cndf: "LEQ"  is cndf4=0b0101 {}
+cndf: "TF"   is cndf4=0b1010 {}
+cndf: "NTF"  is cndf4=0b1011 {}
+cndf: "LU"   is cndf4=0b1100 {}
+cndf: "LV"   is cndf4=0b1101 {}
+cndf: "UNC"  is cndf4=0b1110 {}
+cndf: "UNCF" is cndf4=0b1111 {}
+
 # All FPU instructions have objmode=1
 with : objmode=1 {
 
@@ -95,6 +108,27 @@ with : objmode=1 {
 
 # p.145
 :ui32tof32 rah3, rbh3 is op0_16=0b1110011010001011; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.82
+:mov16 loc16, rah3_8 is op0_16=0b1110001000010011; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {}
+
+# p.84 (MOV32 ACC, RaH), p.89 (MOV32 P, RaH), p.99 (MOV32 XARn, RaH), p.100 (MOV32 XT, RaH)
+:mov32 loc32, rah2 is op8_8=0b10111111 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {}
+
+# p.88
+:mov32 loc32, "STF" is op0_16=0b1110001000000000; amode=0 & op11_5=0b00000 & loc32 {}
+
+# p.98
+:mov32 "STF", loc32 is op0_16=0b1110001010000000; amode=0 & op11_5=0b00000 & loc32 {}
+
+# p.91
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+
+# p.94
+:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.101
+:movd32 rah3_8, loc32 is op0_16=0b1110001000100011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
 
 # p.133
 :setflg "FLAG_TODO", imm11 is op6_10=0b1110011000; imm11 {}
