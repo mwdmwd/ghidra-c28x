@@ -1,19 +1,10 @@
 #!/usr/bin/env python3
-import re
-
-from pypcode import Context, PcodePrettyPrinter
+from pypcode import Context
 
 ctx = Context("tms320c28:LE:32:default")
 
 with open("test.bin", "rb") as f:
     t = f.read()
-
-SHIFT = re.compile(r"((?:<<|>>)\s*#)(0x[0-9a-fA-F]+)")
-
-
-def dehex_shifts(b):
-    return SHIFT.sub(lambda m: m.group(1) + str(int(m.group(2), 16)), b)
-
 
 dx = ctx.disassemble(t)
 for ins in dx.instructions:
