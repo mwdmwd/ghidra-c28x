@@ -42,3 +42,14 @@ diff: tms320c28.sla test.bin
 .PHONY: qdiff
 qdiff: tms320c28.sla test.bin
 	@diff -u <(make --silent dis) <(make --silent test)
+
+.PHONY: qasm
+qasm:
+	@rm -f quick.asm quick.obj
+	@echo '    .text' > quick.asm
+	@echo '    .newblock' >> quick.asm
+	@echo '    .asmfunc' >> quick.asm
+	@sed 's/^/  /' >> quick.asm
+	@$(AS) $(ASFLAGS) quick.asm
+	@$(DIS) $(DISFLAGS) quick.obj | grep . | grep -v Disassembly\ of
+	@rm -f quick.asm quick.obj
