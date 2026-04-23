@@ -503,6 +503,24 @@
 	MOV32		R4H, XAR4
 	MOV32		R0H, XT
 	MOV32		R1H, XT
+	MOV32		*(0xA000), @ACC
+	NOP
+	MOV32		@ACC, *(0xC000)
+	NOP
+	;MOVST0		ZF, NF			; Ghidra shows raw mask (#0x14)
+								; while DIS2000 decodes flag names (NF,ZF)
+	;RPTB		RPTB_END, AL	; label names vs numeric block size
+	;NOP
+	;NOP
+	;NOP
+	;NOP
+	;NOP
+	;NOP
+	;NOP
+	;NOP
+	;NOP
+	;NOP
+	;RPTB_END:
 	; FPU32 arithmetic
 	ABSF32		R0H, R1H
 	NOP

@@ -115,6 +115,12 @@ with : objmode=1 {
 # p.84 (MOV32 ACC, RaH), p.89 (MOV32 P, RaH), p.99 (MOV32 XARn, RaH), p.100 (MOV32 XT, RaH)
 :mov32 loc32, rah2 is op8_8=0b10111111 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {}
 
+# p.83 (manual gives MOV32)
+:vmov32 *(0:imm16), loc32 is op8_8=0b10111101 & loc32; imm16 {}
+
+# p.85 (manual gives MOV32)
+:vmov32 loc32, *(0:imm16) is op8_8=0b10111111 & loc32; imm16 {}
+
 # p.88
 :mov32 loc32, "STF" is op0_16=0b1110001000000000; amode=0 & op11_5=0b00000 & loc32 {}
 
@@ -135,6 +141,9 @@ with : objmode=1 {
 
 # p.106
 :movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+
+# p.106
+:movst0 #imm8 is op8_8=0b10101101 & imm8 {}
 
 # p.109
 :mpyf32 rah3, rbh3, rch3 is op0_16=0b1110011100000000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}

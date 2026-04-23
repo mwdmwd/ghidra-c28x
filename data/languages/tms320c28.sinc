@@ -647,6 +647,12 @@ with : objmode=1 {
 # p.224
 :loopz loc16, #imm16 is op8_8=0b00101100 & loc16; imm16 {}
 
+# p.127
+:rptb imm7, loc16 is objmode=1 & op8_8=0b10110101 & op7=0 & imm7; loc16 {}
+
+# p.129
+:rptb imm7, #imm16 is objmode=1 & op8_8=0b10110101 & op7=1 & imm7; imm16 {}
+
 # p.226 (LPADDR)
 :setc AMODE is op0_16=0b0101011000011110 & AMODE {
 	AMODE = 1;
