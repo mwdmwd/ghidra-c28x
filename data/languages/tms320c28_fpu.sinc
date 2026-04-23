@@ -28,8 +28,8 @@ cndf: "LV"   is cndf4=0b1101 { local b:1 = (STF_LV == 1); export b; }
 cndf: "UNC"  is cndf4=0b1110 { local b:1 = 1; export b; }
 cndf: "UNCF" is cndf4=0b1111 { local b:1 = 1; export b; }
 
-# p2_ee, p2_d3, p2_a3, p1_*, p2_rdh are defined on 'opcode' token in tms320c28.sinc
-attach variables [ p2_d3 p2_a3 p2_rdh ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
+# p2_ee, p2_d3, p2_a3, p1_*, p2_rdh, p2_reh3 are defined on 'opcode' token in tms320c28.sinc
+attach variables [ p2_d3 p2_a3 p2_rdh p2_reh3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 attach variables [ p1_f3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
 # All FPU instructions have objmode=1
@@ -436,5 +436,42 @@ macro update_stf(res) {
 
 # p.133
 :setflg imm6, op11_5, imm11 is op6_10=0b1110011000 & imm6; op11_5 & imm11 {}
+
+# Subtables for RfH split across words: p1_f2 (LSW bits 1:0) = high 2 bits, p2_rfh_bit (MSW bit 15) = low bit
+par_rfh_even: "R0H" is p1_f2=0 { export R0H; }
+par_rfh_even: "R2H" is p1_f2=1 { export R2H; }
+par_rfh_even: "R4H" is p1_f2=2 { export R4H; }
+par_rfh_even: "R6H" is p1_f2=3 { export R6H; }
+
+par_rfh_odd: "R1H" is p1_f2=0 { export R1H; }
+par_rfh_odd: "R3H" is p1_f2=1 { export R3H; }
+par_rfh_odd: "R5H" is p1_f2=2 { export R5H; }
+par_rfh_odd: "R7H" is p1_f2=3 { export R7H; }
+
+# p.114 MPYF32 RaH, RbH, RcH || ADDF32 RdH, ReH, RfH
+:mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101000 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
+	rah3 = rbh3 f* rch3;
+	update_stf(rah3);
+	p2_rdh = p2_reh3 f+ par_rfh_even;
+}
+
+:mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101000 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
+	rah3 = rbh3 f* rch3;
+	update_stf(rah3);
+	p2_rdh = p2_reh3 f+ par_rfh_odd;
+}
+
+# p.119 MPYF32 RaH, RbH, RcH || SUBF32 RdH, ReH, RfH
+:mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101010 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
+	rah3 = rbh3 f* rch3;
+	update_stf(rah3);
+	p2_rdh = p2_reh3 f- par_rfh_even;
+}
+
+:mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101010 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
+	rah3 = rbh3 f* rch3;
+	update_stf(rah3);
+	p2_rdh = p2_reh3 f- par_rfh_odd;
+}
 
 }
