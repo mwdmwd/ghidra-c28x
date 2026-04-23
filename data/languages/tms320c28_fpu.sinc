@@ -130,7 +130,52 @@ with : objmode=1 {
 # p.101
 :movd32 rah3_8, loc32 is op0_16=0b1110001000100011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
 
+# p.104
+:moviz rah3, #fpu_imm16 is op3_13=0b1110100000000 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+
+# p.106
+:movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+
+# p.109
+:mpyf32 rah3, rbh3, rch3 is op0_16=0b1110011100000000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}
+
+# p.110/111 (same encoding)
+:mpyf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100001 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {}
+
+# p.117
+:negf32 rah3, rbh3, cndf is op4_12=0b111001101010 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.134
+:subf32 rah3, rbh3, rch3 is op0_16=0b1110011100100000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}
+
+# p.135 (same encoding as SUBF32 imm)
+:subf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100011 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {}
+
+# p.121
+:pop "RB" is op0_16=0b1111111111110001 {}
+
+# p.123
+:push "RB" is op0_16=0b1111111111110000 {}
+
+# p.125
+:restore is op0_16=0b1110010101100010 {}
+
+# p.131
+:save imm6, op11_5, imm11 is op6_10=0b1110011001 & imm6; op11_5 & imm11 {}
+
+# p.140
+:swapf rah3, rbh3, cndf is op4_12=0b111001101110 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.141
+:testtf cndf is op4_12=0b111001011000 & cndf {}
+
+# p.146
+:zero rah3 is op3_13=0b1110010110010 & rah3 {}
+
+# p.147
+:zeroa is op0_16=0b1110010101100011 {}
+
 # p.133
-:setflg "FLAG_TODO", imm11 is op6_10=0b1110011000; imm11 {}
+:setflg imm6, op11_5, imm11 is op6_10=0b1110011000 & imm6; op11_5 & imm11 {}
 
 }

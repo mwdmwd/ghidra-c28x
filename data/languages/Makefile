@@ -29,6 +29,9 @@ dis: test.obj
 	-e 's/SUBL      ACC/SUBL         ACC/' \
 	-e 's/XRETC        UNC/XRET         /g' \
 	-e 's/BANZ         (.*),/BANZ         \1, /g' \
+	-e 's/MOVIZ        R([0-9]+)/MOVIZ        R\1H/g' \
+	-e 's/SWAPF        R([0-9]+),\s+R([0-9]+)/SWAPF        R\1H, R\2H/g' \
+	-e 's/ZERO         R([0-9]+)/ZERO         R\1H/g' \
 	| ./unhex_immediate.py
 
 .PHONY: test

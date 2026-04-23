@@ -587,4 +587,31 @@
 	NOP
 	MOVD32		R3H, @0x21
 	NOP
+	; FPU32 immediate loads and arithmetic
+	MOVIZ		R0H, #0x4000
+	NOP
+	MOVXI		R0H, #0x1234
+	NOP
+	MPYF32		R1H, R2H, R3H
+	NOP
+	MPYF32		R4H, #0x4000, R5H
+	NOP
+	NEGF32		R6H, R7H
+	NOP
+	SUBF32		R0H, R1H, R2H
+	NOP
+	SUBF32		R3H, #0x4000, R4H
+	NOP
+	SWAPF		R5H, R6H
+	NOP
+	TESTTF		EQ
+	ZERO		R7H
+	NOP
+	POP			RB
+	PUSH		RB
+	RESTORE
+	; SAVE		TF=1		; DIS2000 shows flag=value syntax (e.g. SAVE TF=1)
+							; but our SLEIGH decodes raw mask values.
+	ZEROA
+	NOP
 	.endasmfunc
