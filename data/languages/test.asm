@@ -550,4 +550,20 @@
 	UI32TOF32	R1H, R2H
 	NOP
 	UI32TOF32	R3H, @0x21
+	NOP
+	; FPU32 immediate and compare/max/min
+	ADDF32		R0H, #2.0, R1H
+	NOP
+	ADDF32		R2H, R3H, #-2.5
+	NOP
+	CMPF32		R4H, #0x4000
+	NOP
+	MAXF32		R5H, R6H
+	NOP
+	MAXF32		R7H, #0x3FC0
+	NOP
+	MINF32		R0H, R1H
+	NOP
+	MINF32		R2H, #-1.5
+	NOP
 	.endasmfunc

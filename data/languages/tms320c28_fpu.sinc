@@ -3,6 +3,9 @@
 attach variables rah2 [ _ _ _ _ R0H R1H R2H R3H R4H R5H R6H R7H _ _ _ _ ];  # this is weird
 attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
+@define fpu_imm16_add "imm6; fpu_imm10_lo [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ]"
+@define fpu_imm16_cmp "imm3; fpu_imm13_lo [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
+
 # All FPU instructions have objmode=1
 with : objmode=1 {
 
@@ -18,17 +21,35 @@ with : objmode=1 {
 # p.41
 :addf32 rah3, rbh3, rch3 is op0_16=0b1110011100010000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}
 
+# p.37 / p.39 (same encoding)
+:addf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100010 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {}
+
 # p.47
 :cmpf32 rah3, rbh3 is op0_16=0b1110011010010100; op6_10=0b0000000000 & rbh3 & rah3 {}
 
 # p.50
 :cmpf32 rah3, "#0.0" is op3_13=0b1110010110100 & rah3 {}
 
+# p.48
+:cmpf32 rah3, #fpu_imm16 is op3_13=0b1110100000010 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+
 # p.51
 :einvf32 rah3, rbh3 is op0_16=0b1110011010010011; op6_10=0b0000000000 & rbh3 & rah3 {}
 
 # p.53
 :eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.76
+:maxf32 rah3, rbh3 is op0_16=0b1110011010010110; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.77
+:maxf32 rah3, #fpu_imm16 is op3_13=0b1110100000100 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
+
+# p.79
+:minf32 rah3, rbh3 is op0_16=0b1110011010010111; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.80
+:minf32 rah3, #fpu_imm16 is op3_13=0b1110100000110 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {}
 
 # p.55
 :f32toi16 rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b0000000000 & rbh3 & rah3 {}

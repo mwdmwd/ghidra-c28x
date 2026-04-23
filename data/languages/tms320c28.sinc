@@ -55,6 +55,9 @@ define token opcode (16)
 	imm11		= (0,10)
 	imm16		= (0,15)
 	simm16		= (0,15) signed
+
+	fpu_imm10_lo	= (6,15)
+	fpu_imm13_lo	= (3,15)
 ;
 
 attach variables [ ax0 ax4 ax8 ] [ AL AH ];
