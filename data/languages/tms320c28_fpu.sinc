@@ -1,15 +1,79 @@
 ################################################################
 # SPRUEO2B - June 2007 - Revised January 2015
-attach variables rah2 [ _ _ _ _ R0H R1H R2H R3H R4H R5H R6H R7H _ _ _ _ ];
+attach variables rah2 [ _ _ _ _ R0H R1H R2H R3H R4H R5H R6H R7H _ _ _ _ ];  # this is weird
+attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
 # All FPU instructions have objmode=1
 with : objmode=1 {
 
-# p.86
-:mov32 "mem32", "RaH" is op0_16=0b1110001000000011; op11_5=0b00000 {} # TODO mem32 rah
+# p.86 MOV32 mem32, RaH (store)
+:mov32 loc32, rah3_8 is op0_16=0b1110001000000011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
 
 # p.90 (MOV32 RaH, ACC), p.93 (MOV32 RaH, P), p.96 (MOV32 RaH, XARn), p.97 (MOV32 RaH, XT)
 :mov32 rah2, loc32 is op8_8=0b10111101 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {}
+
+# p.36
+:absf32 rah3, rbh3 is op0_16=0b1110011010010101; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.41
+:addf32 rah3, rbh3, rch3 is op0_16=0b1110011100010000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {}
+
+# p.47
+:cmpf32 rah3, rbh3 is op0_16=0b1110011010010100; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.50
+:cmpf32 rah3, "#0.0" is op3_13=0b1110010110100 & rah3 {}
+
+# p.51
+:einvf32 rah3, rbh3 is op0_16=0b1110011010010011; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.53
+:eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.55
+:f32toi16 rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.56
+:f32toi16r rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b1000000000 & rbh3 & rah3 {}
+
+# p.57
+:f32toi32 rah3, rbh3 is op0_16=0b1110011010001000; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.58
+:f32toui16 rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.59
+:f32toui16r rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b1000000000 & rbh3 & rah3 {}
+
+# p.60
+:f32toui32 rah3, rbh3 is op0_16=0b1110011010001010; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.61
+:fracf32 rah3, rbh3 is op0_16=0b1110011011110001; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.62
+:i16tof32 rah3, rbh3 is op0_16=0b1110011010001101; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.63
+:i16tof32 rah3_8, loc16 is op0_16=0b1110001011001000; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {}
+
+# p.64
+:i32tof32 rah3_8, loc32 is op0_16=0b1110001010001000; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+
+# p.65
+:i32tof32 rah3, rbh3 is op0_16=0b1110011010001001; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.142
+:ui16tof32 rah3_8, loc16 is op0_16=0b1110001011000100; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {}
+
+# p.143
+:ui16tof32 rah3, rbh3 is op0_16=0b1110011010001111; op6_10=0b0000000000 & rbh3 & rah3 {}
+
+# p.144
+:ui32tof32 rah3_8, loc32 is op0_16=0b1110001010000100; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+
+# p.145
+:ui32tof32 rah3, rbh3 is op0_16=0b1110011010001011; op6_10=0b0000000000 & rbh3 & rah3 {}
 
 # p.133
 :setflg "FLAG_TODO", imm11 is op6_10=0b1110011000; imm11 {}
