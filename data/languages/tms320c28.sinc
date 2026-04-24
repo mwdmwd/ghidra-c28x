@@ -557,8 +557,8 @@ with : objmode=1 {
 # p.191
 :edis is op0_16=0b0111011000011010 {}
 
-# p.192
-#:eint # CLRC INTM
+# p.192 (EINT = CLRC INTM)
+:clrc INTM is op0_16=0b0010100100010000 & INTM { INTM = 0; }
 
 # p.193
 :estop0 is op0_16=0b0111011000100101 {}
