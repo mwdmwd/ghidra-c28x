@@ -39,6 +39,7 @@ dis: test.obj
 	-e 's/MOVIZ        R([0-9]+)/MOVIZ        R\1H/g' \
 	-e 's/SWAPF        R([0-9]+),\s+R([0-9]+)/SWAPF        R\1H, R\2H/g' \
 	-e 's/ZERO         R([0-9]+)/ZERO         R\1H/g' \
+	-e 's/RPTB([[:space:]]+)#[$$][+]/RPTB         /g' \
 	-e 's/  +/ /g' \
 	| ./unhex_immediate.py
 

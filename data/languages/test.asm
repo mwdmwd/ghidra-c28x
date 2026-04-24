@@ -509,18 +509,26 @@
 	NOP
 	;MOVST0		ZF, NF			; Ghidra shows raw mask (#0x14)
 								; while DIS2000 decodes flag names (NF,ZF)
-	;RPTB		RPTB_END, AL	; label names vs numeric block size
-	;NOP
-	;NOP
-	;NOP
-	;NOP
-	;NOP
-	;NOP
-	;NOP
-	;NOP
-	;NOP
-	;NOP
-	;RPTB_END:
+	RPTB		$+11, AL	; loc16 form: RSIZE=9, block=9 words
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	RPTB		$+11, #9	; #RC form: RSIZE=9, block=9 words
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
 	; FPU32 arithmetic
 	ABSF32		R0H, R1H
 	NOP

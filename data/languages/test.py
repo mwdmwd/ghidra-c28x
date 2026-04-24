@@ -22,6 +22,7 @@ for ins in dx.instructions:
         "BANZ",
         "BAR",
         "BF",
+        "RPTB",
         "SB",
         "SBF",
     ):
