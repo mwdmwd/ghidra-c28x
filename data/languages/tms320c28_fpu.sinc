@@ -52,6 +52,18 @@ macro update_stf(res) {
 	STF_ZF = ((res & 0x7FFFFFFF) == 0);
 }
 
+# MOV32/MOVD32 flag update: ZF/NF based on exponent field; also NI/ZI
+macro update_stf_mov(res) {
+	STF_NI = res[31,1];
+	STF_ZI = (res == 0);
+	STF_NF = res[31,1];
+	STF_ZF = 0;
+	if ((res & 0x7F800000) != 0) goto <stf_done>;
+	STF_ZF = 1;
+	STF_NF = 0;
+	<stf_done>
+}
+
 # Parallel MOV32 instructions - e=0 (R0H-R3H)
 :addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f+ p1_f3;
@@ -148,7 +160,14 @@ macro update_stf(res) {
 
 # p.70 — MACF32 R7H, R3H, mem32, *XAR7++
 # LSW: 1110 0010 0101 0000 (fixed), MSW: 0001 1111 mem32
-:macf32 "R7H, R3H," loc32^", *XAR7++" is op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {}
+:macf32 "R7H, R3H," loc32^", *XAR7++" is op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {
+	R3H = R3H f+ R2H;
+	update_stf(R3H);
+	local v1:4 = loc32;
+	local v2:4 = *:4 XAR7;
+	XAR7 = XAR7 + 2;
+	R2H = v1 f* v2;
+}
 
 # Parallel MAX/MIN
 :maxf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69c; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
@@ -215,10 +234,16 @@ macro update_stf(res) {
 }
 
 # p.51
-:einvf32 rah3, rbh3 is op0_16=0b1110011010010011; op6_10=0b0000000000 & rbh3 & rah3 {}
+:einvf32 rah3, rbh3 is op0_16=0b1110011010010011; op6_10=0b0000000000 & rbh3 & rah3 {
+	local one:4 = 0x3F800000;
+	rah3 = one f/ rbh3;
+}
 
 # p.53
-:eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {}
+:eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {
+	local one:4 = 0x3F800000;
+	rah3 = one f/ sqrt(rbh3);
+}
 
 # p.76
 :maxf32 rah3, rbh3 is op0_16=0b1110011010010110; op6_10=0b0000000000 & rbh3 & rah3 {
@@ -259,49 +284,99 @@ macro update_stf(res) {
 }
 
 # p.55
-:f32toi16 rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b0000000000 & rbh3 & rah3 {}
+:f32toi16 rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b0000000000 & rbh3 & rah3 {
+	local t:4 = trunc(rbh3);
+	local s:2 = t[0,16];
+	rah3 = sext(s);
+}
 
 # p.56
-:f32toi16r rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b1000000000 & rbh3 & rah3 {}
+:f32toi16r rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b1000000000 & rbh3 & rah3 {
+	local t:4 = round(rbh3);
+	local s:2 = t[0,16];
+	rah3 = sext(s);
+}
 
 # p.57
-:f32toi32 rah3, rbh3 is op0_16=0b1110011010001000; op6_10=0b0000000000 & rbh3 & rah3 {}
+:f32toi32 rah3, rbh3 is op0_16=0b1110011010001000; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = trunc(rbh3);
+}
 
 # p.58
-:f32toui16 rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b0000000000 & rbh3 & rah3 {}
+:f32toui16 rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b0000000000 & rbh3 & rah3 {
+	local t:4 = trunc(rbh3);
+	local s:2 = t[0,16];
+	rah3 = zext(s);
+}
 
 # p.59
-:f32toui16r rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b1000000000 & rbh3 & rah3 {}
+:f32toui16r rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b1000000000 & rbh3 & rah3 {
+	local t:4 = round(rbh3);
+	local s:2 = t[0,16];
+	rah3 = zext(s);
+}
 
 # p.60
-:f32toui32 rah3, rbh3 is op0_16=0b1110011010001010; op6_10=0b0000000000 & rbh3 & rah3 {}
+:f32toui32 rah3, rbh3 is op0_16=0b1110011010001010; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = trunc(rbh3);
+}
 
 # p.61
-:fracf32 rah3, rbh3 is op0_16=0b1110011011110001; op6_10=0b0000000000 & rbh3 & rah3 {}
+:fracf32 rah3, rbh3 is op0_16=0b1110011011110001; op6_10=0b0000000000 & rbh3 & rah3 {
+	local i:4 = trunc(rbh3);
+	local int_part:4 = int2float(i);
+	rah3 = rbh3 f- int_part;
+}
 
 # p.62
-:i16tof32 rah3, rbh3 is op0_16=0b1110011010001101; op6_10=0b0000000000 & rbh3 & rah3 {}
+:i16tof32 rah3, rbh3 is op0_16=0b1110011010001101; op6_10=0b0000000000 & rbh3 & rah3 {
+	local s:2 = rbh3[0,16];
+	local e:4 = sext(s);
+	rah3 = int2float(e);
+}
 
 # p.63
-:i16tof32 rah3_8, loc16 is op0_16=0b1110001011001000; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {}
+:i16tof32 rah3_8, loc16 is op0_16=0b1110001011001000; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+	local e:4 = sext(loc16);
+	rah3_8 = int2float(e);
+}
 
 # p.64
-:i32tof32 rah3_8, loc32 is op0_16=0b1110001010001000; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+:i32tof32 rah3_8, loc32 is op0_16=0b1110001010001000; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	rah3_8 = int2float(loc32);
+}
 
 # p.65
-:i32tof32 rah3, rbh3 is op0_16=0b1110011010001001; op6_10=0b0000000000 & rbh3 & rah3 {}
+:i32tof32 rah3, rbh3 is op0_16=0b1110011010001001; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = int2float(rbh3);
+}
 
-# p.142
-:ui16tof32 rah3_8, loc16 is op0_16=0b1110001011000100; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {}
+# p.142 - zext to 32-bit makes it a non-negative signed int, int2float is exact
+:ui16tof32 rah3_8, loc16 is op0_16=0b1110001011000100; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+	local e:4 = zext(loc16);
+	rah3_8 = int2float(e);
+}
 
 # p.143
-:ui16tof32 rah3, rbh3 is op0_16=0b1110011010001111; op6_10=0b0000000000 & rbh3 & rah3 {}
+:ui16tof32 rah3, rbh3 is op0_16=0b1110011010001111; op6_10=0b0000000000 & rbh3 & rah3 {
+	local s:2 = rbh3[0,16];
+	local e:4 = zext(s);
+	rah3 = int2float(e);
+}
 
-# p.144
-:ui32tof32 rah3_8, loc32 is op0_16=0b1110001010000100; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+# p.144 - zero-extend to 64-bit so it stays non-negative, then narrow back to f32
+:ui32tof32 rah3_8, loc32 is op0_16=0b1110001010000100; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	local e:8 = zext(loc32);
+	local f:8 = int2float(e);
+	rah3_8 = float2float(f);
+}
 
 # p.145
-:ui32tof32 rah3, rbh3 is op0_16=0b1110011010001011; op6_10=0b0000000000 & rbh3 & rah3 {}
+:ui32tof32 rah3, rbh3 is op0_16=0b1110011010001011; op6_10=0b0000000000 & rbh3 & rah3 {
+	local e:8 = zext(rbh3);
+	local f:8 = int2float(e);
+	rah3 = float2float(f);
+}
 
 # p.82
 :mov16 loc16, rah3_8 is op0_16=0b1110001000010011; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
@@ -349,8 +424,11 @@ macro update_stf(res) {
 	<done>
 }
 
-# p.101
-:movd32 rah3_8, loc32 is op0_16=0b1110001000100011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {}
+# p.101 - load RaH from mem32, copy mem32 to mem32+2 (store side omitted: no address exposed)
+:movd32 rah3_8, loc32 is op0_16=0b1110001000100011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	rah3_8 = loc32;
+	update_stf_mov(rah3_8);
+}
 
 # p.104
 :moviz rah3, #fpu_imm16 is op3_13=0b1110100000000 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
@@ -362,8 +440,47 @@ macro update_stf(res) {
 	rah3[16,16] = fpu_imm16;
 }
 
-# p.106
-:movst0 #imm8 is op8_8=0b10101101 & imm8 {}
+# p.106 - copy selected STF flags to ST0; clear LUF/LVF if selected
+:movst0 #imm8 is op8_8=0b10101101 & imm8 {
+	local flag:4 = imm8;
+	# LVF → OV, then clear
+	if ((flag & 1) == 0) goto <f0_done>;
+	V = STF_LV;
+	STF = STF & 0xFFFFFFFE;
+	<f0_done>
+	# LUF → OV (OR in), then clear
+	if ((flag & 2) == 0) goto <f1_done>;
+	if (!STF_LU) goto <f1a>;
+	V = 1;
+	<f1a>
+	STF = STF & 0xFFFFFFFD;
+	<f1_done>
+	# NF → N
+	if ((flag & 4) == 0) goto <f2_done>;
+	N = STF_NF;
+	<f2_done>
+	# ZF → Z
+	if ((flag & 8) == 0) goto <f3_done>;
+	Z = STF_ZF;
+	<f3_done>
+	# NI → N (OR in)
+	if ((flag & 0x10) == 0) goto <f4_done>;
+	if (!STF_NI) goto <f4a>;
+	N = 1;
+	<f4a>
+	<f4_done>
+	# ZI → Z (OR in)
+	if ((flag & 0x20) == 0) goto <f5_done>;
+	if (!STF_ZI) goto <f5a>;
+	Z = 1;
+	<f5a>
+	<f5_done>
+	# TF → C and TC
+	if ((flag & 0x40) == 0) goto <f6_done>;
+	C = STF_TF;
+	TC = STF_TF;
+	<f6_done>
+}
 
 # p.109
 :mpyf32 rah3, rbh3, rch3 is op0_16=0b1110011100000000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
@@ -404,10 +521,14 @@ macro update_stf(res) {
 }
 
 # p.121
-:pop RB is op0_16=0b1111111111110001 & RB {}
+:pop RB is op0_16=0b1111111111110001 & RB {
+	pop32(RB);
+}
 
 # p.123
-:push RB is op0_16=0b1111111111110000 & RB {}
+:push RB is op0_16=0b1111111111110000 & RB {
+	push32(RB);
+}
 
 # p.125
 :restore is op0_16=0b1110010101100010 {
@@ -452,7 +573,9 @@ macro update_stf(res) {
 }
 
 # p.141
-:testtf cndf is op4_12=0b111001011000 & cndf {}
+:testtf cndf is op4_12=0b111001011000 & cndf {
+	STF_TF = cndf;
+}
 
 # p.146
 :zero rah3 is op3_13=0b1110010110010 & rah3 {
@@ -468,7 +591,13 @@ macro update_stf(res) {
 }
 
 # p.133
-:setflg imm6, op11_5, imm11 is op6_10=0b1110011000 & imm6; op11_5 & imm11 {}
+:setflg imm6, op11_5, imm11 is op6_10=0b1110011000 & imm6; op11_5 & imm11 {
+	local f_lo:4 = imm6;
+	local f_hi:4 = op11_5;
+	local flag:4 = (f_hi << 6) | f_lo;
+	local val:4 = imm11;
+	STF = (STF & ~flag) | (val & flag);
+}
 
 # Subtables for RfH split across words: p1_f2 (LSW bits 1:0) = high 2 bits, p2_rfh_bit (MSW bit 15) = low bit
 par_rfh_even: "R0H" is p1_f2=0 { export R0H; }
