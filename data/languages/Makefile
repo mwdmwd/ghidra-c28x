@@ -54,6 +54,10 @@ diff: tms320c28.sla test.bin
 qdiff: tms320c28.sla test.bin
 	@diff -u <(make --silent dis) <(make --silent test)
 
+.PHONY: qghidra
+qghidra: tms320c28.sla
+	@python3 qghidra.py
+
 .PHONY: qasm
 qasm:
 	@rm -f quick.asm quick.obj
