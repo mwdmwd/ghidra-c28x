@@ -6,13 +6,15 @@ attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 @define fpu_imm16_add "imm6; fpu_imm10_lo [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ]"
 @define fpu_imm16_cmp "imm3; fpu_imm13_lo [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
 
-# STF flags
+# STF flags (Table 2-2 in SPRUEO2B)
 define bitrange
 	STF_LV = STF[0,1]
 	STF_LU = STF[1,1]
 	STF_NF = STF[2,1]
 	STF_ZF = STF[3,1]
-	STF_TF = STF[4,1]
+	STF_NI = STF[4,1]
+	STF_ZI = STF[5,1]
+	STF_TF = STF[6,1]
 ;
 
 cndf: "NEQ"  is cndf4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
