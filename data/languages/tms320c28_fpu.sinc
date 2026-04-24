@@ -408,10 +408,37 @@ macro update_stf(res) {
 :push RB is op0_16=0b1111111111110000 & RB {}
 
 # p.125
-:restore is op0_16=0b1110010101100010 {}
+:restore is op0_16=0b1110010101100010 {
+	R0H = R0H_sh;
+	R1H = R1H_sh;
+	R2H = R2H_sh;
+	R3H = R3H_sh;
+	R4H = R4H_sh;
+	R5H = R5H_sh;
+	R6H = R6H_sh;
+	R7H = R7H_sh;
+	STF = STF_sh;
+	STF = STF & 0x7FFFFFFF;
+}
 
 # p.131
-:save imm6, op11_5, imm11 is op6_10=0b1110011001 & imm6; op11_5 & imm11 {}
+:save imm6, op11_5, imm11 is op6_10=0b1110011001 & imm6; op11_5 & imm11 {
+	R0H_sh = R0H;
+	R1H_sh = R1H;
+	R2H_sh = R2H;
+	R3H_sh = R3H;
+	R4H_sh = R4H;
+	R5H_sh = R5H;
+	R6H_sh = R6H;
+	R7H_sh = R7H;
+	STF_sh = STF;
+	local f_lo:4 = imm6;
+	local f_hi:4 = op11_5;
+	local flag:4 = (f_hi << 6) | f_lo;
+	local val:4 = imm11;
+	STF = (STF & ~flag) | (val & flag);
+	STF = STF | 0x80000000;
+}
 
 # p.140
 :swapf rah3, rbh3, cndf is op4_12=0b111001101110 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
