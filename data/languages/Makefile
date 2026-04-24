@@ -22,7 +22,6 @@ test.bin: test.obj
 .PHONY: dis
 dis: test.obj
 # movl rd, *--sp -> pop is dubious as it is implemented with != which bloats the sla to hell
-# TODO no support for parallel
 	$(DIS) $(DISFLAGS) $< | tail -n+5 \
 	| perl -0777 -pe 's/\n\s+\|\|/ || /g' \
 	| sed -E -e 's/(<<|>>)\s+([0-9]+)/\1 #\2/g' \
