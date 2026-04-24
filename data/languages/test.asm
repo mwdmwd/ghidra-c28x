@@ -667,3 +667,7 @@
     NOP
     MPYF32 R7H, R6H, R5H || SUBF32 R4H, R3H, R2H
     NOP
+    MACF32 R7H, R3H, *XAR6, *XAR7++
+    NOP
+    MACF32 R7H, R3H, *XAR6++, *XAR7++
+    NOP

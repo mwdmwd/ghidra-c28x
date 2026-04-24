@@ -144,6 +144,10 @@ macro update_stf(res) {
 	p2_a3 = loc32;
 }
 
+# p.70 — MACF32 R7H, R3H, mem32, *XAR7++
+# LSW: 1110 0010 0101 0000 (fixed), MSW: 0001 1111 mem32
+:macf32 "R7H, R3H," loc32^", *XAR7++" is op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {}
+
 # Parallel MAX/MIN
 :maxf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69c; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
 	if (rah3 f< rbh3) goto <swap>;
