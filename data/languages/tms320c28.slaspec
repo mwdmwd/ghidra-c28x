@@ -26,6 +26,7 @@ define register offset=0x20e size=4  [  STF ];
 
 # FPU32 registers (32-bit IEEE-754 floating-point)
 define register offset=0x300 size=4  [  R0H  R1H  R2H  R3H  R4H  R5H  R6H  R7H  ];
+define register offset=0x320 size=4  [  RB  ];
 
 # Define context bits (if defined, size must be multiple of 4-bytes)
 define register offset=0xf00 size=4   contextreg;

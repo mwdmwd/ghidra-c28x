@@ -402,10 +402,10 @@ macro update_stf(res) {
 }
 
 # p.121
-:pop "RB" is op0_16=0b1111111111110001 {}
+:pop RB is op0_16=0b1111111111110001 & RB {}
 
 # p.123
-:push "RB" is op0_16=0b1111111111110000 {}
+:push RB is op0_16=0b1111111111110000 & RB {}
 
 # p.125
 :restore is op0_16=0b1110010101100010 {}
