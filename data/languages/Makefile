@@ -4,10 +4,14 @@ ASFLAGS := --float_support=fpu32
 DIS := $(TIBIN)dis2000
 DISFLAGS ?=
 HEX := $(TIBIN)hex2000
-SLEIGH_REPORT_CONFLICTS := -l
-
-ifdef PERMISSIVE
+# -l lists conflicting patterns as errors because context-only ^instruction
+# patterns (used for RPT semantics) inherently conflict with every regular instruction
+# in SLEIGH's conflict checker, even though they resolve correctly at runtime by specificity
+# Use make CONFLICTS=1 to re-enable for hunting real encoding overlaps
 SLEIGH_REPORT_CONFLICTS :=
+
+ifdef CONFLICTS
+SLEIGH_REPORT_CONFLICTS := -l
 endif
 
 SLEIGH_GREP ?=
