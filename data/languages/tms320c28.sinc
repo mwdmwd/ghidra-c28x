@@ -381,10 +381,22 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.138
-:addcl ACC, loc32 is objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {}
+:addcl ACC, loc32 is objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {
+	local result:5 = zext(ACC) + zext(loc32) + zext(C);
+	ACC = result[0, 32];
+	C = result[32, 1];
+	flagnz(ACC);
+	# TODO V, OVC, OVM
+}
 
 # p.139
-:addcu ACC, loc16 is op8_8=0b00001100 & ACC & loc16 {}
+:addcu ACC, loc16 is op8_8=0b00001100 & ACC & loc16 {
+	local result:5 = zext(ACC) + zext(loc16) + zext(C);
+	ACC = result[0, 32];
+	C = result[32, 1];
+	flagnz(ACC);
+	# TODO V, OVC, OVM
+}
 
 # p.140
 :addl ACC, loc32 is op8_8=0b00000111 & ACC & loc32 {
@@ -393,7 +405,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.141
-:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM {} # conflict with `mova T, loc16` and `movp T, loc16`
+:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM { # conflict with `mova T, loc16` and `movp T, loc16`
+	ACC = ACC + (P << PM);
+	flagnz(ACC);
+	# TODO C, V, OVC (PM shift direction depends on sign; negative PM = arithmetic right shift)
+}
 
 # p.142
 :addl loc32, ACC is objmode=1 & op0_16=0b0101011000000001 & ACC; op8_8=0b00000000 & loc32 {
@@ -413,10 +429,22 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.144
-:addul P, loc32 is objmode=1 & op0_16=0b0101011001010111 & P; op8_8=0b00000000 & loc32 {}
+:addul P, loc32 is objmode=1 & op0_16=0b0101011001010111 & P; op8_8=0b00000000 & loc32 {
+	local result:5 = zext(P) + zext(loc32);
+	P = result[0, 32];
+	C = result[32, 1];
+	flagnz(P);
+	# TODO V, OVCU
+}
 
 # p.145
-:addul ACC, loc32 is objmode=1 & op0_16=0b0101011001010011 & ACC; loc32 {}
+:addul ACC, loc32 is objmode=1 & op0_16=0b0101011001010011 & ACC; loc32 {
+	local result:5 = zext(ACC) + zext(loc32);
+	ACC = result[0, 32];
+	C = result[32, 1];
+	flagnz(ACC);
+	# TODO V, OVCU
+}
 
 # p.146
 :adrk #imm8 is op8_8=0b11111100 & imm8 {
@@ -506,13 +534,52 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.159
-:asr64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {}
+:asr64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	local tmp:8 = val s>> (shift0_4_1 - 1);
+	C = tmp[0, 1];
+	val = tmp s>> 1;
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
 
 # p.160
-:asr64 ACC:P, T is objmode=1 & op0_16=0b0101011000101100 & ACC & P & T {}
+:asr64 ACC:P, T is objmode=1 & op0_16=0b0101011000101100 & ACC & P & T {
+	local shift:4 = zext(T[0,6]);
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:8 = val s>> (shift - 1);
+	C = tmp[0, 1];
+	val = tmp s>> 1;
+	<done>
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
 
 # p.161
-:asrl ACC, T is objmode=1 & op0_16=0b0101011000010000 & ACC & T {}
+:asrl ACC, T is objmode=1 & op0_16=0b0101011000010000 & ACC & T {
+	local shift:4 = zext(T[0,5]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:4 = ACC s>> (shift - 1);
+	C = tmp[0, 1];
+	ACC = tmp s>> 1;
+	<done>
+	flagnz(ACC);
+}
 
 # p.162
 :b off16, cond is op4_12=0b111111111110 & cond; off16 {
@@ -587,7 +654,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.177
-:cmp ax8, loc16 is op9_7=0b0101010 & ax8 & loc16 {}
+:cmp ax8, loc16 is op9_7=0b0101010 & ax8 & loc16 {
+	local tmp:3 = sext(ax8) - sext(loc16);
+	flagnz(tmp);
+	C = ax8 >= loc16;
+}
 
 # p.178
 :cmp loc16, #simm16 is op8_8=0b00011011 & loc16; simm16 {
@@ -597,7 +668,13 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.179
-:cmp64 ACC:P is objmode=1 & op0_16=0b0101011001011110 & ACC & P {}
+:cmp64 ACC:P is objmode=1 & op0_16=0b0101011001011110 & ACC & P {
+	N = ACC[31, 1] ^ V;
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	Z = ((hi << 32) | lo) == 0;
+	V = 0;
+}
 
 # p.180
 :cmpb ax8, #imm8 is op9_7=0b0101001 & ax8 & imm8 {
@@ -608,23 +685,41 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.181
 :cmpl ACC, loc32 is op8_8=0b00001111 & ACC & loc32 {
-	local tmp:5 = zext(ACC) - zext(loc32); # 5 bytes so it behaves like infinite precision in all cases
+	local tmp:5 = sext(ACC) - sext(loc32);
 	flagnz(tmp);
-	# TODO C flag
+	C = ACC >= loc32;
 }
 
 # p.182
-:cmpl ACC, P << PM is op0_16=0b1111111101011001 & ACC & P & PM {}
+:cmpl ACC, P << PM is op0_16=0b1111111101011001 & ACC & P & PM {
+	local shifted:4 = P << PM;
+	local tmp:5 = sext(ACC) - sext(shifted);
+	flagnz(tmp);
+	C = ACC >= shifted;
+	# TODO PM negative = arithmetic right shift; pcode INT_LEFT with negative arg is approximate
+}
 
 with : objmode=1 {
 # p.183
-:cmpr "0" is op0_16=0b0101011000011101 {}
+:cmpr "0" is op0_16=0b0101011000011101 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 == *[register]:2 rp;
+}
 # p.183
-:cmpr "1" is op0_16=0b0101011000011001 {}
+:cmpr "1" is op0_16=0b0101011000011001 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 > *[register]:2 rp;
+}
 # p.183
-:cmpr "2" is op0_16=0b0101011000011000 {}
+:cmpr "2" is op0_16=0b0101011000011000 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 < *[register]:2 rp;
+}
 # p.183
-:cmpr "3" is op0_16=0b0101011000011100 {}
+:cmpr "3" is op0_16=0b0101011000011100 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 != *[register]:2 rp;
+}
 }
 
 # p.184
@@ -802,40 +897,158 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; ] { export *:4 rel; }
 }
 
 # p.230
-:lsl ACC, shift0_4_1 is op4_12=0b111111110011 & ACC & shift0_4_1 {}
+:lsl ACC, shift0_4_1 is op4_12=0b111111110011 & ACC & shift0_4_1 {
+	local tmp:4 = ACC << (shift0_4_1 - 1);
+	C = tmp[31, 1];
+	ACC = tmp << 1;
+	flagnz(ACC);
+}
 
 # p.231
-:lsl ACC, T is op0_16=0b1111111101010000 & ACC & T {}
+:lsl ACC, T is op0_16=0b1111111101010000 & ACC & T {
+	local shift:4 = zext(T[0,4]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:4 = ACC << (shift - 1);
+	C = tmp[31, 1];
+	ACC = tmp << 1;
+	<done>
+	flagnz(ACC);
+}
 
 # p.232
-:lsl ax4, shift0_4_1 is op5_11=0b11111111100 & ax4 & shift0_4_1 {}
+:lsl ax4, shift0_4_1 is op5_11=0b11111111100 & ax4 & shift0_4_1 {
+	local tmp:2 = ax4 << (shift0_4_1 - 1);
+	C = tmp[15, 1];
+	ax4 = tmp << 1;
+	flagnz(ax4);
+}
 
 # p.233
-:lsl ax0, T is op1_15=0b111111110110011 & ax0 & T {}
+:lsl ax0, T is op1_15=0b111111110110011 & ax0 & T {
+	local shift:4 = zext(T[0,4]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:2 = ax0 << (shift - 1);
+	C = tmp[15, 1];
+	ax0 = tmp << 1;
+	<done>
+	flagnz(ax0);
+}
 
 # p.234
-:lsl64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101010 & ACC & P & shift0_4_1 {}
+:lsl64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101010 & ACC & P & shift0_4_1 {
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	local tmp:8 = val << (shift0_4_1 - 1);
+	C = tmp[63, 1];
+	val = tmp << 1;
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
 
 # p.235
-:lsl64 ACC:P, T is objmode=1 & op0_16=0b0101011001010010 & ACC & P & T {}
+:lsl64 ACC:P, T is objmode=1 & op0_16=0b0101011001010010 & ACC & P & T {
+	local shift:4 = zext(T[0,6]);
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:8 = val << (shift - 1);
+	C = tmp[63, 1];
+	val = tmp << 1;
+	<done>
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
 
 # p.236
-:lsll ACC, T is objmode=1 & op0_16=0b0101011000111011 & ACC & T {}
+:lsll ACC, T is objmode=1 & op0_16=0b0101011000111011 & ACC & T {
+	ACC = ACC << zext(T[0,5]);
+	flagnz(ACC);
+}
 
 # p.237
-:lsr ax4, shift0_4_1 is op5_11=0b11111111110 & ax4 & shift0_4_1 {}
+:lsr ax4, shift0_4_1 is op5_11=0b11111111110 & ax4 & shift0_4_1 {
+	local tmp:2 = ax4 >> (shift0_4_1 - 1);
+	C = tmp[0, 1];
+	ax4 = tmp >> 1;
+	flagnz(ax4);
+}
 
 # p.238
-:lsr ax0, T is op1_15=0b111111110110001 & ax0 & T {}
+:lsr ax0, T is op1_15=0b111111110110001 & ax0 & T {
+	local shift:4 = zext(T[0,4]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:2 = ax0 >> (shift - 1);
+	C = tmp[0, 1];
+	ax0 = tmp >> 1;
+	<done>
+	flagnz(ax0);
+}
 
 # p.239
-:lsr64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101001 & ACC & P & shift0_4_1 {}
+:lsr64 ACC:P, shift0_4_1 is objmode=1 & op4_12=0b010101101001 & ACC & P & shift0_4_1 {
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	local tmp:8 = val >> (shift0_4_1 - 1);
+	C = tmp[0, 1];
+	val = tmp >> 1;
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
 
 # p.240
-:lsr64 ACC:P, T is objmode=1 & op0_16=0b0101011001011011 & ACC & P & T {}
+:lsr64 ACC:P, T is objmode=1 & op0_16=0b0101011001011011 & ACC & P & T {
+	local shift:4 = zext(T[0,6]);
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:8 = val >> (shift - 1);
+	C = tmp[0, 1];
+	val = tmp >> 1;
+	<done>
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
 
 # p.241
-:lsrl ACC, T is objmode=1 & op0_16=0b0101011000100010 & ACC & T {}
+:lsrl ACC, T is objmode=1 & op0_16=0b0101011000100010 & ACC & T {
+	local shift:4 = zext(T[0,5]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:4 = ACC >> (shift - 1);
+	C = tmp[0, 1];
+	ACC = tmp >> 1;
+	<done>
+	flagnz(ACC);
+}
 
 # p.242
 :mac P, loc16, 0:imm16 is op8_8=0b00010100 & P & loc16; imm16 {}
