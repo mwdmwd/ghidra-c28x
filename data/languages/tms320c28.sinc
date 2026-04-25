@@ -860,15 +860,6 @@ with : objmode=1 {
 # p.224
 :loopz loc16, #imm16 is op8_8=0b00101100 & loc16; imm16 {}
 
-# Computes display address for RPTB end label: inst_start (word addr) + RSIZE + 2
-rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; ] { export *:4 rel; }
-
-# p.127
-:rptb rptb_end, loc16 is objmode=1 & op8_8=0b10110101 & op7=0 & rptb_end; loc16 {}
-
-# p.129
-:rptb rptb_end, #imm16 is objmode=1 & op8_8=0b10110101 & op7=1 & rptb_end; imm16 {}
-
 # p.226 (LPADDR)
 :setc AMODE is op0_16=0b0101011000011110 & AMODE {
 	AMODE = 1;

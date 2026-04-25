@@ -17,6 +17,15 @@ define bitrange
 	STF_TF = STF[6,1]
 ;
 
+# RB register fields (Figure 2-3 in SPRUEO2B)
+define bitrange
+	RB_RC = RB[0,16]
+	RB_RE = RB[16,7]
+	RB_RSIZE = RB[23,7]
+	RB_RA = RB[30,1]
+	RB_RAS = RB[31,1]
+;
+
 cndf: "NEQ"  is cndf4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
 cndf: "EQ"   is cndf4=0b0001 { local b:1 = (STF_ZF == 1); export b; }
 cndf: "GT"   is cndf4=0b0010 { local b:1 = (STF_ZF == 0) && (STF_NF == 0); export b; }
@@ -27,8 +36,8 @@ cndf: "TF"   is cndf4=0b1010 { local b:1 = (STF_TF == 1); export b; }
 cndf: "NTF"  is cndf4=0b1011 { local b:1 = (STF_TF == 0); export b; }
 cndf: "LU"   is cndf4=0b1100 { local b:1 = (STF_LU == 1); export b; }
 cndf: "LV"   is cndf4=0b1101 { local b:1 = (STF_LV == 1); export b; }
-cndf: "UNC"  is cndf4=0b1110 { local b:1 = 1; export b; }
-cndf: "UNCF" is cndf4=0b1111 { local b:1 = 1; export b; }
+cndf: "UNC"  is cndf4=0b1110 { local b:1 = 1; export b; }                    # Unconditional
+cndf: "UNCF" is cndf4=0b1111 { local b:1 = 1; export b; }                    # Unconditional with flag modification
 
 # p2_ee, p2_d3, p2_a3, p1_*, p2_rdh, p2_reh3 are defined on 'opcode' token in tms320c28.sinc
 attach variables [ p2_d3 p2_a3 p2_rdh p2_reh3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
@@ -48,8 +57,8 @@ fpu_re_high: "R6H" is p2_ee=2 { export R6H; }
 fpu_re_high: "R7H" is p2_ee=3 { export R7H; }
 
 macro update_stf(res) {
-	STF_NF = res[31,1];
-	STF_ZF = ((res & 0x7FFFFFFF) == 0);
+	STF_ZF = ((res & 0x7F800000) == 0);
+	STF_NF = res[31,1] && (STF_ZF == 0);
 }
 
 # MOV32/MOVD32 flag update: ZF/NF based on exponent field; also NI/ZI
@@ -67,102 +76,95 @@ macro update_stf_mov(res) {
 # Parallel MOV32 instructions - e=0 (R0H-R3H)
 :addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f+ p1_f3;
-	update_stf(p2_d3);
 	loc32 = p2_a3;
 }
 :addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f+ p1_f3;
-	update_stf(p2_d3);
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 :subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f- p1_f3;
-	update_stf(p2_d3);
 	loc32 = p2_a3;
 }
 :subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f- p1_f3;
-	update_stf(p2_d3);
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 :mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f* p1_f3;
-	update_stf(p2_d3);
 	loc32 = p2_a3;
 }
 :mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f* p1_f3;
-	update_stf(p2_d3);
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 :macf32 "R3H, R2H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	R3H = R3H f+ R2H;
-	update_stf(R3H);
-	R2H = fpu_re_low f* p1_f3;
+	p2_d3 = fpu_re_low f* p1_f3;
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 :macf32 "R7H, R6H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	R7H = R7H f+ R6H;
-	update_stf(R7H);
-	R6H = fpu_re_low f* p1_f3;
+	p2_d3 = fpu_re_low f* p1_f3;
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 # Parallel MOV32 instructions - e=1 (R4H-R7H)
 :addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f+ p1_f3;
-	update_stf(p2_d3);
 	loc32 = p2_a3;
 }
 :addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f+ p1_f3;
-	update_stf(p2_d3);
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 :subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f- p1_f3;
-	update_stf(p2_d3);
 	loc32 = p2_a3;
 }
 :subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f- p1_f3;
-	update_stf(p2_d3);
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 :mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f* p1_f3;
-	update_stf(p2_d3);
 	loc32 = p2_a3;
 }
 :mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f* p1_f3;
-	update_stf(p2_d3);
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 :macf32 "R3H, R2H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	R3H = R3H f+ R2H;
-	update_stf(R3H);
-	R2H = fpu_re_high f* p1_f3;
+	p2_d3 = fpu_re_high f* p1_f3;
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 :macf32 "R7H, R6H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=1 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	R7H = R7H f+ R6H;
-	update_stf(R7H);
-	R6H = fpu_re_high f* p1_f3;
+	p2_d3 = fpu_re_high f* p1_f3;
 	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
 }
 
 # p.70 — MACF32 R7H, R3H, mem32, *XAR7++
 # LSW: 1110 0010 0101 0000 (fixed), MSW: 0001 1111 mem32
 :macf32 "R7H, R3H," loc32^", *XAR7++" is op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {
 	R3H = R3H f+ R2H;
-	update_stf(R3H);
 	local v1:4 = loc32;
 	local v2:4 = *:4 XAR7;
 	XAR7 = XAR7 + 2;
@@ -196,10 +198,10 @@ macro update_stf_mov(res) {
 :mov32 rah2, loc32 is op8_8=0b10111101 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
 	rah2 = loc32;
 }
-
 # p.36
 :absf32 rah3, rbh3 is op0_16=0b1110011010010101; op6_10=0b0000000000 & rbh3 & rah3 {
 	rah3 = rbh3 & 0x7FFFFFFF;
+	update_stf(rah3);
 }
 
 # p.41
@@ -233,13 +235,13 @@ macro update_stf_mov(res) {
 	update_stf(res);
 }
 
-# p.51
+# p.51 - no flags (only LUF/LVF, which we don't model here)
 :einvf32 rah3, rbh3 is op0_16=0b1110011010010011; op6_10=0b0000000000 & rbh3 & rah3 {
 	local one:4 = 0x3F800000;
 	rah3 = one f/ rbh3;
 }
 
-# p.53
+# p.53 - no flags (only LUF/LVF)
 :eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {
 	local one:4 = 0x3F800000;
 	rah3 = one f/ sqrt(rbh3);
@@ -283,95 +285,95 @@ macro update_stf_mov(res) {
 	<done>
 }
 
-# p.55
+# p.55 - no flags
 :f32toi16 rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b0000000000 & rbh3 & rah3 {
 	local t:4 = trunc(rbh3);
 	local s:2 = t[0,16];
 	rah3 = sext(s);
 }
 
-# p.56
+# p.56 - no flags
 :f32toi16r rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b1000000000 & rbh3 & rah3 {
 	local t:4 = round(rbh3);
 	local s:2 = t[0,16];
 	rah3 = sext(s);
 }
 
-# p.57
+# p.57 - no flags
 :f32toi32 rah3, rbh3 is op0_16=0b1110011010001000; op6_10=0b0000000000 & rbh3 & rah3 {
 	rah3 = trunc(rbh3);
 }
 
-# p.58
+# p.58 - no flags
 :f32toui16 rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b0000000000 & rbh3 & rah3 {
 	local t:4 = trunc(rbh3);
 	local s:2 = t[0,16];
 	rah3 = zext(s);
 }
 
-# p.59
+# p.59 - no flags
 :f32toui16r rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b1000000000 & rbh3 & rah3 {
 	local t:4 = round(rbh3);
 	local s:2 = t[0,16];
 	rah3 = zext(s);
 }
 
-# p.60
+# p.60 - no flags
 :f32toui32 rah3, rbh3 is op0_16=0b1110011010001010; op6_10=0b0000000000 & rbh3 & rah3 {
 	rah3 = trunc(rbh3);
 }
 
-# p.61
+# p.61 - no flags
 :fracf32 rah3, rbh3 is op0_16=0b1110011011110001; op6_10=0b0000000000 & rbh3 & rah3 {
 	local i:4 = trunc(rbh3);
 	local int_part:4 = int2float(i);
 	rah3 = rbh3 f- int_part;
 }
 
-# p.62
+# p.62 - no flags
 :i16tof32 rah3, rbh3 is op0_16=0b1110011010001101; op6_10=0b0000000000 & rbh3 & rah3 {
 	local s:2 = rbh3[0,16];
 	local e:4 = sext(s);
 	rah3 = int2float(e);
 }
 
-# p.63
+# p.63 - no flags
 :i16tof32 rah3_8, loc16 is op0_16=0b1110001011001000; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
 	local e:4 = sext(loc16);
 	rah3_8 = int2float(e);
 }
 
-# p.64
+# p.64 - no flags
 :i32tof32 rah3_8, loc32 is op0_16=0b1110001010001000; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	rah3_8 = int2float(loc32);
 }
 
-# p.65
+# p.65 - no flags
 :i32tof32 rah3, rbh3 is op0_16=0b1110011010001001; op6_10=0b0000000000 & rbh3 & rah3 {
 	rah3 = int2float(rbh3);
 }
 
-# p.142 - zext to 32-bit makes it a non-negative signed int, int2float is exact
+# p.142 - zext to 32-bit makes it a non-negative signed int, int2float is exact; no flags
 :ui16tof32 rah3_8, loc16 is op0_16=0b1110001011000100; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
 	local e:4 = zext(loc16);
 	rah3_8 = int2float(e);
 }
 
-# p.143
+# p.143 - no flags
 :ui16tof32 rah3, rbh3 is op0_16=0b1110011010001111; op6_10=0b0000000000 & rbh3 & rah3 {
 	local s:2 = rbh3[0,16];
 	local e:4 = zext(s);
 	rah3 = int2float(e);
 }
 
-# p.144 - zero-extend to 64-bit so it stays non-negative, then narrow back to f32
+# p.144 - zero-extend to 64-bit so it stays non-negative, then narrow back to f32; no flags
 :ui32tof32 rah3_8, loc32 is op0_16=0b1110001010000100; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	local e:8 = zext(loc32);
 	local f:8 = int2float(e);
 	rah3_8 = float2float(f);
 }
 
-# p.145
+# p.145 - no flags
 :ui32tof32 rah3, rbh3 is op0_16=0b1110011010001011; op6_10=0b0000000000 & rbh3 & rah3 {
 	local e:8 = zext(rbh3);
 	local f:8 = int2float(e);
@@ -410,23 +412,38 @@ macro update_stf_mov(res) {
 	STF = loc32;
 }
 
-# p.91
+# p.91 - UNCF: always moves, updates NF/ZF/NI/ZI
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf4=0b1111 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	rah3_8 = loc32;
+	update_stf_mov(rah3_8);
+}
+
+# p.91 - conditional (non-UNCF): no flags modified
 :mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	if (!cndf) goto <done>;
 	rah3_8 = loc32;
 	<done>
 }
 
-# p.94
+# p.94 - UNCF: always moves, updates NF/ZF/NI/ZI
+:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cndf4=0b1111 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = rbh3;
+	update_stf_mov(rah3);
+}
+
+# p.94 - conditional (non-UNCF): no flags modified
 :mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
 	if (!cndf) goto <done>;
 	rah3 = rbh3;
 	<done>
 }
 
-# p.101 - load RaH from mem32, copy mem32 to mem32+2 (store side omitted: no address exposed)
+# p.101 - load RaH from mem32, copy mem32 to mem32+2
 :movd32 rah3_8, loc32 is op0_16=0b1110001000100011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
-	rah3_8 = loc32;
+	local val:4 = loc32;
+	rah3_8 = val;
+	local addr:4 = &loc32;
+	*:4 (addr + 2) = val;
 	update_stf_mov(rah3_8);
 }
 
@@ -563,7 +580,7 @@ macro update_stf_mov(res) {
 	STF = STF | 0x80000000;
 }
 
-# p.140
+# p.140 - no flags
 :swapf rah3, rbh3, cndf is op4_12=0b111001101110 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
 	if (!cndf) goto <done>;
 	local tmp = rah3;
@@ -577,7 +594,7 @@ macro update_stf_mov(res) {
 	STF_TF = cndf;
 }
 
-# p.146
+# p.146 - no flags
 :zero rah3 is op3_13=0b1110010110010 & rah3 {
 	rah3 = 0;
 }
@@ -588,6 +605,29 @@ macro update_stf_mov(res) {
 	R1H = 0;
 	R2H = 0;
 	R3H = 0;
+}
+
+# p.127
+rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; ] { export *:4 rel; }
+:rptb rptb_end, loc16 is op8_8=0b10110101 & op7=0 & rptb_end & imm7; loc16 {
+	local rsz:1 = imm7;
+	RB_RSIZE = rsz;
+	local count:2 = loc16;
+	RB_RC = count;
+	local end_addr:4 = (inst_start + zext(rsz) + 1) & 0x7F;
+	RB_RE = end_addr[0,7];
+	RB_RA = (count != 0);
+}
+
+# p.129
+:rptb rptb_end, #imm16 is op8_8=0b10110101 & op7=1 & rptb_end & imm7; imm16 {
+	local rsz:1 = imm7;
+	RB_RSIZE = rsz;
+	local count:2 = imm16;
+	RB_RC = count;
+	local end_addr:4 = (inst_start + zext(rsz) + 1) & 0x7F;
+	RB_RE = end_addr[0,7];
+	RB_RA = (count != 0);
 }
 
 # p.133
