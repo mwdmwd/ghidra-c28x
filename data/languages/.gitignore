@@ -1,4 +1,5 @@
 *.sla
 *.bin
 *.obj
+quick.asm
 old/
