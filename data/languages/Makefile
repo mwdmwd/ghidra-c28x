@@ -62,7 +62,7 @@ diff: tms320c28.sla test.bin
 
 # Quiet diff (no output if identical)
 .PHONY: qdiff
-qdiff: SLEIGH_GREP := 2>&1 | (grep -v '^INFO\|^openjdk\|^OpenJDK\|Compiling\|WARN.*NOP\|WARN.*-n\|WARN.*Truncation' || :)
+qdiff: SLEIGH_GREP := 2>&1 | (grep -v '^INFO\|^openjdk\|^OpenJDK\|Compiling\|WARN.*-n\|WARN.*Truncation' || :)
 qdiff: tms320c28.sla test.bin
 	@diff -u <(make --silent dis) <(make --silent test)
 
