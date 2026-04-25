@@ -17,18 +17,18 @@ define bitrange
 	STF_TF = STF[6,1]
 ;
 
-cndf: "NEQ"  is cndf4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
-cndf: "EQ"   is cndf4=0b0001 { local b:1 = (STF_ZF == 1); export b; }
-cndf: "GT"   is cndf4=0b0010 { local b:1 = (STF_ZF == 0) && (STF_NF == 0); export b; }
-cndf: "GEQ"  is cndf4=0b0011 { local b:1 = (STF_NF == 0); export b; }
-cndf: "LT"   is cndf4=0b0100 { local b:1 = (STF_NF == 1); export b; }
-cndf: "LEQ"  is cndf4=0b0101 { local b:1 = (STF_ZF == 1) || (STF_NF == 1); export b; }
-cndf: "TF"   is cndf4=0b1010 { local b:1 = (STF_TF == 1); export b; }
-cndf: "NTF"  is cndf4=0b1011 { local b:1 = (STF_TF == 0); export b; }
-cndf: "LU"   is cndf4=0b1100 { local b:1 = (STF_LU == 1); export b; }
-cndf: "LV"   is cndf4=0b1101 { local b:1 = (STF_LV == 1); export b; }
-cndf: "UNC"  is cndf4=0b1110 { local b:1 = 1; export b; }                    # Unconditional
-cndf: "UNCF" is cndf4=0b1111 { local b:1 = 1; export b; }                    # Unconditional with flag modification
+cndf: "NEQ"  is cond0_4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
+cndf: "EQ"   is cond0_4=0b0001 { local b:1 = (STF_ZF == 1); export b; }
+cndf: "GT"   is cond0_4=0b0010 { local b:1 = (STF_ZF == 0) && (STF_NF == 0); export b; }
+cndf: "GEQ"  is cond0_4=0b0011 { local b:1 = (STF_NF == 0); export b; }
+cndf: "LT"   is cond0_4=0b0100 { local b:1 = (STF_NF == 1); export b; }
+cndf: "LEQ"  is cond0_4=0b0101 { local b:1 = (STF_ZF == 1) || (STF_NF == 1); export b; }
+cndf: "TF"   is cond0_4=0b1010 { local b:1 = (STF_TF == 1); export b; }
+cndf: "NTF"  is cond0_4=0b1011 { local b:1 = (STF_TF == 0); export b; }
+cndf: "LU"   is cond0_4=0b1100 { local b:1 = (STF_LU == 1); export b; }
+cndf: "LV"   is cond0_4=0b1101 { local b:1 = (STF_LV == 1); export b; }
+cndf: "UNC"  is cond0_4=0b1110 { local b:1 = 1; export b; }                    # Unconditional
+cndf: "UNCF" is cond0_4=0b1111 { local b:1 = 1; export b; }                    # Unconditional with flag modification
 
 # p2_ee, p2_d3, p2_a3, p1_*, p2_rdh, p2_reh3 are defined on 'opcode' token in tms320c28.sinc
 attach variables [ p2_d3 p2_a3 p2_rdh p2_reh3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
@@ -404,7 +404,7 @@ macro update_stf_mov(res) {
 }
 
 # p.91 - UNCF: always moves, updates NF/ZF/NI/ZI
-:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf4=0b1111 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cond0_4=0b1111 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	rah3_8 = loc32;
 	update_stf_mov(rah3_8);
 }
@@ -417,7 +417,7 @@ macro update_stf_mov(res) {
 }
 
 # p.94 - UNCF: always moves, updates NF/ZF/NI/ZI
-:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cndf4=0b1111 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cond0_4=0b1111 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
 	rah3 = rbh3;
 	update_stf_mov(rah3);
 }
