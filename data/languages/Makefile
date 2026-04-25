@@ -55,19 +55,28 @@ dis: test.obj
 test: tms320c28.sla test.bin
 	./test.py | sed -E 's/  +/ /g' | ./unhex_immediate.py
 
+# Full visual diff
 .PHONY: diff
 diff: tms320c28.sla test.bin
 	diff --side-by-side --left-column <(make --silent dis) <(make --silent test)
 
+# Quiet diff (no output if identical)
 .PHONY: qdiff
 qdiff: SLEIGH_GREP := 2>&1 | (grep -v '^INFO\|^openjdk\|^OpenJDK\|Compiling\|WARN.*NOP\|WARN.*-n\|WARN.*Truncation' || :)
 qdiff: tms320c28.sla test.bin
 	@diff -u <(make --silent dis) <(make --silent test)
 
+# Disassemble hex words from stdin with Ghidra, to assembly
 .PHONY: qghidra
 qghidra: tms320c28.sla
 	@python3 qghidra.py
 
+# Disassemble hex words from stdin with Ghidra, to P-Code
+.PHONY: qpcode
+qpcode: tms320c28.sla
+	@python3 qpcode.py
+
+# Assemble instructions from stdin, print along with hex words
 .PHONY: qasm
 qasm:
 	@rm -f quick.asm quick.obj
