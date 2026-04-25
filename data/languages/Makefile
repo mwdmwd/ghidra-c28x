@@ -10,14 +10,19 @@ ifdef PERMISSIVE
 SLEIGH_REPORT_CONFLICTS :=
 endif
 
+SLEIGH_GREP ?=
+
+SHELL := /usr/bin/env bash
+.SHELLFLAGS := -o pipefail -c
+
 tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec $(wildcard tms320c28*.sinc) tms320c28.slaspec
-	/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -a $$PWD # -f unused fields
+	/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -a $$PWD $(SLEIGH_GREP) # -f unused fields
 
 test.obj: test.asm
 	$(AS) $(ASFLAGS) $<
 
 test.bin: test.obj
-	$(HEX) $< --binary -o $@
+	@$(HEX) $< --binary -o $@ 2>&1 | (grep -v '^Translating\|text ==>' || :)
 
 .PHONY: dis
 dis: test.obj
@@ -51,6 +56,7 @@ diff: tms320c28.sla test.bin
 	diff --side-by-side --left-column <(make --silent dis) <(make --silent test)
 
 .PHONY: qdiff
+qdiff: SLEIGH_GREP := 2>&1 | (grep -v '^INFO\|^openjdk\|^OpenJDK\|Compiling\|WARN.*NOP\|WARN.*-n\|WARN.*Truncation' || :)
 qdiff: tms320c28.sla test.bin
 	@diff -u <(make --silent dis) <(make --silent test)
 
@@ -68,3 +74,7 @@ qasm:
 	@$(AS) $(ASFLAGS) quick.asm
 	@$(DIS) $(DISFLAGS) quick.obj | grep . | grep -v Disassembly\ of
 	@rm -f quick.asm quick.obj
+
+.PHONY: clean
+clean:
+	rm -f tms320c28.sla test.obj test.bin quick.asm quick.obj
