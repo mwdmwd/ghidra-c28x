@@ -17,15 +17,6 @@ define bitrange
 	STF_TF = STF[6,1]
 ;
 
-# RB register fields (Figure 2-3 in SPRUEO2B)
-define bitrange
-	RB_RC = RB[0,16]
-	RB_RE = RB[16,7]
-	RB_RSIZE = RB[23,7]
-	RB_RA = RB[30,1]
-	RB_RAS = RB[31,1]
-;
-
 cndf: "NEQ"  is cndf4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
 cndf: "EQ"   is cndf4=0b0001 { local b:1 = (STF_ZF == 1); export b; }
 cndf: "GT"   is cndf4=0b0010 { local b:1 = (STF_ZF == 0) && (STF_NF == 0); export b; }
@@ -608,7 +599,7 @@ macro update_stf_mov(res) {
 }
 
 # p.127
-rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; ] { export *:4 rel; }
+rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel, rptb_flag); ] { export *:4 rel; }
 :rptb rptb_end, loc16 is op8_8=0b10110101 & op7=0 & rptb_end & imm7; loc16 {
 	local rsz:1 = imm7;
 	RB_RSIZE = rsz;
@@ -617,6 +608,7 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; ] { export *:4 rel; }
 	local end_addr:4 = (inst_start + zext(rsz) + 1) & 0x7F;
 	RB_RE = end_addr[0,7];
 	RB_RA = (count != 0);
+	RB_RSTART = inst_next;
 }
 
 # p.129
@@ -628,6 +620,7 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; ] { export *:4 rel; }
 	local end_addr:4 = (inst_start + zext(rsz) + 1) & 0x7F;
 	RB_RE = end_addr[0,7];
 	RB_RA = (count != 0);
+	RB_RSTART = inst_next;
 }
 
 # p.133

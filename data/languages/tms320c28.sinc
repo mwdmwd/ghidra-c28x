@@ -273,6 +273,26 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 ################################################################
 # SPRU430F - August 2001 - Revised April 2015
 
+# RPT repeat wrapper: when an instruction follows RPT, execute it N+1 times.
+# rpt_active is set (with noflow) by RPT on inst_next; rpt_phase prevents recursion.
+:^instruction is rpt_phase=0 & rpt_active=1 & instruction [ rpt_phase=1; ] {
+    build instruction;
+    if (RPTC == 0) goto inst_next;
+    RPTC = RPTC - 1;
+    goto inst_start;
+}
+
+# RPTB block-end wrapper: loops the whole block RB_RC+1 times total.
+# rptb_flag is set (with noflow) by RPTB via globalset on the last block instruction.
+# RB_RSTART holds the byte address of the first block instruction (set by RPTB body).
+:^instruction is rpt_phase=0 & rptb_flag=1 & instruction [ rpt_phase=1; ] {
+    build instruction;
+    if (RB_RC == 0) goto inst_next;
+    RB_RC = RB_RC - 1;
+    goto [RB_RSTART];
+}
+
+
 # p.124
 :aborti is op0_16=0b0000000000000001 {}
 
@@ -1797,9 +1817,14 @@ with : objmode=1 {
 	flagnz(ACC);
 }
 
-# p.395
-:rpt #imm8 is op8_8=0b11110110 & imm8 {} # TODO oof, see https://github.com/NationalSecurityAgency/ghidra/discussions/5584
-:rpt loc16 is op8_8=0b11110111 & loc16 {} # TODO oof
+# p.395 - loads RPTC with N; next instruction executes N+1 times (see ^instruction above)
+:rpt #imm8 is op8_8=0b11110110 & imm8 [ rpt_active=1; globalset(inst_next, rpt_active); ] {
+    RPTC = zext(imm8:1);
+}
+:rpt loc16 is op8_8=0b11110111 & loc16 [ rpt_active=1; globalset(inst_next, rpt_active); ] {
+    local cnt:2 = loc16;
+    RPTC = cnt;
+}
 
 # p.396
 :sat ACC is op0_16=0b1111111101010111 & ACC {}

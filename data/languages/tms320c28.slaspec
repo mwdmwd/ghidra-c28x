@@ -26,7 +26,22 @@ define register offset=0x20e size=4  [  STF ];
 
 # FPU32 registers (32-bit IEEE-754 floating-point)
 define register offset=0x300 size=4  [  R0H  R1H  R2H  R3H  R4H  R5H  R6H  R7H  ];
+
 define register offset=0x320 size=4  [  RB  ];
+# Block start byte-address register for RPTB loop-back (written by RPTB, read by ^instruction wrapper)
+define register offset=0x324 size=4  [  RB_RSTART  ];
+# Internal repeat counter loaded by RPT instruction
+define register offset=0x122 size=2  [  RPTC  ];
+
+# RB register fields (Figure 2-3 in SPRUEO2B) — defined here so tms320c28.sinc can use them
+define bitrange
+	RB_RC    = RB[0,16]
+	RB_RE    = RB[16,7]
+	RB_RSIZE = RB[23,7]
+	RB_RA    = RB[30,1]
+	RB_RAS   = RB[31,1]
+;
+
 # Shadow registers for SAVE/RESTORE (high-priority interrupt context)
 define register offset=0x340 size=4  [  R0H_sh  R1H_sh  R2H_sh  R3H_sh  R4H_sh  R5H_sh  R6H_sh  R7H_sh  STF_sh  ];
 
@@ -34,8 +49,11 @@ define register offset=0x340 size=4  [  R0H_sh  R1H_sh  R2H_sh  R3H_sh  R4H_sh  
 define register offset=0xf00 size=4   contextreg;
 
 define context contextreg
-  amode	  = (0,0) # ST0
-  objmode	= (1,1) # ST0
+	amode      = (0,0)			# ST0
+	objmode    = (1,1)			# ST0
+	rpt_active = (2,2) noflow	# set by RPT for the one following instruction
+	rptb_flag  = (3,3) noflow	# set by RPTB on the last instruction of its block
+	rpt_phase  = (31,31)		# internal: prevents recursive ^instruction matching
 ;
 
 # SXM sign extension mode
