@@ -29,7 +29,7 @@ tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec
 	$(Q)/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -a $$PWD $(SLEIGH_GREP) # -f unused fields
 
 test.obj: test.asm
-	$(AS) $(ASFLAGS) $<
+	$(Q)$(AS) $(ASFLAGS) $<
 
 test.bin: test.obj
 	@$(HEX) $< --binary -o $@ 2>&1 | (grep -v '^Translating\|text ==>' || :)
