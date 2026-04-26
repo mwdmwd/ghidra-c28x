@@ -583,7 +583,7 @@ macro update_stf_mov(res) {
 }
 
 # p.131
-:save imm6, op11_5, imm11 is op6_10=0b1110011001 & imm6; op11_5 & imm11 {
+:save imm6, imm11_5, imm11 is op6_10=0b1110011001 & imm6; imm11_5 & imm11 {
 	R0H_sh = R0H;
 	R1H_sh = R1H;
 	R2H_sh = R2H;
@@ -595,7 +595,7 @@ macro update_stf_mov(res) {
 	packstf(STF);
 	STF_sh = STF;
 	local f_lo:4 = imm6;
-	local f_hi:4 = op11_5;
+	local f_hi:4 = imm11_5;
 	local flag:4 = (f_hi << 6) | f_lo;
 	local val:4 = imm11;
 	STF = (STF & ~flag) | (val & flag);
@@ -656,9 +656,9 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel,
 }
 
 # p.133
-:setflg imm6, op11_5, imm11 is op6_10=0b1110011000 & imm6; op11_5 & imm11 {
+:setflg imm6, imm11_5, imm11 is op6_10=0b1110011000 & imm6; imm11_5 & imm11 {
 	local f_lo:4 = imm6;
-	local f_hi:4 = op11_5;
+	local f_hi:4 = imm11_5;
 	local flag:4 = (f_hi << 6) | f_lo;
 	local val:4 = imm11;
 	# bit 9 = RND32 rounding mode; bits 7-8,10 reserved (ignored)
