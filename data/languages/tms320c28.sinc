@@ -836,7 +836,7 @@ with : objmode=1 {
 }
 
 # p.403, p.186 (DINT)
-:setc "INTM" is op0_16=0b0011101100010000 {
+:setc INTM is op0_16=0b0011101100010000 & INTM {
 	INTM = 1;
 }
 
@@ -850,10 +850,14 @@ with : objmode=1 {
 :dmov loc16 is objmode=1 & op8_8=0b10100101 & loc16 {}
 
 # p.190
-:eallow is op0_16=0b0111011000100010 {}
+:eallow is op0_16=0b0111011000100010 {
+	EALLOW = 1;
+}
 
 # p.191
-:edis is op0_16=0b0111011000011010 {}
+:edis is op0_16=0b0111011000011010 {
+	EALLOW = 0;
+}
 
 # p.192 (EINT = CLRC INTM)
 :clrc INTM is op0_16=0b0010100100010000 & INTM { INTM = 0; }
