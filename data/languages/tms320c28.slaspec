@@ -34,13 +34,8 @@ define register offset=0x324 size=4  [  RB_RSTART  ];
 define register offset=0x122 size=2  [  RPTC  ];
 
 # RB register fields (Figure 2-3 in SPRUEO2B) — defined here so tms320c28.sinc can use them
-define bitrange
-	RB_RC    = RB[0,16]
-	RB_RE    = RB[16,7]
-	RB_RSIZE = RB[23,7]
-	RB_RA    = RB[30,1]
-	RB_RAS   = RB[31,1]
-;
+define register offset=0x328 size=2  [  RB_RC  ];
+define register offset=0x32a size=1  [  RB_RE  RB_RSIZE  RB_RA  RB_RAS  ];
 
 # Shadow registers for SAVE/RESTORE (high-priority interrupt context)
 define register offset=0x340 size=4  [  R0H_sh  R1H_sh  R2H_sh  R3H_sh  R4H_sh  R5H_sh  R6H_sh  R7H_sh  STF_sh  ];

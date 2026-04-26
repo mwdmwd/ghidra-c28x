@@ -7,15 +7,7 @@ attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 @define fpu_imm16_cmp "imm3; fpu_imm13_lo [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
 
 # STF flags (Table 2-2 in SPRUEO2B)
-define bitrange
-	STF_LV = STF[0,1]
-	STF_LU = STF[1,1]
-	STF_NF = STF[2,1]
-	STF_ZF = STF[3,1]
-	STF_NI = STF[4,1]
-	STF_ZI = STF[5,1]
-	STF_TF = STF[6,1]
-;
+define register offset=0x124 size=1  [  STF_LV  STF_LU  STF_NF  STF_ZF  STF_NI  STF_ZI  STF_TF  ];
 
 cndf: "NEQ"  is cond0_4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
 cndf: "EQ"   is cond0_4=0b0001 { local b:1 = (STF_ZF == 1); export b; }
@@ -36,6 +28,41 @@ attach variables [ p1_f3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
 # All FPU instructions have objmode=1
 with : objmode=1 {
+
+macro packstf(res) {
+	local lv:4 = zext(STF_LV);
+	local lu:4 = zext(STF_LU);
+	local nf:4 = zext(STF_NF);
+	local zf:4 = zext(STF_ZF);
+	local ni:4 = zext(STF_NI);
+	local zi:4 = zext(STF_ZI);
+	local tf:4 = zext(STF_TF);
+	res = (res & 0xFFFFFF80) | lv | (lu << 1) | (nf << 2) | (zf << 3) | (ni << 4) | (zi << 5) | (tf << 6);
+}
+macro unpackstf(in) {
+	STF_LV = (in & 0x01) != 0;
+	STF_LU = (in & 0x02) != 0;
+	STF_NF = (in & 0x04) != 0;
+	STF_ZF = (in & 0x08) != 0;
+	STF_NI = (in & 0x10) != 0;
+	STF_ZI = (in & 0x20) != 0;
+	STF_TF = (in & 0x40) != 0;
+}
+macro packrb(res) {
+	local rc:4 = zext(RB_RC);
+	local re:4 = zext(RB_RE);
+	local rsz:4 = zext(RB_RSIZE);
+	local ra:4 = zext(RB_RA);
+	local ras:4 = zext(RB_RAS);
+	res = rc | (re << 16) | (rsz << 23) | (ra << 30) | (ras << 31);
+}
+macro unpackrb(in) {
+	RB_RC    = in[0,16];
+	RB_RE    = in[16,7];
+	RB_RSIZE = in[23,7];
+	RB_RA    = in[30,1];
+	RB_RAS   = in[31,1];
+}
 
 fpu_re_low: "R0H" is p2_ee=0 { export R0H; }
 fpu_re_low: "R1H" is p2_ee=1 { export R1H; }
@@ -454,14 +481,14 @@ macro update_stf_mov(res) {
 	# LVF → OV, then clear
 	if ((flag & 1) == 0) goto <f0_done>;
 	V = STF_LV;
-	STF = STF & 0xFFFFFFFE;
+	STF_LV = 0;
 	<f0_done>
 	# LUF → OV (OR in), then clear
 	if ((flag & 2) == 0) goto <f1_done>;
 	if (!STF_LU) goto <f1a>;
 	V = 1;
 	<f1a>
-	STF = STF & 0xFFFFFFFD;
+	STF_LU = 0;
 	<f1_done>
 	# NF → N
 	if ((flag & 4) == 0) goto <f2_done>;
@@ -531,10 +558,12 @@ macro update_stf_mov(res) {
 # p.121
 :pop RB is op0_16=0b1111111111110001 & RB {
 	pop32(RB);
+	unpackrb(RB);
 }
 
 # p.123
 :push RB is op0_16=0b1111111111110000 & RB {
+	packrb(RB);
 	push32(RB);
 }
 
@@ -550,6 +579,7 @@ macro update_stf_mov(res) {
 	R7H = R7H_sh;
 	STF = STF_sh;
 	STF = STF & 0x7FFFFFFF;
+	unpackstf(STF);
 }
 
 # p.131
@@ -562,6 +592,7 @@ macro update_stf_mov(res) {
 	R5H_sh = R5H;
 	R6H_sh = R6H;
 	R7H_sh = R7H;
+	packstf(STF);
 	STF_sh = STF;
 	local f_lo:4 = imm6;
 	local f_hi:4 = op11_5;
@@ -569,6 +600,7 @@ macro update_stf_mov(res) {
 	local val:4 = imm11;
 	STF = (STF & ~flag) | (val & flag);
 	STF = STF | 0x80000000;
+	unpackstf(STF);
 }
 
 # p.140 - no flags
@@ -629,7 +661,17 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel,
 	local f_hi:4 = op11_5;
 	local flag:4 = (f_hi << 6) | f_lo;
 	local val:4 = imm11;
-	STF = (STF & ~flag) | (val & flag);
+	# bit 9 = RND32 rounding mode; bits 7-8,10 reserved (ignored)
+	if ((flag & 0x200) == 0) goto <no_rnd>;
+	STF = (STF & ~0x200) | (val & 0x200);
+	<no_rnd>
+	if ((flag & 0x01) == 0) goto <s0>; STF_LV = (val & 0x01) != 0; <s0>
+	if ((flag & 0x02) == 0) goto <s1>; STF_LU = (val & 0x02) != 0; <s1>
+	if ((flag & 0x04) == 0) goto <s2>; STF_NF = (val & 0x04) != 0; <s2>
+	if ((flag & 0x08) == 0) goto <s3>; STF_ZF = (val & 0x08) != 0; <s3>
+	if ((flag & 0x10) == 0) goto <s4>; STF_NI = (val & 0x10) != 0; <s4>
+	if ((flag & 0x20) == 0) goto <s5>; STF_ZI = (val & 0x20) != 0; <s5>
+	if ((flag & 0x40) == 0) goto <s6>; STF_TF = (val & 0x40) != 0; <s6>
 }
 
 # Subtables for RfH split across words: p1_f2 (LSW bits 1:0) = high 2 bits, p2_rfh_bit (MSW bit 15) = low bit
