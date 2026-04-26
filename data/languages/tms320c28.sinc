@@ -390,7 +390,27 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.126
-:abstc ACC is objmode=1 & op0_16=0b0101011001011111 & ACC {}
+:abstc ACC is objmode=1 & op0_16=0b0101011001011111 & ACC {
+	local start_acc:4 = ACC;
+	C = 0;
+	if (start_acc == 0x80000000) goto <overflow>;
+	if (start_acc s< 0) goto <neg>;
+	goto <flags>;
+<neg>
+	ACC = -start_acc;
+	TC = TC ^ 1;
+	goto <flags>;
+<overflow>
+	V = 1;
+	TC = TC ^ 1;
+	if (OVM == 1) goto <sat>;
+	# ACC remains 0x80000000
+	goto <flags>;
+<sat>
+	ACC = 0x7FFFFFFF;
+<flags>
+	flagnz(ACC);
+}
 
 # p.128
 :add ACC, #imm16 << #shift0_4 is op4_12=0b111111110001 & ACC & shift0_4; imm16 {
@@ -827,7 +847,19 @@ with : objmode=1 {
 }
 
 # p.184
-:csb ACC is objmode=1 & op0_16=0b0101011000110101 & ACC {}
+:csb ACC is objmode=1 & op0_16=0b0101011000110101 & ACC {
+	local acc:4 = ACC;
+	local count:2;
+	if (acc s< 0) goto <neg>;
+	count = lzcount(acc);
+	goto <done>;
+<neg>
+	count = lzcount(~acc);
+<done>
+	T = count - 1;
+	flagnz(acc);
+	TC = N;
+}
 
 # p.185
 :dec loc16 is op8_8=0b00001011 & loc16 {
@@ -848,7 +880,10 @@ with : objmode=1 {
 :dmac ACC:P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001011; op8_8=0b10000111 & ACC & P & loc32 & XAR7 {}
 
 # p.189
-:dmov loc16 is objmode=1 & op8_8=0b10100101 & loc16 {}
+:dmov loc16 is objmode=1 & op8_8=0b10100101 & loc16 {
+	local addr:4 = &loc16;
+	*:2 (addr + 2) = loc16;
+}
 
 # p.190
 :eallow is op0_16=0b0111011000100010 {
@@ -873,7 +908,10 @@ with : objmode=1 {
 :ffc XAR7, imm22 is op6_10=0b0000000011 & XAR7 & $(imm22) {}
 
 # p.196
-:flip ax0 is objmode=1 & op1_15=0b010101100111000 & ax0 {}
+:flip ax0 is objmode=1 & op1_15=0b010101100111000 & ax0 {
+	bitrev16(ax0);
+	flagnz(ax0);
+}
 
 # p.197
 :iack #imm16 is op0_16=0b0111011000111111; imm16 {}
@@ -1159,7 +1197,15 @@ with : objmode=1 {
 :mac P, loc16, *XAR7++ is objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 {}
 
 # p.246
-:max ax0, loc16 is objmode=1 & op1_15=0b010101100111001 & ax0; op8_8=0b00000000 & loc16 {} # MAX AL, @AH has the @ on ah
+:max ax0, loc16 is objmode=1 & op1_15=0b010101100111001 & ax0; op8_8=0b00000000 & loc16 { # MAX AL, @AH has the @ on ah
+	local loc:2 = loc16;
+	local ax:2 = ax0;
+	N = (ax s< loc);
+	Z = (ax == loc);
+	if (ax s>= loc) goto inst_next;
+	ax0 = loc;
+	V = 1;
+}
 
 # p.247
 :maxcul P, loc32 is objmode=1 & op0_16=0b0101011001010001; op8_8=0b00000000 & P & loc32 {}
@@ -1168,7 +1214,15 @@ with : objmode=1 {
 :maxl ACC, loc32 is objmode=1 & op0_16=0b0101011001100001; op8_8=0b00000000 & ACC & loc32 {}
 
 # p.249
-:min ax0, loc16 is objmode=1 & op1_15=0b010101100111010 & ax0; op8_8=0b00000000 & loc16 {} # MAX AL, @AH has the @ on ah
+:min ax0, loc16 is objmode=1 & op1_15=0b010101100111010 & ax0; op8_8=0b00000000 & loc16 { # MIN AL, @AH has the @ on ah
+	local loc:2 = loc16;
+	local ax:2 = ax0;
+	N = (ax s< loc);
+	Z = (ax == loc);
+	if (ax s<= loc) goto inst_next;
+	ax0 = loc;
+	V = 1;
+}
 
 # p.250
 :mincul P, loc32 is objmode=1 & op0_16=0b0101011001011001; P & loc32 {}
