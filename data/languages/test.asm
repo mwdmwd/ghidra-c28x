@@ -338,8 +338,8 @@
 	QMPYXUL		P, XT, XAR2
 	ROL			ACC
 	ROR			ACC
-	RPT			#0x21
-	RPT			SP
+	RPT			#0x21 || NOP
+	RPT			SP || NOP
 	SAT			ACC
 	SAT64		ACC:P
 	SB			-1, HIS
