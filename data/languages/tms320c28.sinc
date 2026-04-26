@@ -30,6 +30,7 @@ define token opcode (16)
 	cond8_4		= (8,11)
 	reg16		= (0,3)
 	reg32		= (0,3)
+	regax		= (0,3)
 	arn0		= (0,2)
 	xarn0		= (0,2)
 	rah2		= (2,5)
@@ -81,6 +82,7 @@ attach values shift8_3_1 [ 1 2 3 4 5 6 7 8 ];
 
 # T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH, we call it T throughout as this matches dis2000
 attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
+attach variables regax [ _ _ _ _ _ _ _ _ AH AL _ _ _ _ _ _ ];
 attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
 attach variables [ xarn0 xarn8 ] [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
 attach variables [ arn0 arn3 arn8 ] [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 ];
@@ -1399,7 +1401,13 @@ with : objmode=1 {
 :mov loc16, IER is op8_8=0b00100000 & loc16 & IER {}
 
 # p.269
-:mov loc16, "OVC" is objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & loc16 {}
+:mov loc16, OVC is objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & loc16 & OVC {
+	loc16 = zext(OVC) << 10;
+}
+:mov regax, OVC is objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & regax & OVC {
+	regax = zext(OVC) << 10;
+	flagnz(regax);
+}
 
 # p.270
 :mov loc16, P is op8_8=0b00111111 & loc16 & P {}
@@ -1408,7 +1416,9 @@ with : objmode=1 {
 :mov loc16, T is op8_8=0b00100001 & loc16 & T {}
 
 # p.272
-:mov "OVC", loc16 is objmode=1 & op0_16=0b0101011000000010; op8_8=0b00000000 & loc16 {}
+:mov OVC, loc16 is objmode=1 & op0_16=0b0101011000000010; op8_8=0b00000000 & OVC & loc16 {
+	OVC = loc16[10,6];
+}
 
 # p.273
 :mov PH, loc16 is op8_8=0b00101111 & PH & loc16 {}
@@ -2357,4 +2367,10 @@ with : objmode=1 {
 :zalr ACC, loc16 is objmode=1 & op0_16=0b0101011000010011; op8_8=0b00000000 & ACC & loc16 {}
 
 # p.472
-:zapa is objmode=1 & op0_16=0b0101011000110011 {}
+:zapa is objmode=1 & op0_16=0b0101011000110011 {
+	ACC = 0;
+	P = 0;
+	OVC = 0;
+	N = 1;
+	Z = 0;
+}
