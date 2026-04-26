@@ -14,13 +14,19 @@ ifdef CONFLICTS
 SLEIGH_REPORT_CONFLICTS := -l
 endif
 
-SLEIGH_GREP ?=
+ifdef V
+SLEIGH_GREP := 2>&1 | (grep -v '^INFO\|^openjdk\|^OpenJDK\|Compiling' || :)
+Q :=
+else
+SLEIGH_GREP := 2>&1 | (grep -v '^INFO\|^openjdk\|^OpenJDK\|Compiling\|WARN.*NOP\|WARN.*-n\|WARN.*Truncation' || :)
+Q := @
+endif
 
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -o pipefail -c
 
 tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec $(wildcard tms320c28*.sinc) tms320c28.slaspec
-	/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -a $$PWD $(SLEIGH_GREP) # -f unused fields
+	$(Q)/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -a $$PWD $(SLEIGH_GREP) # -f unused fields
 
 test.obj: test.asm
 	$(AS) $(ASFLAGS) $<
@@ -62,19 +68,18 @@ diff: tms320c28.sla test.bin
 
 # Quiet diff (no output if identical)
 .PHONY: qdiff
-qdiff: SLEIGH_GREP := 2>&1 | (grep -v '^INFO\|^openjdk\|^OpenJDK\|Compiling\|WARN.*-n\|WARN.*Truncation' || :)
 qdiff: tms320c28.sla test.bin
-	@diff -u <(make --silent dis) <(make --silent test)
+	$(Q)diff -u <(make --silent dis) <(make --silent test)
 
 # Disassemble hex words from stdin with Ghidra, to assembly
 .PHONY: qghidra
 qghidra: tms320c28.sla
-	@python3 qghidra.py
+	$(Q)python3 qghidra.py
 
 # Disassemble hex words from stdin with Ghidra, to P-Code
 .PHONY: qpcode
 qpcode: tms320c28.sla
-	@python3 qpcode.py
+	$(Q)python3 qpcode.py
 
 # Assemble instructions from stdin, print along with hex words
 .PHONY: qasm
@@ -84,10 +89,10 @@ qasm:
 	@echo '    .newblock' >> quick.asm
 	@echo '    .asmfunc' >> quick.asm
 	@sed 's/^/  /' >> quick.asm
-	@$(AS) $(ASFLAGS) quick.asm
-	@$(DIS) $(DISFLAGS) quick.obj | grep . | grep -v Disassembly\ of
+	$(Q)$(AS) $(ASFLAGS) quick.asm
+	$(Q)$(DIS) $(DISFLAGS) quick.obj | grep . | grep -v Disassembly\ of
 	@rm -f quick.asm quick.obj
 
 .PHONY: clean
 clean:
-	rm -f tms320c28.sla test.obj test.bin quick.asm quick.obj
+	@rm -f tms320c28.sla test.obj test.bin quick.asm quick.obj
