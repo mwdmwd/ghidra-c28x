@@ -56,16 +56,6 @@ define context contextreg
 	rpt_phase  = (31,31)		# internal: prevents recursive ^instruction matching
 ;
 
-# SXM sign extension mode
-
-# Flag bits (?? manual is very confusing - could be typos!)
-@define C_flag "F[0,1]"		# C: Carry
-@define N_flag "F[1,1]"		# N: Add/Subtract
-@define PV_flag "F[2,1]"	# PV: Parity/Overflow
-@define H_flag "F[4,1]"		# H: Half Carry
-@define Z_flag "F[6,1]"		# Z: Zero
-@define S_flag "F[7,1]"		# S: Sign
-
 # Include contents of tms320c28.sinc file
 @include "tms320c28.sinc"
 @include "tms320c28_fpu.sinc"
