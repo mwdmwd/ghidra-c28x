@@ -35,23 +35,17 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
   <default_proto>
     <prototype name="__stdcall" extrapop="0" stackshift="2">
       <input>
-        <!-- Class 3: Hidden Return Pointer (Structure returns) -->
-        <!-- Placed in XAR6 (Manual Sec 7.3.2) -->
+        <!-- Class 3: Hidden return pointer (structure returns) -->
+        <!-- Placed in XAR6 (manual sec 7.3.2) -->
         <pentry minsize="1" maxsize="4" metatype="hiddenret">
           <register name="XAR6"/>
         </pentry>
 
         <!-- Class 2: Pointers -->
         <!-- Placed in XAR4 and XAR5 (Manual Sec 7.3.1) -->
-        <pentry minsize="1" maxsize="4" metatype="ptr">
-          <register name="XAR4"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" metatype="ptr">
-          <register name="XAR5"/>
-        </pentry>
+        <!-- omitted, conflict -->
 
-        <!-- Class 1: Floats -->
-        <!-- 32-bit float arguments for FPU targets go to R0H-R3H -->
+        <!-- Class 1: 32-bit floats go to R0H-R3H -->
         <pentry minsize="3" maxsize="4" metatype="float">
           <register name="R0H"/>
         </pentry>
@@ -65,24 +59,18 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="R3H"/>
         </pentry>
 
-        <!-- Class 0: General (Integers, structs, and fallback for exhausted pools) -->
-        <!-- 32-bit integer arguments: First goes to ACC -->
-        <pentry minsize="3" maxsize="4">
+        <!-- Class 0: General: ACC covers both 16-bit and 32-bit integer args
+            (AL/AH are sub-registers of ACC; listing them separately
+              causes the physical-overlap error) -->
+        <pentry minsize="1" maxsize="4">
           <register name="ACC"/>
         </pentry>
 
-        <!-- 16-bit integer arguments: Fill order is AL, AH, XAR4, XAR5 -->
-        <pentry minsize="1" maxsize="2">
-          <register name="AL"/>
-        </pentry>
-        <pentry minsize="1" maxsize="2">
-          <register name="AH"/>
-        </pentry>
-        <!-- If XAR4/5 are not consumed by pointers, they act as general registers -->
-        <pentry minsize="1" maxsize="2">
+        <!-- XAR4/XAR5: general-purpose (also used for pointer args, but they will incorrectly go to ACC first...) -->
+        <pentry minsize="1" maxsize="4">
           <register name="XAR4"/>
         </pentry>
-        <pentry minsize="1" maxsize="2">
+        <pentry minsize="1" maxsize="4">
           <register name="XAR5"/>
         </pentry>
 
@@ -94,24 +82,15 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
       </input>
 
       <output>
-        <!-- Class 2: Pointers -->
-        <pentry minsize="1" maxsize="4" metatype="ptr">
-          <register name="XAR4"/>
-        </pentry>
-
-        <!-- Class 1: Floats -->
-        <pentry minsize="3" maxsize="4" metatype="float">
+        <pentry minsize="1" maxsize="4" metatype="float">
           <register name="R0H"/>
         </pentry>
-
-        <!-- Class 0: General -->
-        <!-- 32-bit int returns in ACC -->
-        <pentry minsize="3" maxsize="4">
+        <!-- ACC covers both 32-bit and 16-bit integer returns (subsumes AL) -->
+        <pentry minsize="1" maxsize="4">
           <register name="ACC"/>
         </pentry>
-        <!-- 16-bit int returns in AL -->
-        <pentry minsize="1" maxsize="2">
-          <register name="AL"/>
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR4"/>
         </pentry>
       </output>
 
