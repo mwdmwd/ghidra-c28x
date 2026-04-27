@@ -439,7 +439,9 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 
 # p.124
-:aborti is op0_16=0b0000000000000001 {}
+:aborti is op0_16=0b0000000000000001 {
+	DBGM = 1;
+}
 
 # p.125
 :abs ACC is op0_16=0b1111111101010110 & ACC {
@@ -823,7 +825,9 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.175
-:clrc "XF" is op0_16=0b0101011000011011 {}
+:clrc XF is op0_16=0b0101011000011011 & XF {
+	XF = 0;
+}
 
 # p.176
 :clrc imm8 is op8_8=0b00101001 & imm8 { # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP
@@ -957,7 +961,9 @@ with : objmode=1 {
 }
 
 # p.192 (EINT = CLRC INTM)
-:clrc INTM is op0_16=0b0010100100010000 & INTM { INTM = 0; }
+:clrc INTM is op0_16=0b0010100100010000 & INTM {
+	INTM = 0;
+}
 
 # p.193
 :estop0 is op0_16=0b0111011000100101 {}
@@ -966,7 +972,11 @@ with : objmode=1 {
 :estop1 is op0_16=0b0111011000100100 {}
 
 # p.195
-:ffc XAR7, imm22 is op6_10=0b0000000011 & XAR7 & $(imm22) {}
+:ffc XAR7, imm22 is op6_10=0b0000000011 & XAR7 & $(imm22) {
+    XAR7 = inst_next;
+    local tgt:4 = imm22;
+    call [tgt];
+}
 
 # p.196
 :flip ax0 is objmode=1 & op1_15=0b010101100111000 & ax0 {
@@ -978,7 +988,9 @@ with : objmode=1 {
 :iack #imm16 is op0_16=0b0111011000111111; imm16 {}
 
 # p.198
-:idle is op0_16=0b0111011000100001 {}
+:idle is op0_16=0b0111011000100001 {
+	IDLESTAT = 1;
+}
 
 # p.199
 :imacl P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001101; op8_8=0b11000111 & P & loc32 & XAR7 {}
@@ -1002,7 +1014,10 @@ with : objmode=1 {
 :impyxul P, XT, loc32 is objmode=1 & op0_16=0b0101011001100101; op8_8=0b00000000 & P & XT & loc32 {}
 
 # p.209
-:in loc16, *(imm16) is objmode=1 & op8_8=0b10110100 & loc16; imm16 {}
+:in loc16, *(imm16) is objmode=1 & op8_8=0b10110100 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	loc16 = *:2 ptr;
+}
 
 # p.211
 :inc loc16 is op8_8=0b00001010 & loc16 {
@@ -1026,10 +1041,14 @@ with : objmode=1 {
 :iret is op0_16=0b0111011000000010 {}
 
 # p.216
-:lb *XAR7 is op0_16=0b0111011000100000 & XAR7 { goto [XAR7]; }
+:lb *XAR7 is op0_16=0b0111011000100000 & XAR7 {
+	goto [XAR7];
+}
 
 # p.217
-:lb dest22 is op6_10=0b0000000001 ... & dest22 { goto dest22; }
+:lb dest22 is op6_10=0b0000000001 ... & dest22 {
+	goto dest22;
+}
 
 # p.218
 :lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {
@@ -1292,7 +1311,10 @@ with : objmode=1 {
 :minl ACC, loc32 is objmode=1 & op0_16=0b0101011001010000; op8_8=0b00000000 & ACC & loc32 {}
 
 # p.252
-:mov *(0:imm16), loc16 is op8_8=0b11110100 & loc16; imm16 {}
+:mov *(0:imm16), loc16 is op8_8=0b11110100 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	*:2 ptr = loc16;
+}
 
 # p.253
 :mov ACC, #imm16 << #shift0_4 is op4_12=0b111111110010 & shift0_4; ACC & imm16 {
@@ -1399,13 +1421,22 @@ with : objmode=1 {
 }
 
 # p.263
-:mov loc16, ACC << #1 is objmode=1 & op8_8=0b10110001 & loc16 & ACC {}
+:mov loc16, ACC << #1 is objmode=1 & op8_8=0b10110001 & loc16 & ACC {
+	local tmp:4 = ACC << 1;
+	loc16 = tmp:2;
+}
 
 # p.263
-:mov loc16, ACC << #shift8_3_1 is objmode=1 & op0_16=0b0101011000101101; op11_5=0b00000 & loc16 & ACC & shift8_3_1 {}
+:mov loc16, ACC << #shift8_3_1 is objmode=1 & op0_16=0b0101011000101101; op11_5=0b00000 & loc16 & ACC & shift8_3_1 {
+	local tmp:4 = ACC << shift8_3_1;
+	loc16 = tmp:2;
+}
 
 # p.263
-:mov loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10111 & loc16 & ACC & shift8_3_1 {}
+:mov loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10111 & loc16 & ACC & shift8_3_1 {
+	local tmp:4 = ACC << shift8_3_1;
+	loc16 = tmp:2;
+}
 
 # p.264
 :mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 {
@@ -1426,10 +1457,15 @@ with : objmode=1 {
 }
 
 # p.266
-:mov loc16, ax0, cond8 is objmode=1 & op1_15=0b010101100010101 & ax0; op12_4=0b0000 & cond8 & loc16 {}
+:mov loc16, ax0, cond8 is objmode=1 & op1_15=0b010101100010101 & ax0; op12_4=0b0000 & cond8 & loc16 {
+	if (!cond8) goto inst_next;
+	loc16 = ax0;
+}
 
 # p.268
-:mov loc16, IER is op8_8=0b00100000 & loc16 & IER {}
+:mov loc16, IER is op8_8=0b00100000 & loc16 & IER {
+	loc16 = IER;
+}
 
 # p.269
 :mov loc16, OVC is objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & loc16 & OVC {
@@ -1441,10 +1477,15 @@ with : objmode=1 {
 }
 
 # p.270
-:mov loc16, P is op8_8=0b00111111 & loc16 & P {}
+:mov loc16, P is op8_8=0b00111111 & loc16 & P {
+	local tmp:4 = P << PM;
+	loc16 = tmp:2;
+}
 
 # p.271
-:mov loc16, T is op8_8=0b00100001 & loc16 & T {}
+:mov loc16, T is op8_8=0b00100001 & loc16 & T {
+	loc16 = T;
+}
 
 # p.272
 :mov OVC, loc16 is objmode=1 & op0_16=0b0101011000000010; op8_8=0b00000000 & OVC & loc16 {
@@ -1452,28 +1493,50 @@ with : objmode=1 {
 }
 
 # p.273
-:mov PH, loc16 is op8_8=0b00101111 & PH & loc16 {}
+:mov PH, loc16 is op8_8=0b00101111 & PH & loc16 {
+	PH = loc16;
+}
 
 # p.274
-:mov PL, loc16 is op8_8=0b00100111 & PL & loc16 {}
+:mov PL, loc16 is op8_8=0b00100111 & PL & loc16 {
+	PL = loc16;
+}
 
 # p.275
-:mov PM, ax0 is objmode=1 & op1_15=0b010101100011100 & PM & ax0 {}
+:mov PM, ax0 is objmode=1 & op1_15=0b010101100011100 & PM & ax0 {
+	PM = ax0[0,3];
+}
 
 # p.276
-:mov T, loc16 is op8_8=0b00101101 & T & loc16 {}
+:mov T, loc16 is op8_8=0b00101101 & T & loc16 {
+	T = loc16;
+}
 
 # p.277
-:mov TL, #0 is objmode=1 & op0_16=0b0101011001010110 & TL {}
+:mov TL, #0 is objmode=1 & op0_16=0b0101011001010110 & TL {
+	TL = 0;
+}
 
 # p.278
-:mov xarn0, PC is objmode=1 & op3_13=0b0011111001011 & xarn0 & PC {}
+:mov xarn0, PC is objmode=1 & op3_13=0b0011111001011 & xarn0 & PC {
+	xarn0 = inst_next;
+}
 
 # p.279
-:mova T, loc16 is op8_8=0b00010000 & op0_8!=0b10101100 & T & loc16 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+:mova T, loc16 is op8_8=0b00010000 & op0_8!=0b10101100 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+	T = loc16;
+	ACC = ACC + (P << PM);
+	flagnz(ACC);
+}
 
 # p.280
-:movad T, loc16 is objmode=1 & op8_8=0b10100111 & T & loc16 {}
+:movad T, loc16 is objmode=1 & op8_8=0b10100111 & T & loc16 {
+	local addr:4 = &loc16;
+	T = loc16;
+	*:2 (addr + 2) = T;
+	ACC = ACC + (P << PM);
+	flagnz(ACC);
+}
 
 # p.281
 :movb ACC, #imm8 is objmode=1 & op8_8=0b00000010 & ACC & imm8 {
@@ -1482,7 +1545,9 @@ with : objmode=1 {
 }
 
 # p.282
-:movb ar67_8, #imm8 is op9_7=0b1101011 & ar67_8 & imm8 {}
+:movb ar67_8, #imm8 is op9_7=0b1101011 & ar67_8 & imm8 {
+	ar67_8 = zext(imm8:1);
+}
 
 # p.283
 :movb ax8, #imm8 is op9_7=0b1001101 & ax8 & imm8 {
@@ -1504,13 +1569,20 @@ with : objmode=1 {
 }
 
 # p.288
-:movb loc16, #imm8_8, cond is objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & loc16 {}
+:movb loc16, #imm8_8, cond is objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & loc16 {
+	if (!cond) goto inst_next;
+	loc16 = zext(imm8_8:1);
+}
 
 # p.290
-:movb loc16, ax8lsb is op9_7=0b0011110 & ax8 & ax8lsb & loc16 {}
+:movb loc16, ax8lsb is op9_7=0b0011110 & ax8 & ax8lsb & loc16 {
+	loc16 = zext(ax8lsb);
+}
 
 # p.292
-:movb loc16, ax8msb is op9_7=0b1100100 & ax8 & ax8msb & loc16 {}
+:movb loc16, ax8msb is op9_7=0b1100100 & ax8 & ax8msb & loc16 {
+	loc16 = zext(ax8msb);
+}
 
 # p.294
 :movb xarn8, #imm8 is op11_5=0b11010 & xarn8 & imm8 {
@@ -1528,25 +1600,68 @@ with : objmode=1 {
 }
 
 # p.295
-:movdl XT, loc32 is objmode=1 & op8_8=0b10100110 & XT & loc32 {}
+:movdl XT, loc32 is objmode=1 & op8_8=0b10100110 & XT & loc32 {
+	local addr:4 = &loc32;
+	local old_xt:4 = XT;
+	XT = loc32;
+	*:4 (addr + 4) = old_xt;
+}
 
 # p.296
-:movh loc16, ACC << #1 is objmode=1 & op8_8=0b10110011 & loc16 & ACC {}
+:movh loc16, ACC << #1 is objmode=1 & op8_8=0b10110011 & loc16 & ACC {
+	local sh:4 = ACC << 1;
+	loc16 = sh[16,16];
+}
+:movh regax, ACC << #1 is objmode=1 & op8_8=0b10110011 & regax & ACC {
+	local sh:4 = ACC << 1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
 
 # p.296
-:movh loc16, ACC << #shift8_3_1 is objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & loc16 & ACC {}
+:movh loc16, ACC << #shift8_3_1 is objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & loc16 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	loc16 = sh[16,16];
+}
+:movh regax, ACC << #shift8_3_1 is objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & regax & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
 
 # p.296
-:movh loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10110 & shift8_3_1 & loc16 & ACC {}
+:movh loc16, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10110 & shift8_3_1 & loc16 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	loc16 = sh[16,16];
+}
+:movh regax, ACC << #shift8_3_1 is objmode=0 & op11_5=0b10110 & shift8_3_1 & regax & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
 
 # p.297
-:movh loc16, P is op8_8=0b01010111 & loc16 & P {}
+:movh loc16, P is op8_8=0b01010111 & loc16 & P {
+	local sh:4 = P << PM;
+	loc16 = sh[16,16];
+}
+:movh regax, P is op8_8=0b01010111 & regax & P {
+	local sh:4 = P << PM;
+	regax = sh[16,16];
+	flagnz(regax);
+}
 
 # p.298
-:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 & op0_8!=0b10111110{}
+:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 & op0_8!=0b10111110 {
+	ACC = loc32;
+	flagnz(ACC);
+}
 
 # p.299
-:movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM {} # alias for `MOVP T, loc16` with `loc16 = @T`
+:movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM { # alias for `MOVP T, loc16` with `loc16 = @T`
+	ACC = P << PM;
+	flagnz(ACC);
+}
 
 # p. 300
 :movl loc32, ACC is op8_8=0b00011110 & op0_8!=0b10111110 & loc32 & ACC {
@@ -1555,29 +1670,55 @@ with : objmode=1 {
 }
 
 # p.301
-:movl loc32, ACC, cond8 is op0_16=0b0101011001001000; op12_4=0b0000 & loc32 & ACC & cond8 {}
+:movl loc32, ACC, cond8 is op0_16=0b0101011001001000; op12_4=0b0000 & loc32 & ACC & cond8 {
+	if (!cond8) goto inst_next; loc32 = ACC;
+}
 
 # p.303
-:movl loc32, P is objmode=1 & op8_8=0b10101001 & loc32 & P {}
+:movl loc32, P is objmode=1 & op8_8=0b10101001 & loc32 & P {
+	loc32 = P;
+}
 
 # p.304
-:movl loc32, XAR0 is objmode=1 & op8_8=0b00111010 & op0_8!=0b10111101 & loc32 & XAR0 {}
-:movl loc32, XAR1 is objmode=1 & op8_8=0b10110010 & op0_8!=0b10111101 & loc32 & XAR1 {}
-:movl loc32, XAR2 is objmode=1 & op8_8=0b10101010 & op0_8!=0b10111101 & loc32 & XAR2 {}
-:movl loc32, XAR3 is objmode=1 & op8_8=0b10100010 & op0_8!=0b10111101 & loc32 & XAR3 {}
-:movl loc32, XAR4 is objmode=1 & op8_8=0b10101000 & op0_8!=0b10111101 & loc32 & XAR4 {}
-:movl loc32, XAR5 is objmode=1 & op8_8=0b10100000 & op0_8!=0b10111101 & loc32 & XAR5 {}
-:movl loc32, XAR6 is op8_8=0b11000010 & op0_8!=0b10111101 & loc32 & XAR6 {}
-:movl loc32, XAR7 is op8_8=0b11000011 & op0_8!=0b10111101 & loc32 & XAR7 {}
+:movl loc32, XAR0 is objmode=1 & op8_8=0b00111010 & op0_8!=0b10111101 & loc32 & XAR0 {
+	loc32 = XAR0;
+}
+:movl loc32, XAR1 is objmode=1 & op8_8=0b10110010 & op0_8!=0b10111101 & loc32 & XAR1 {
+	loc32 = XAR1;
+}
+:movl loc32, XAR2 is objmode=1 & op8_8=0b10101010 & op0_8!=0b10111101 & loc32 & XAR2 {
+	loc32 = XAR2;
+}
+:movl loc32, XAR3 is objmode=1 & op8_8=0b10100010 & op0_8!=0b10111101 & loc32 & XAR3 {
+	loc32 = XAR3;
+}
+:movl loc32, XAR4 is objmode=1 & op8_8=0b10101000 & op0_8!=0b10111101 & loc32 & XAR4 {
+	loc32 = XAR4;
+}
+:movl loc32, XAR5 is objmode=1 & op8_8=0b10100000 & op0_8!=0b10111101 & loc32 & XAR5 {
+	loc32 = XAR5;
+}
+:movl loc32, XAR6 is op8_8=0b11000010 & op0_8!=0b10111101 & loc32 & XAR6 {
+	loc32 = XAR6;
+}
+:movl loc32, XAR7 is op8_8=0b11000011 & op0_8!=0b10111101 & loc32 & XAR7 {
+	loc32 = XAR7;
+}
 
 # p.305
-:movl loc32, XT is objmode=1 & op8_8=0b10101011 & op0_8!=0b10111101 & loc32 & XT {}
+:movl loc32, XT is objmode=1 & op8_8=0b10101011 & op0_8!=0b10111101 & loc32 & XT {
+	loc32 = XT;
+}
 
 # p.306
-:movl P, ACC is op0_16=0b1111111101011010 & P & ACC {}
+:movl P, ACC is op0_16=0b1111111101011010 & P & ACC {
+	P = ACC;
+}
 
 # p.307
-:movl P, loc32 is objmode=1 & op8_8=0b10100011 & P & loc32 {}
+:movl P, loc32 is objmode=1 & op8_8=0b10100011 & P & loc32 {
+	P = loc32;
+}
 
 # p.308
 :movl XAR0, loc32 is objmode=1 & op8_8=0b10001110 & op0_8!=0b10111110 & XAR0 & loc32 {
@@ -1632,26 +1773,40 @@ with : objmode=1 {
 }
 
 # p.310
-:movl XT, loc32 is objmode=1 & op8_8=0b10000111 & op0_8!=0b10111110 & XT & loc32 {}
+:movl XT, loc32 is objmode=1 & op8_8=0b10000111 & op0_8!=0b10111110 & XT & loc32 {
+	XT = loc32;
+}
 
 # p.311
-:movp T, loc16 is op8_8=0b00010110 & op0_8!=0b10101100 & T & loc16 {} # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+:movp T, loc16 is op8_8=0b00010110 & op0_8!=0b10101100 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+	T = loc16;
+	ACC = ACC + (P << PM);
+	flagnz(ACC);
+}
 
 # p.312
-:movs T, loc16 is op8_8=0b00010001 & op0_8!=0b10101100 & T & loc16 {}
+:movs T, loc16 is op8_8=0b00010001 & op0_8!=0b10101100 & T & loc16 {
+	T = loc16;
+	ACC = ACC - (P << PM);
+	flagnz(ACC);
+}
 
 # p.313
 :movu ACC, loc16 is op8_8=0b00001110 & ACC & loc16 {
-	#ACC = loc16;
+	ACC = zext(loc16);
 	N = 0;
 	Z = (ACC == 0);
 }
 
 # p.314
-:movu loc16, "OVC" is objmode=1 & op0_16=0b0101011000101000; op8_8=0b00000000 & loc16 {}
+:movu loc16, OVC is objmode=1 & op0_16=0b0101011000101000; op8_8=0b00000000 & loc16 & OVC {
+	loc16 = zext(OVC);
+}
 
 # p.315
-:movu "OVC", loc16 is objmode=1 & op0_16=0b0101011001100010; op8_8=0b00000000 & loc16 {}
+:movu OVC, loc16 is objmode=1 & op0_16=0b0101011001100010; op8_8=0b00000000 & loc16 & OVC {
+	OVC = loc16[0,6];
+}
 
 # p.316
 :movw DP, #imm16 is op0_16=0b0111011000011111; DP & imm16 {
@@ -1659,7 +1814,9 @@ with : objmode=1 {
 }
 
 # p.317
-:movx TL, loc16 is objmode=1 & op0_16=0b0101011000100001; TL & loc16 {}
+:movx TL, loc16 is objmode=1 & op0_16=0b0101011000100001; TL & loc16 {
+	XT = sext(loc16);
+}
 
 # p.318
 :movz arn8, loc16 is op11_5=0b01011 & arn8 & xarn8 & loc16 {
@@ -1812,30 +1969,55 @@ with : objmode=1 {
 }
 
 # p.352
-:out *(imm16), loc16 is objmode=1 & op8_8=0b10111100 & loc16; imm16 {}
+:out *(imm16), loc16 is objmode=1 & op8_8=0b10111100 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	*:2 ptr = loc16;
+}
 
 # p.353
-:pop ACC is op0_16=0b0000011010111110 & ACC {} # alias for `MOVL ACC, *--SP`
+:pop ACC is op0_16=0b0000011010111110 & ACC { # alias for `MOVL ACC, *--SP`
+	pop32(ACC);
+	flagnz(ACC);
+}
 
 # p.354
-:pop AR1:AR0 is op0_16=0b0111011000000111 & AR1 & AR0 {}
-:pop AR3:AR2 is op0_16=0b0111011000000101 & AR3 & AR2 {}
-:pop AR5:AR4 is op0_16=0b0111011000000110 & AR5 & AR4 {}
+:pop AR1:AR0 is op0_16=0b0111011000000111 & AR1 & AR0 {
+	local val:4; pop32(val); AR0 = val[0,16]; AR1 = val[16,16];
+}
+:pop AR3:AR2 is op0_16=0b0111011000000101 & AR3 & AR2 {
+	local val:4; pop32(val); AR2 = val[0,16]; AR3 = val[16,16];
+}
+:pop AR5:AR4 is op0_16=0b0111011000000110 & AR5 & AR4 {
+	local val:4; pop32(val); AR4 = val[0,16]; AR5 = val[16,16];
+}
 
 # p.355
-:pop AR1H:AR0H is op0_16=0b0000000000000011 & AR1H & AR0H {}
+:pop AR1H:AR0H is op0_16=0b0000000000000011 & AR1H & AR0H {
+	local val:4; pop32(val); AR0H = val[0,16]; AR1H = val[16,16];
+}
 
 # p.356
-:pop DBGIER is op0_16=0b0111011000010010 & DBGIER {}
+:pop DBGIER is op0_16=0b0111011000010010 & DBGIER {
+	pop16(DBGIER);
+}
 
 # p.357
-:pop DP is op0_16=0b0111011000000011 & DP {}
+:pop DP is op0_16=0b0111011000000011 & DP {
+	pop16(DP);
+}
 
 # p.358
-:pop DP:ST1 is op0_16=0b0111011000000001 & DP & ST1 {}
+:pop DP:ST1 is op0_16=0b0111011000000001 & DP & ST1 {
+	local val:4; pop32(val);
+	local st1_val:2 = val[0,16];
+	unpackst1(st1_val);
+	DP = val[16,16];
+}
 
 # p.359
-:pop IFR is op0_16=0b0000000000000010 & IFR {}
+:pop IFR is op0_16=0b0000000000000010 & IFR {
+	pop16(IFR);
+}
 
 # p.360
 :pop loc16 is op8_8=0b00101010 & loc16 {
@@ -1843,37 +2025,64 @@ with : objmode=1 {
 }
 
 # p.361
-:pop P is op0_16=0b0111011000010001 & P {}
+:pop P is op0_16=0b0111011000010001 & P {
+	pop32(P);
+}
 
 # p.362
-:pop RPC is op0_16=0b0000000000000111 & RPC {}
+:pop RPC is op0_16=0b0000000000000111 & RPC {
+	pop32(RPC);
+}
 
 # p.363
 :pop ST0 is op0_16=0b0111011000010011 & ST0 {
 	local tmp:2;
-	#pop16(tmp);
-	#ST0 = tmp; # TODO
-	#unpackst0(tmp);
+	pop16(tmp);
+	unpackst0(tmp);
 }
 
 # p.364
-:pop ST1 is op0_16=0b0111011000000000 & ST1 {}
+:pop ST1 is op0_16=0b0111011000000000 & ST1 {
+	local tmp:2; pop16(tmp); unpackst1(tmp);
+}
 
 # p.365
-:pop T:ST0 is op0_16=0b0111011000010101 & T & ST0 {}
+:pop T:ST0 is op0_16=0b0111011000010101 & T & ST0 {
+	local val:4; pop32(val);
+	local st0_val:2 = val[0,16]; unpackst0(st0_val);
+	T = val[16,16];
+}
 
 # p.366
-:pop XAR0 is objmode=1 & op0_16=0b1000111010111110 & XAR0 {}
-:pop XAR1 is objmode=1 & op0_16=0b1000101110111110 & XAR1 {}
-:pop XAR2 is objmode=1 & op0_16=0b1000011010111110 & XAR2 {}
-:pop XAR3 is objmode=1 & op0_16=0b1000001010111110 & XAR3 {}
-:pop XAR4 is objmode=1 & op0_16=0b1000101010111110 & XAR4 {}
-:pop XAR5 is objmode=1 & op0_16=0b1000001110111110 & XAR5 {}
-:pop XAR6 is op0_16=0b1100010010111110 & XAR6 {}
-:pop XAR7 is op0_16=0b1100010110111110 & XAR7 {}
+:pop XAR0 is objmode=1 & op0_16=0b1000111010111110 & XAR0 {
+	pop32(XAR0);
+}
+:pop XAR1 is objmode=1 & op0_16=0b1000101110111110 & XAR1 {
+	pop32(XAR1);
+}
+:pop XAR2 is objmode=1 & op0_16=0b1000011010111110 & XAR2 {
+	pop32(XAR2);
+}
+:pop XAR3 is objmode=1 & op0_16=0b1000001010111110 & XAR3 {
+	pop32(XAR3);
+}
+:pop XAR4 is objmode=1 & op0_16=0b1000101010111110 & XAR4 {
+	pop32(XAR4);
+}
+:pop XAR5 is objmode=1 & op0_16=0b1000001110111110 & XAR5 {
+	pop32(XAR5);
+}
+:pop XAR6 is op0_16=0b1100010010111110 & XAR6 {
+	pop32(XAR6);
+}
+:pop XAR7 is op0_16=0b1100010110111110 & XAR7 {
+	pop32(XAR7);
+}
 
 # p.367
-:pop XT is op0_16=0b1000011110111110 & XT {}
+:pop XT is op0_16=0b1000011110111110 & XT {
+	pop32(XT);
+}
 
 # p.368
 :pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {
@@ -1885,41 +2094,71 @@ with : objmode=1 {
 }
 
 # p.369
-:push ACC is op0_16=0b0001111010111110 & ACC {} # alias for `MOVL *SP++, ACC`
+:push ACC is op0_16=0b0001111010111110 & ACC { # alias for `MOVL *SP++, ACC`
+	push32(ACC);
+}
 
 # p.370
-:push AR1:AR0 is op0_16=0b0111011000001101 & AR1 & AR0 {}
-:push AR3:AR2 is op0_16=0b0111011000001111 & AR3 & AR2 {}
-:push AR5:AR4 is op0_16=0b0111011000001100 & AR5 & AR4 {}
+:push AR1:AR0 is op0_16=0b0111011000001101 & AR1 & AR0 {
+	local val:4 = zext(AR0) | (zext(AR1) << 16);
+	push32(val);
+}
+:push AR3:AR2 is op0_16=0b0111011000001111 & AR3 & AR2 {
+	local val:4 = zext(AR2) | (zext(AR3) << 16);
+	push32(val);
+}
+:push AR5:AR4 is op0_16=0b0111011000001100 & AR5 & AR4 {
+	local val:4 = zext(AR4) | (zext(AR5) << 16);
+	push32(val);
+}
 
 # p.371
-:push AR1H:AR0H is op0_16=0b0000000000000101 & AR1H & AR0H {}
+:push AR1H:AR0H is op0_16=0b0000000000000101 & AR1H & AR0H {
+	local val:4 = zext(AR0H) | (zext(AR1H) << 16);
+	push32(val);
+}
 
 # p.372
-:push DBGIER is op0_16=0b0111011000001110 & DBGIER {}
+:push DBGIER is op0_16=0b0111011000001110 & DBGIER {
+	push16(DBGIER);
+}
 
 # p.373
-:push DP is op0_16=0b0111011000001011 & DP {}
+:push DP is op0_16=0b0111011000001011 & DP {
+	push16(DP);
+}
 
 # p.374
-:push DP:ST1 is op0_16=0b0111011000001001 & DP & ST1 {}
+:push DP:ST1 is op0_16=0b0111011000001001 & DP & ST1 {
+	packst1(ST1);
+	local val:4 = zext(ST1) | (zext(DP) << 16);
+	push32(val);
+}
 
 # p.375
-:push IFR is op0_16=0b0111011000001010 & IFR {}
+:push IFR is op0_16=0b0111011000001010 & IFR {
+	push16(IFR);
+}
 
 # p.376
-:push loc16 is op8_8=0b00100010 & loc16 {}
+:push loc16 is op8_8=0b00100010 & loc16 {
+	push16(loc16);
+}
 
 # p.377
-:push P is op0_16=0b0111011000011101 & P {}
+:push P is op0_16=0b0111011000011101 & P {
+	push32(P);
+}
 
 # p.378
-:push RPC is op0_16=0b0000000000000100 & RPC {}
+:push RPC is op0_16=0b0000000000000100 & RPC {
+	push32(RPC);
+}
 
 # p.379
 :push ST0 is op0_16=0b0111011000011000 & ST0 {
-	#packst0(ST0); # TODO
-	#push16(ST0);
+	packst0(ST0);
+	push16(ST0);
 }
 
 # p.380
@@ -1929,7 +2168,11 @@ with : objmode=1 {
 }
 
 # p.381
-:push T:ST0 is op0_16=0b0111011000011001 & T & ST0 {}
+:push T:ST0 is op0_16=0b0111011000011001 & T & ST0 {
+	packst0(ST0);
+	local val:4 = zext(ST0) | (zext(T) << 16);
+	push32(val);
+}
 
 # p.382
 :push XAR0 is objmode=1 & op0_16=0b0011101010111101 & XAR0 {
@@ -1958,10 +2201,14 @@ with : objmode=1 {
 }
 
 # p.383
-:push XT is objmode=1 & op0_16=0b1010101110111101 & XT {} # I really don't see how this can coexist with `add ACC, loc16 << #shift0_4 is op12_4=0b1010 & objmode=0` unless it's objmode=1
+:push XT is objmode=1 & op0_16=0b1010101110111101 & XT { # I really don't see how this can coexist with `add ACC, loc16 << #shift0_4 is op12_4=0b1010 & objmode=0` unless it's objmode=1
+	push32(XT);
+}
 
 # p.384
-:pwrite *XAR7, loc16 is op8_8=0b00100110 & loc16 & XAR7 {}
+:pwrite *XAR7, loc16 is op8_8=0b00100110 & loc16 & XAR7 {
+	*:2 XAR7 = loc16;
+}
 
 # p.385
 :qmacl P, loc32, *XAR7   is objmode=1 & op0_16=0b0101011001001111; op8_8=0b11000111 & P & loc32 & XAR7 {}
@@ -2287,7 +2534,10 @@ with : objmode=1 {
 }
 
 # p.443
-:uout *(imm16), loc16 is objmode=1 & op8_8=0b10110000 & loc16; imm16 {}
+:uout *(imm16), loc16 is objmode=1 & op8_8=0b10110000 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	*:2 ptr = loc16;
+}
 
 # p.444
 :xb *AL is objmode=1 & op0_16=0b0101011000010100 & AL {}
@@ -2370,13 +2620,22 @@ with : objmode=1 {
 }
 
 # p.464
-:xpread loc16, *(imm16) is objmode=1 & op8_8=0b10101100 & loc16; imm16 {}
+:xpread loc16, *(imm16) is objmode=1 & op8_8=0b10101100 & loc16; imm16 {
+	local ptr:4 = 0x3F0000 | imm16;
+	loc16 = *:2 ptr;
+}
 
 # p.465
-:xpread loc16, *AL is objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & loc16 & AL {}
+:xpread loc16, *AL is objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & loc16 & AL {
+	local ptr:4 = 0x3F0000 | zext(AL);
+	loc16 = *:2 ptr;
+}
 
 # p.466
-:xpwrite *AL, loc16 is objmode=1 & op0_16=0b0101011000111101; op8_8=0b00000000 & AL & loc16 {}
+:xpwrite *AL, loc16 is objmode=1 & op0_16=0b0101011000111101; op8_8=0b00000000 & AL & loc16 {
+	local ptr:4 = 0x3F0000 | zext(AL);
+	*:2 ptr = loc16;
+}
 
 # p.467
 :xret is objmode=1 & op0_16=0b0101011011111111 {
@@ -2396,7 +2655,11 @@ with : objmode=1 {
 }
 
 # p.470
-:zalr ACC, loc16 is objmode=1 & op0_16=0b0101011000010011; op8_8=0b00000000 & ACC & loc16 {}
+:zalr ACC, loc16 is objmode=1 & op0_16=0b0101011000010011; op8_8=0b00000000 & ACC & loc16 {
+	AH = loc16;
+	AL = 0x8000;
+	flagnz(ACC);
+}
 
 # p.472
 :zapa is objmode=1 & op0_16=0b0101011000110011 {
