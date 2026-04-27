@@ -16,6 +16,8 @@ define token opcode (16)
 	op9_7		= (9,15)
 	op10_6		= (10,15)
 	ax8			= (8,8)
+	ax8lsb		= (8,8)
+	ax8msb		= (8,8)
 	ax4			= (4,4)
 	ax0			= (0,0)
 	op11_5		= (11,15)
@@ -58,6 +60,7 @@ define token opcode (16)
 	xarn8		= (8,10)
 	imm3		= (0,2)
 	imm3_3		= (3,5)
+	imm3_3_p	= (3,3) # parity bit for imm3_3
 	imm4		= (0,3)
 	imm5		= (0,4)
 	imm6		= (0,5)
@@ -77,6 +80,8 @@ define token opcode (16)
 ;
 
 attach variables [ ax0 ax4 ax8 ] [ AL AH ];
+attach variables [ ax8lsb ] [ AL.LSB AH.LSB ];
+attach variables [ ax8msb ] [ AL.MSB AH.MSB ];
 attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
 attach values shift8_3_1 [ 1 2 3 4 5 6 7 8 ];
 
@@ -321,6 +326,60 @@ loc32: *AR6%++         is amode=0 & op0_8=0b10111111 & AR6 {
 }
 # 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
 loc32: reg32           is amode=0 & op4_4=0b1010 & reg32 {export reg32;}
+
+# 8-Bit Subset of 16-Bit Addressing Modes (for LSB / MSB instructions)
+# Direct Addressing Modes (DP)
+loc8: @imm6           is amode=0 & op6_2=0b00 & imm6 {local addr:4 = (zext(DP) << 6) | imm6; local w:2 = *:2 addr; local b:1 = w:1; export b;}
+# Stack Addressing Modes (SP)
+loc8: *-SP[imm6]      is amode=0 & op6_2=0b01 & SP & imm6 {local addr:4 = zext(SP) - imm6; local w:2 = *:2 addr; local b:1 = w:1; export b;}
+loc8: *SP++           is amode=0 & op0_8=0b10111101 & SP {local addr:4 = zext(SP); SP = SP + 1; local w:2 = *:2 addr; local b:1 = w:1; export b;}
+loc8: *--SP           is amode=0 & op0_8=0b10111110 & SP {SP = SP - 1; local addr:4 = zext(SP); local w:2 = *:2 addr; local b:1 = w:1; export b;}
+# C28x Indirect Addressing Modes (XAR0 to XAR7). imm3 is the raw numeric value of xarn0 to set ARP
+loc8: *xarn0++        is amode=0 & op3_5=0b10000 & xarn0 & imm3 {ARP = imm3; local addr:4 = xarn0; xarn0 = xarn0 + 1; local w:2 = *:2 addr; local b:1 = w:1; export b;}
+loc8: *--xarn0        is amode=0 & op3_5=0b10001 & xarn0 & imm3 {ARP = imm3; xarn0 = xarn0 - 1; local w:2 = *:2 xarn0; local b:1 = w:1; export b;}
+loc8: *+xarn0[AR0]    is amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	local w:2 = *:2 addr;
+	local b:1;
+	if ((AR0 & 1) != 0) goto <odd>;
+	b = w:1;
+	goto <done>;
+<odd>
+	b = w[8,8];
+<done>
+	export b;
+}
+loc8: *+xarn0[AR1]     is amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	local w:2 = *:2 addr;
+	local b:1;
+	if ((AR1 & 1) != 0) goto <odd>;
+	b = w:1;
+	goto <done>;
+<odd>
+	b = w[8,8];
+<done>
+	export b;
+}
+loc8: *+xarn0[imm3_3]  is amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 & imm3_3_p=0 {ARP = imm3; local addr = xarn0 + imm3_3; local w:2 = *:2 addr; local b:1 = w:1; export b;} # Even, LSB
+loc8: *+xarn0[imm3_3]  is amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 & imm3_3_p=1 {ARP = imm3; local addr = xarn0 + imm3_3; local w:2 = *:2 addr; local b:1 = w[8,8]; export b;} # Odd, MSB
+# C2xLP Indirect Addressing Modes (no offset, always LSB)
+loc8: *                is amode=0 & op0_8=0b10111000 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; local w:2 = *:2 rv; local b:1 = w:1; export b;}
+loc8: *++              is amode=0 & op0_8=0b10111001 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv + 1; local w:2 = *:2 rv; local b:1 = w:1; export b;}
+loc8: *--              is amode=0 & op0_8=0b10111010 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv - 1; local w:2 = *:2 rv; local b:1 = w:1; export b;}
+loc8: *"ARP"^imm3      is amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local rv:4 = *[register]rp;
+	ARP = imm3;
+	local w:2 = *:2 rv;
+	local b:1 = w:1;
+	export b;
+}
+# AR0/BR0/circular variants omitted: undefined
+# 16-Bit Register Addressing Modes
+loc8: reg16            is amode=0 & op4_4=0b1010 & reg16 {local b:1 = reg16[0,8]; export b;}
 
 cond:  "NEQ"  is cond0_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
 cond:  "EQ"   is cond0_4=0b0001 { local cnd:1 = Z   == 1; export cnd; }
@@ -1432,19 +1491,26 @@ with : objmode=1 {
 }
 
 # p.284
-:movb ax8".LSB", loc16 is op9_7=0b1100011 & ax8 & loc16 {}
+:movb ax8lsb, loc8 is op9_7=0b1100011 & ax8 & ax8lsb & loc8 {
+	ax8 = zext(loc8);
+	Z = ax8 == 0;
+	N = 0;
+}
 
 # p.286
-:movb ax8".MSB", loc16 is op9_7=0b0011100 & ax8 & loc16 {}
+:movb ax8msb, loc8 is op9_7=0b0011100 & ax8 & ax8msb & loc8 {
+	ax8msb = loc8;
+	flagnz(ax8);
+}
 
 # p.288
 :movb loc16, #imm8_8, cond is objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & loc16 {}
 
 # p.290
-:movb loc16, ax8".LSB" is op9_7=0b0011110 & ax8 & loc16 {}
+:movb loc16, ax8lsb is op9_7=0b0011110 & ax8 & ax8lsb & loc16 {}
 
 # p.292
-:movb loc16, ax8".MSB" is op9_7=0b1100100 & ax8 & loc16 {}
+:movb loc16, ax8msb is op9_7=0b1100100 & ax8 & ax8msb & loc16 {}
 
 # p.294
 :movb xarn8, #imm8 is op11_5=0b11010 & xarn8 & imm8 {
