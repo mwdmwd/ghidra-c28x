@@ -133,40 +133,61 @@ macro pop32(ret32) {
 }
 
 macro packst0(res) {
-	res = zext((OVC << 10) | (PM << 7) | (V << 6) | (N << 5) | (Z << 4) | (C << 3) | (TC << 2) | (OVM << 1) | SXM);
+	res = (zext(SXM)
+		| (zext(OVM) << 1)
+		| (zext(TC) << 2)
+		| (zext(C) << 3)
+		| (zext(Z) << 4)
+		| (zext(N) << 5)
+		| (zext(V) << 6)
+		| (zext(PM) << 7)
+		| (zext(OVC) << 10));
 }
 
 macro unpackst0(in) {
 	OVC = in[10,6];
 	PM  = in[7,3];
-	V   = (in & 0b1000000) != 0;
-	N   = (in & 0b100000)  != 0;
-	Z   = (in & 0b10000)   != 0;
-	C   = (in & 0b1000)    != 0;
-	TC  = (in & 0b100)     != 0;
-	OVM = (in & 0b10)      != 0;
-	SXM = (in & 0b1)       != 0;
+	V   = in[6,1];
+	N   = in[5,1];
+	Z   = in[4,1];
+	C   = in[3,1];
+	TC  = in[2,1];
+	OVM = in[1,1];
+	SXM = in[0,1];
 }
 
 macro packst1(res) {
-	res = zext((ARP << 13) | (XF << 12) | (M0M1MAP << 11) | (OBJMODE << 9) | (AMODE << 8) | (IDLESTAT << 7) | (EALLOW << 6) | (LOOP << 5) | (SPA << 4) | (VMAP << 3) | (PAGE0 << 2) | (DBGM << 1) | (INTM << 0));
+	res = (zext(INTM)
+		| (zext(DBGM) << 1)
+		| (zext(PAGE0) << 2)
+		| (zext(VMAP) << 3)
+		| (zext(SPA) << 4)
+		| (zext(LOOP) << 5)
+		| (zext(EALLOW) << 6)
+		| (zext(IDLESTAT) << 7)
+		| (zext(AMODE) << 8)
+		| (zext(OBJMODE) << 9)
+		# bit 10 reserved
+		| (zext(M0M1MAP) << 11)
+		| (zext(XF) << 12)
+		| (zext(ARP) << 13));
 }
 
 macro unpackst1(in) {
 	ARP      = in[13,3];
-	XF       = (in & 0b0000000000001) != 0;
-	M0M1MAP  = (in & 0b000000000001) != 0;
+	XF       = in[12,1];
+	M0M1MAP  = in[11,1];
 	# bit 10 reserved
-	OBJMODE  = (in & 0b0000000001) != 0;
-	AMODE    = (in & 0b000000001) != 0;
-	IDLESTAT = (in & 0b00000001) != 0;
-	EALLOW   = (in & 0b0000001) != 0;
-	LOOP     = (in & 0b000001) != 0;
-	SPA      = (in & 0b00001) != 0;
-	VMAP     = (in & 0b0001) != 0;
-	PAGE0    = (in & 0b001) != 0;
-	DBGM     = (in & 0b01) != 0;
-	INTM     = (in & 0b1) != 0;
+	OBJMODE  = in[9,1];
+	AMODE    = in[8,1];
+	IDLESTAT = in[7,1];
+	EALLOW   = in[6,1];
+	LOOP     = in[5,1];
+	SPA      = in[4,1];
+	VMAP     = in[3,1];
+	PAGE0    = in[2,1];
+	DBGM     = in[1,1];
+	INTM     = in[0,1];
 }
 
 macro flagnz(in) {
