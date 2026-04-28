@@ -768,8 +768,10 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.156
 :asp is op0_16=0b0111011000011011 {
+	SPA = 0;
 	if ((SP % 2) == 0) goto inst_next;
 	SP = SP + 1;
+	SPA = 1;
 }
 
 # p.157
@@ -2020,7 +2022,11 @@ with : objmode=1 {
 :mpyxu P, T, loc16 is op8_8=0b00110010 & P & T & loc16 {}
 
 # p.333
-:nasp is op0_16=0b0111011000010111 {}
+:nasp is op0_16=0b0111011000010111 {
+	if (SPA == 0) goto inst_next;
+	SPA = 0;
+	SP = SP - 1;
+}
 
 # p.334
 :neg ACC is op0_16=0b1111111101010100 & ACC {}
