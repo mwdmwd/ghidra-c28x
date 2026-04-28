@@ -222,6 +222,30 @@ macro rbsub16(result, a, b) {
 	result = rr;
 }
 
+macro intr_enter(vec) {
+	packst0(ST0);
+	local ie_v1:4 = zext(ST0) | (zext(T) << 16);
+	SP = SP + 1;
+	push32(ie_v1);
+	push32(ACC);
+	push32(P);
+	local ie_v2:4 = zext(AR0) | (zext(AR1) << 16);
+	push32(ie_v2);
+	packst1(ST1);
+	local ie_v3:4 = zext(ST1) | (zext(DP) << 16);
+	push32(ie_v3);
+	local ie_v4:4 = zext(IER);
+	push32(ie_v4);
+	local iret_pc:4 = inst_next;
+	push32(iret_pc);
+	INTM = 1;
+	DBGM = 1;
+	EALLOW = 0;
+	LOOP = 0;
+	IDLESTAT = 0;
+	call [vec];
+}
+
 # TODO: use for all (?) P << PM shifts
 # PM positive - left shift, PM negative - right shift, PM zero - no shift
 macro pmshift(result, in) {
@@ -1080,18 +1104,53 @@ with : objmode=1 {
 }
 
 # p.212
-:intr "INT"^intno is op4_12=0b000000000001 & imm4 [ intno = imm4 + 1; ] {}
+:intr "INT"^intno is op4_12=0b000000000001 & imm4 [ intno = imm4 + 1; ] {
+	local tmp4:2 = imm4;
+	local imm4v:4 = zext(tmp4) + zext(tmp4);
+	local vec:4 = 0x3FFFC2 + imm4v;
+	intr_enter(vec);
+}
 # p.212
-:intr "DLOGINT" is op4_12=0b000000000001 & imm4=0b1110 {}
+:intr "DLOGINT" is op4_12=0b000000000001 & imm4=0b1110 {
+	local vec2:4 = 0x3FFFDE;
+	intr_enter(vec2);
+}
 # p.212
-:intr "RTOSINT" is op4_12=0b000000000001 & imm4=0b1111 {}
+:intr "RTOSINT" is op4_12=0b000000000001 & imm4=0b1111 {
+	local vec3:4 = 0x3FFFE0;
+	intr_enter(vec3);
+}
 # p.212
-:intr "NMI" is op0_16=0b0111011000010110 {}
+:intr "NMI" is op0_16=0b0111011000010110 {
+	local vec4:4 = 0x3FFFE4;
+	intr_enter(vec4);
+}
 # p.212
 :intr "EMU" is op0_16=0b0111011000011100 {}
 
 # p.214
-:iret is op0_16=0b0111011000000010 {}
+:iret is op0_16=0b0111011000000010 {
+	local ret_pc:4;
+	pop32(ret_pc);
+	local ier_dbgstat:4;
+	pop32(ier_dbgstat);
+	IER = ier_dbgstat[0,16];
+	local dp_st1:4;
+	pop32(dp_st1);
+	unpackst1(dp_st1[0,16]);
+	DP = dp_st1[16,16];
+	local ar1_ar0:4;
+	pop32(ar1_ar0);
+	AR0 = ar1_ar0[0,16];
+	AR1 = ar1_ar0[16,16];
+	pop32(P);
+	pop32(ACC);
+	local t_st0:4;
+	pop32(t_st0);
+	unpackst0(t_st0[0,16]);
+	T = t_st0[16,16];
+	return [ret_pc];
+}
 
 # p.216
 :lb *XAR7 is op0_16=0b0111011000100000 & XAR7 {
