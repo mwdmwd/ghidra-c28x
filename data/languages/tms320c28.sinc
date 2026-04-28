@@ -222,6 +222,25 @@ macro rbsub16(result, a, b) {
 	result = rr;
 }
 
+# TODO: use for all (?) P << PM shifts
+# PM positive - left shift, PM negative - right shift, PM zero - no shift
+macro pmshift(result, in) {
+	if (PM s>= 0) goto <l>;
+	result = in s>> (-PM);
+	goto <d>;
+<l>
+	result = in << PM;
+<d>
+}
+
+# Store lower 38 bits of a 64-bit product into P, applying PM shift mode
+macro store_p_lower38(prod64) {
+	local t:8 = prod64 & 0x3FFFFFFFFF;
+	local s:8;
+	pmshift(s, t);
+	P = s[0,32];
+}
+
 ################################################################
 # Addressing and stuff
 ################################################################
@@ -1014,10 +1033,23 @@ with : objmode=1 {
 }
 
 # p.199
-:imacl P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001101; op8_8=0b11000111 & P & loc32 & XAR7 {}
+:imacl P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001101; op8_8=0b11000111 & P & loc32 & XAR7 {
+	# TODO C, V, OVCU, OVM
+	ACC = ACC + P;
+	local tmp:8 = sext(loc32) * sext(*:4 XAR7);
+	store_p_lower38(tmp);
+	flagnz(ACC);
+}
 
 # p.199
-:imacl P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 {}
+:imacl P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 {
+	# TODO C, V, OVCU, OVM
+	ACC = ACC + P;
+	local tmp:8 = sext(loc32) * sext(*:4 XAR7);
+	store_p_lower38(tmp);
+	XAR7 = XAR7 + 1;
+	flagnz(ACC);
+}
 
 # p.201
 :impyal P, XT, loc32 is objmode=1 & op0_16=0b0101011001001100; op8_8=0b00000000 & P & XT & loc32 {}
@@ -1309,10 +1341,27 @@ with : objmode=1 {
 }
 
 # p.247
-:maxcul P, loc32 is objmode=1 & op0_16=0b0101011001010001; op8_8=0b00000000 & P & loc32 {}
+:maxcul P, loc32 is objmode=1 & op0_16=0b0101011001010001; op8_8=0b00000000 & P & loc32 {
+	# N/Z set by prior instruction; if N && !Z → P > loc32, update to loc32
+	if (N == 0) goto <check_eq>;
+	if (Z != 0) goto inst_next;
+	P = loc32;
+	goto inst_next;
+<check_eq>
+	if (Z == 0) goto inst_next;
+	if (P < loc32) goto inst_next;
+	V = 1;
+	P = loc32;
+}
 
 # p.248
-:maxl ACC, loc32 is objmode=1 & op0_16=0b0101011001100001; op8_8=0b00000000 & ACC & loc32 {}
+:maxl ACC, loc32 is objmode=1 & op0_16=0b0101011001100001; op8_8=0b00000000 & ACC & loc32 {
+	N = (ACC s< loc32);
+	Z = (ACC == loc32);
+	if (ACC s>= loc32) goto inst_next;
+	ACC = loc32;
+	# TODO C, V
+}
 
 # p.249
 :min ax0, loc16 is objmode=1 & op1_15=0b010101100111010 & ax0; op8_8=0b00000000 & loc16 { # MIN AL, @AH has the @ on ah
@@ -1326,10 +1375,27 @@ with : objmode=1 {
 }
 
 # p.250
-:mincul P, loc32 is objmode=1 & op0_16=0b0101011001011001; P & loc32 {}
+:mincul P, loc32 is objmode=1 & op0_16=0b0101011001011001; P & loc32 {
+	# N/Z from prior; if N=0,Z=0 → P < loc32, update to loc32
+	if (N != 0) goto <check_eq>;
+	if (Z != 0) goto <check_eq>;
+	P = loc32;
+	goto inst_next;
+<check_eq>
+	if (Z == 0) goto inst_next;
+	if (P <= loc32) goto inst_next;
+	V = 1;
+	P = loc32;
+}
 
 # p.251
-:minl ACC, loc32 is objmode=1 & op0_16=0b0101011001010000; op8_8=0b00000000 & ACC & loc32 {}
+:minl ACC, loc32 is objmode=1 & op0_16=0b0101011001010000; op8_8=0b00000000 & ACC & loc32 {
+	N = (ACC s< loc32);
+	Z = (ACC == loc32);
+	if (ACC s<= loc32) goto inst_next;
+	ACC = loc32;
+	# TODO C, V
+}
 
 # p.252
 :mov *(0:imm16), loc16 is op8_8=0b11110100 & loc16; imm16 {
@@ -1525,7 +1591,7 @@ with : objmode=1 {
 
 # p.275
 :mov PM, ax0 is objmode=1 & op1_15=0b010101100011100 & PM & ax0 {
-	PM = ax0[0,3];
+	PM = ax0[0,3]; # TODO check encoding
 }
 
 # p.276
