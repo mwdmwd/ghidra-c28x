@@ -439,6 +439,10 @@ macro update_stf_mov(res) {
 }
 
 # p.84 (MOV32 ACC, RaH), p.89 (MOV32 P, RaH), p.99 (MOV32 XARn, RaH), p.100 (MOV32 XT, RaH)
+:mov32 ACC, rah2 is op8_8=0b10111111 & op4_4=0b1010 & reg32=9 & ACC; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
+	ACC = rah2;
+	flagnz(ACC);
+}
 :mov32 loc32, rah2 is op8_8=0b10111111 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
 	loc32 = rah2;
 }
@@ -450,6 +454,11 @@ macro update_stf_mov(res) {
 }
 
 # p.85 (manual gives MOV32)
+:vmov32 ACC, *(0:imm16) is op8_8=0b10111111 & op4_4=0b1010 & reg32=9 & ACC; imm16 {
+	local addr:4 = imm16;
+	ACC = *:4 addr;
+	flagnz(ACC);
+}
 :vmov32 loc32, *(0:imm16) is op8_8=0b10111111 & loc32; imm16 {
 	local addr:4 = imm16;
 	loc32 = *:4 addr;
