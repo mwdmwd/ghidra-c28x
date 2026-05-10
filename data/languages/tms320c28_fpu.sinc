@@ -79,6 +79,41 @@ macro update_stf(res) {
 	STF_NF = res[31,1] && (STF_ZF == 0);
 }
 
+macro fpu_cmp_operand(out, in) {
+	local exp:4 = in & 0x7F800000;
+	out = in;
+	if (exp != 0) goto <not_zeroish>;
+	out = 0;
+	goto <done>;
+	<not_zeroish>
+	if (exp != 0x7F800000) goto <done>;
+	if ((in & 0x007FFFFF) == 0) goto <done>;
+	out = 0x7F800000;
+	<done>
+}
+
+macro update_stf_cmp(lhs, rhs) {
+	local lhs_cmp:4;
+	local rhs_cmp:4;
+	fpu_cmp_operand(lhs_cmp, lhs);
+	fpu_cmp_operand(rhs_cmp, rhs);
+	STF_ZF = (lhs_cmp f== rhs_cmp);
+	STF_NF = (lhs_cmp f< rhs_cmp);
+}
+
+macro fpu_minmax_output(out) {
+	local exp:4 = out & 0x7F800000;
+	if (exp != 0) goto <not_denorm>;
+	if ((out & 0x007FFFFF) == 0) goto <done>;
+	out = 0;
+	goto <done>;
+	<not_denorm>
+	if (exp != 0x7F800000) goto <done>;
+	if ((out & 0x007FFFFF) == 0) goto <done>;
+	out = 0x7F800000;
+	<done>
+}
+
 # MOV32/MOVD32 flag update: ZF/NF based on exponent field; also NI/ZI
 macro update_stf_mov(res) {
 	STF_NI = res[31,1];
@@ -191,20 +226,21 @@ macro update_stf_mov(res) {
 
 # Parallel MAX/MIN
 :maxf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69c; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
-	if (rah3 f< rbh3) goto <swap>;
-	goto <done>;
-	<swap>
-	rah3 = rbh3;
+	update_stf_cmp(rah3, rbh3);
 	rch3 = p2_rdh;
+	if (!STF_NF) goto <done>;
+	rah3 = rbh3;
 	<done>
+	fpu_minmax_output(rah3);
 }
 :minf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69d; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
-	if (rah3 f> rbh3) goto <swap>;
-	goto <done>;
-	<swap>
-	rah3 = rbh3;
+	update_stf_cmp(rah3, rbh3);
 	rch3 = p2_rdh;
+	if (STF_NF) goto <done>;
+	if (STF_ZF) goto <done>;
+	rah3 = rbh3;
 	<done>
+	fpu_minmax_output(rah3);
 }
 
 # p.86 MOV32 mem32, RaH (store)
@@ -237,20 +273,19 @@ macro update_stf_mov(res) {
 
 # p.47
 :cmpf32 rah3, rbh3 is op0_16=0b1110011010010100; op6_10=0b0000000000 & rbh3 & rah3 {
-	local res = rah3 f- rbh3;
-	update_stf(res);
+	update_stf_cmp(rah3, rbh3);
 }
 
 # p.50
 :cmpf32 rah3, "#0.0" is op3_13=0b1110010110100 & rah3 {
-	update_stf(rah3);
+	local zero:4 = 0;
+	update_stf_cmp(rah3, zero);
 }
 
 # p.48
 :cmpf32 rah3, #fpu_imm16 is op3_13=0b1110100000010 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
 	local imm32:4 = fpu_imm16 << 16;
-	local res = rah3 f- imm32;
-	update_stf(res);
+	update_stf_cmp(rah3, imm32);
 }
 
 # p.51 - no flags (only LUF/LVF, which we don't model here)
@@ -267,40 +302,42 @@ macro update_stf_mov(res) {
 
 # p.76
 :maxf32 rah3, rbh3 is op0_16=0b1110011010010110; op6_10=0b0000000000 & rbh3 & rah3 {
-	if (rah3 f< rbh3) goto <swap>;
-	goto <done>;
-	<swap>
+	update_stf_cmp(rah3, rbh3);
+	if (!STF_NF) goto <done>;
 	rah3 = rbh3;
 	<done>
+	fpu_minmax_output(rah3);
 }
 
 # p.77
 :maxf32 rah3, #fpu_imm16 is op3_13=0b1110100000100 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
 	local imm32:4 = fpu_imm16 << 16;
-	if (rah3 f< imm32) goto <swap>;
-	goto <done>;
-	<swap>
+	update_stf_cmp(rah3, imm32);
+	if (!STF_NF) goto <done>;
 	rah3 = imm32;
 	<done>
+	fpu_minmax_output(rah3);
 }
 
 # p.79
 :minf32 rah3, rbh3 is op0_16=0b1110011010010111; op6_10=0b0000000000 & rbh3 & rah3 {
-	if (rah3 f> rbh3) goto <swap>;
-	goto <done>;
-	<swap>
+	update_stf_cmp(rah3, rbh3);
+	if (STF_NF) goto <done>;
+	if (STF_ZF) goto <done>;
 	rah3 = rbh3;
 	<done>
+	fpu_minmax_output(rah3);
 }
 
 # p.80
 :minf32 rah3, #fpu_imm16 is op3_13=0b1110100000110 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
 	local imm32:4 = fpu_imm16 << 16;
-	if (rah3 f> imm32) goto <swap>;
-	goto <done>;
-	<swap>
+	update_stf_cmp(rah3, imm32);
+	if (STF_NF) goto <done>;
+	if (STF_ZF) goto <done>;
 	rah3 = imm32;
 	<done>
+	fpu_minmax_output(rah3);
 }
 
 # p.55 - no flags
