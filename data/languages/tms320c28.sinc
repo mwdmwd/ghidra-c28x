@@ -1552,6 +1552,7 @@ with : objmode=1 {
 	local ax:2 = ax0;
 	N = (ax s< loc);
 	Z = (ax == loc);
+	C = (ax >= loc);
 	if (ax s>= loc) goto inst_next;
 	ax0 = loc;
 	V = 1;
@@ -1573,11 +1574,13 @@ with : objmode=1 {
 
 # p.248
 :maxl ACC, loc32 is objmode=1 & op0_16=0b0101011001100001; op8_8=0b00000000 & ACC & loc32 {
-	N = (ACC s< loc32);
-	Z = (ACC == loc32);
-	if (ACC s>= loc32) goto inst_next;
-	ACC = loc32;
-	# TODO C, V
+	local loc:4 = loc32;
+	N = (ACC s< loc);
+	Z = (ACC == loc);
+	C = (ACC >= loc);
+	if (ACC s>= loc) goto inst_next;
+	ACC = loc;
+	V = 1;
 }
 
 # p.249
@@ -1586,6 +1589,7 @@ with : objmode=1 {
 	local ax:2 = ax0;
 	N = (ax s< loc);
 	Z = (ax == loc);
+	C = (ax >= loc);
 	if (ax s<= loc) goto inst_next;
 	ax0 = loc;
 	V = 1;
@@ -1607,11 +1611,13 @@ with : objmode=1 {
 
 # p.251
 :minl ACC, loc32 is objmode=1 & op0_16=0b0101011001010000; op8_8=0b00000000 & ACC & loc32 {
-	N = (ACC s< loc32);
-	Z = (ACC == loc32);
-	if (ACC s<= loc32) goto inst_next;
-	ACC = loc32;
-	# TODO C, V
+	local loc:4 = loc32;
+	N = (ACC s< loc);
+	Z = (ACC == loc);
+	C = (ACC >= loc);
+	if (ACC s<= loc) goto inst_next;
+	ACC = loc;
+	V = 1;
 }
 
 # p.252
