@@ -250,7 +250,6 @@ macro intr_enter(vec) {
 	call [vec];
 }
 
-# TODO: use for all (?) P << PM shifts
 # PM positive - left shift, PM negative - right shift, PM zero - no shift
 macro pmshift(result, in) {
 	if (PM s>= 0) goto <l>;
@@ -701,9 +700,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.141
 :addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM { # conflict with `mova T, loc16` and `movp T, loc16`
-	ACC = ACC + (P << PM);
-	flagnz(ACC);
-	# TODO C, V, OVC (PM shift direction depends on sign; negative PM = arithmetic right shift)
+	acc_add_pm_p();
 }
 
 # p.142
@@ -991,11 +988,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.182
 :cmpl ACC, P << PM is op0_16=0b1111111101011001 & ACC & P & PM {
-	local shifted:4 = P << PM;
+	local shifted:4;
+	pmshift(shifted, P);
 	local tmp:5 = sext(ACC) - sext(shifted);
 	flagnz(tmp);
 	C = ACC >= shifted;
-	# TODO PM negative = arithmetic right shift; pcode INT_LEFT with negative arg is approximate
 }
 
 with : objmode=1 {
@@ -1782,7 +1779,8 @@ with : objmode=1 {
 
 # p.270
 :mov loc16, P is op8_8=0b00111111 & loc16 & P {
-	local tmp:4 = P << PM;
+	local tmp:4;
+	pmshift(tmp, P);
 	loc16 = tmp:2;
 }
 
@@ -1829,8 +1827,7 @@ with : objmode=1 {
 # p.279
 :mova T, loc16 is op8_8=0b00010000 & op0_8!=0b10101100 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
 	T = loc16;
-	ACC = ACC + (P << PM);
-	flagnz(ACC);
+	acc_add_pm_p();
 }
 
 # p.280
@@ -1838,8 +1835,7 @@ with : objmode=1 {
 	local addr:4 = &loc16;
 	T = loc16;
 	*:2 (addr + 2) = T;
-	ACC = ACC + (P << PM);
-	flagnz(ACC);
+	acc_add_pm_p();
 }
 
 # p.281
@@ -1946,11 +1942,13 @@ with : objmode=1 {
 
 # p.297
 :movh loc16, P is op8_8=0b01010111 & loc16 & P {
-	local sh:4 = P << PM;
+	local sh:4;
+	pmshift(sh, P);
 	loc16 = sh[16,16];
 }
 :movh regax, P is op8_8=0b01010111 & regax & P {
-	local sh:4 = P << PM;
+	local sh:4;
+	pmshift(sh, P);
 	regax = sh[16,16];
 	flagnz(regax);
 }
@@ -1963,7 +1961,7 @@ with : objmode=1 {
 
 # p.299
 :movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM { # alias for `MOVP T, loc16` with `loc16 = @T`
-	ACC = P << PM;
+	pmshift(ACC, P);
 	flagnz(ACC);
 }
 
@@ -2084,15 +2082,14 @@ with : objmode=1 {
 # p.311
 :movp T, loc16 is op8_8=0b00010110 & op0_8!=0b10101100 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
 	T = loc16;
-	ACC = ACC + (P << PM);
+	pmshift(ACC, P);
 	flagnz(ACC);
 }
 
 # p.312
 :movs T, loc16 is op8_8=0b00010001 & op0_8!=0b10101100 & T & loc16 {
 	T = loc16;
-	ACC = ACC - (P << PM);
-	flagnz(ACC);
+	acc_sub_pm_p();
 }
 
 # p.313
@@ -2921,16 +2918,17 @@ with : objmode=1 {
 
 # p.412
 :sqra loc16 is objmode=1 & op0_16=0b0101011000010101; op8_8=0b00000000 & loc16 {
-	ACC = ACC + P << PM;
-	#T = loc16; # TODO
-	#P = T * T;
+	acc_add_pm_p();
+	T = loc16;
+	local prod:4 = sext(T) * sext(T);
+	P = prod;
 }
 
 # p.413
 :sqrs loc16 is objmode=1 & op0_16=0b0101011000010001; loc16 {
 	acc_sub_pm_p();
 	T = loc16;
-	local prod:4 = sext(T) * sext(loc16);
+	local prod:4 = sext(T) * sext(T);
 	P = prod;
 }
 
