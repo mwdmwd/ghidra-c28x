@@ -99,6 +99,10 @@ attach variables ar67_8 [ AR6 AR7 ];
 
 @define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) + imm16; ]"
 
+define pcodeop breakpoint;
+define pcodeop iack;
+define pcodeop intr_emu;
+
 macro mext(out, in) {
 	if (SXM) goto <sext>;
 	out = zext(in);
@@ -1111,10 +1115,14 @@ with : objmode=1 {
 }
 
 # p.193
-:estop0 is op0_16=0b0111011000100101 {}
+:estop0 is op0_16=0b0111011000100101 {
+	breakpoint();
+}
 
 # p.194
-:estop1 is op0_16=0b0111011000100100 {}
+:estop1 is op0_16=0b0111011000100100 {
+	breakpoint();
+}
 
 # p.195
 :ffc XAR7, imm22 is op6_10=0b0000000011 & XAR7 & $(imm22) {
@@ -1130,7 +1138,9 @@ with : objmode=1 {
 }
 
 # p.197
-:iack #imm16 is op0_16=0b0111011000111111; imm16 {}
+:iack #imm16 is op0_16=0b0111011000111111; imm16 {
+	iack(imm16:2);
+}
 
 # p.198
 :idle is op0_16=0b0111011000100001 {
@@ -1234,7 +1244,9 @@ with : objmode=1 {
 	intr_enter(vec4);
 }
 # p.212
-:intr "EMU" is op0_16=0b0111011000011100 {}
+:intr "EMU" is op0_16=0b0111011000011100 {
+	intr_emu();
+}
 
 # p.214
 :iret is op0_16=0b0111011000000010 {
@@ -1301,10 +1313,28 @@ with : objmode=1 {
 }
 
 # p.222
-:loopnz loc16, #imm16 is op8_8=0b00101110 & loc16; imm16 {}
+:loopnz loc16, #imm16 is op8_8=0b00101110 & loc16; imm16 {
+	LOOP = 1;
+	local masked:2 = loc16 & imm16:2;
+	N = masked[15,1];
+	Z = (masked == 0);
+	if (Z) goto <done>;
+	goto inst_start;
+<done>
+	LOOP = 0;
+}
 
 # p.224
-:loopz loc16, #imm16 is op8_8=0b00101100 & loc16; imm16 {}
+:loopz loc16, #imm16 is op8_8=0b00101100 & loc16; imm16 {
+	LOOP = 1;
+	local masked:2 = loc16 & imm16:2;
+	N = masked[15,1];
+	Z = (masked == 0);
+	if (!Z) goto <done>;
+	goto inst_start;
+<done>
+	LOOP = 0;
+}
 
 # p.226 (LPADDR)
 :setc AMODE is op0_16=0b0101011000011110 & AMODE {
@@ -2264,7 +2294,9 @@ with : objmode=1 {
 }
 
 # p.339
-:nop is op8_8=0b01110111 & loc16 {} # TODO ind arpn
+:nop is op8_8=0b01110111 & loc16 {
+	# loc16 emits the addressing-mode side effects for NOP *,ARPn forms.
+}
 
 # p.340
 :norm ACC, *    is objmode=1 & op0_16=0b0101011000100100 & ACC {
