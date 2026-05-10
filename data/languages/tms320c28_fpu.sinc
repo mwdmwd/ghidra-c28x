@@ -422,12 +422,14 @@ macro update_stf_mov(res) {
 
 # p.88
 :mov32 loc32, STF is op0_16=0b1110001000000000; amode=0 & op11_5=0b00000 & loc32 & STF {
+	packstf(STF);
 	loc32 = STF;
 }
 
 # p.98
 :mov32 STF, loc32 is op0_16=0b1110001010000000; amode=0 & op11_5=0b00000 & loc32 & STF {
 	STF = loc32;
+	unpackstf(STF);
 }
 
 # p.91 - UNCF: always moves, updates NF/ZF/NI/ZI
