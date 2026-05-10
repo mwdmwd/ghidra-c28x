@@ -265,6 +265,46 @@ macro store_p_lower38(prod64) {
 	P = s[0,32];
 }
 
+macro acc_add_pm_p() {
+	local shifted:4;
+	pmshift(shifted, P);
+	local old:4 = ACC;
+	local wide:5 = zext(old) + zext(shifted);
+	ACC = wide[0,32];
+	C = wide[32,1];
+	if (((old ^ ACC) & (shifted ^ ACC) & 0x80000000) == 0) goto <done>;
+	V = 1;
+	# TODO: OVC/OVCU and OVM saturation.
+<done>
+	flagnz(ACC);
+}
+
+macro acc_sub_pm_p() {
+	local shifted:4;
+	pmshift(shifted, P);
+	local old:4 = ACC;
+	local wide:5 = zext(old) - zext(shifted);
+	ACC = wide[0,32];
+	C = (wide[32,1] == 0);
+	if (((old ^ shifted) & (old ^ ACC) & 0x80000000) == 0) goto <done>;
+	V = 1;
+	# TODO: OVC and OVM saturation.
+<done>
+	flagnz(ACC);
+}
+
+macro acc_sub32(value) {
+	local old:4 = ACC;
+	local wide:5 = zext(old) - zext(value);
+	ACC = wide[0,32];
+	C = (wide[32,1] == 0);
+	if (((old ^ value) & (old ^ ACC) & 0x80000000) == 0) goto <done>;
+	V = 1;
+	# TODO: OVC and OVM saturation.
+<done>
+	flagnz(ACC);
+}
+
 ################################################################
 # Addressing and stuff
 ################################################################
@@ -1005,10 +1045,49 @@ with : objmode=1 {
 }
 
 # p.187
-:dmac ACC:P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001011; op8_8=0b11000111 & ACC & P & loc32 & XAR7 {}
+:dmac ACC:P, loc32, *XAR7 is objmode=1 & op0_16=0b0101011001001011; op8_8=0b11000111 & ACC & P & loc32 & XAR7 {
+	XT = loc32;
+	local coeff:4 = *:4 XAR7;
+	local prod_hi:4 = sext(XT[16,16]) * sext(coeff[16,16]);
+	local prod_lo:4 = sext(XT[0,16]) * sext(coeff[0,16]);
+	local sh_hi:4;
+	local sh_lo:4;
+	pmshift(sh_hi, prod_hi);
+	pmshift(sh_lo, prod_lo);
+	local old:4 = ACC;
+	local wide_acc:5 = zext(old) + zext(sh_hi);
+	ACC = wide_acc[0,32];
+	C = wide_acc[32,1];
+	if (((old ^ ACC) & (sh_hi ^ ACC) & 0x80000000) == 0) goto <padd>;
+	V = 1;
+	# TODO: OVC and OVM saturation for ACC.
+<padd>
+	P = P + sh_lo;
+	flagnz(ACC);
+}
 
 # p.187
-:dmac ACC:P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001011; op8_8=0b10000111 & ACC & P & loc32 & XAR7 {}
+:dmac ACC:P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001011; op8_8=0b10000111 & ACC & P & loc32 & XAR7 {
+	XT = loc32;
+	local coeff:4 = *:4 XAR7;
+	local prod_hi:4 = sext(XT[16,16]) * sext(coeff[16,16]);
+	local prod_lo:4 = sext(XT[0,16]) * sext(coeff[0,16]);
+	local sh_hi:4;
+	local sh_lo:4;
+	pmshift(sh_hi, prod_hi);
+	pmshift(sh_lo, prod_lo);
+	local old:4 = ACC;
+	local wide_acc:5 = zext(old) + zext(sh_hi);
+	ACC = wide_acc[0,32];
+	C = wide_acc[32,1];
+	if (((old ^ ACC) & (sh_hi ^ ACC) & 0x80000000) == 0) goto <padd>;
+	V = 1;
+	# TODO: OVC and OVM saturation for ACC.
+<padd>
+	P = P + sh_lo;
+	XAR7 = XAR7 + 2;
+	flagnz(ACC);
+}
 
 # p.189
 :dmov loc16 is objmode=1 & op8_8=0b10100101 & loc16 {
@@ -1078,19 +1157,46 @@ with : objmode=1 {
 }
 
 # p.201
-:impyal P, XT, loc32 is objmode=1 & op0_16=0b0101011001001100; op8_8=0b00000000 & P & XT & loc32 {}
+:impyal P, XT, loc32 is objmode=1 & op0_16=0b0101011001001100; op8_8=0b00000000 & P & XT & loc32 {
+	local old:4 = ACC;
+	local wide:5 = zext(old) + zext(P);
+	ACC = wide[0,32];
+	C = wide[32,1];
+	if (((old ^ ACC) & (P ^ ACC) & 0x80000000) == 0) goto <mul>;
+	V = 1;
+	# TODO: OVCU.
+<mul>
+	local prod:8 = sext(XT) * sext(loc32);
+	store_p_lower38(prod);
+	flagnz(ACC);
+}
 
 # p.203
-:impyl ACC, XT, loc32 is objmode=1 & op0_16=0b0101011001000100; op8_8=0b00000000 & ACC & XT & loc32 {}
+:impyl ACC, XT, loc32 is objmode=1 & op0_16=0b0101011001000100; op8_8=0b00000000 & ACC & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	ACC = prod[0,32];
+	flagnz(ACC);
+}
 
 # p.204
-:impyl P, XT, loc32 is objmode=1 & op0_16=0b0101011000000101; op8_8=0b00000000 & P & XT & loc32 {}
+:impyl P, XT, loc32 is objmode=1 & op0_16=0b0101011000000101; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	store_p_lower38(prod);
+}
 
 # p.205
-:impysl P, XT, loc32 is objmode=1 & op0_16=0b0101011001000011; op8_8=0b00000000 & P & XT & loc32 {}
+:impysl P, XT, loc32 is objmode=1 & op0_16=0b0101011001000011; op8_8=0b00000000 & P & XT & loc32 {
+	local oldp:4 = P;
+	acc_sub32(oldp);
+	local prod:8 = sext(XT) * sext(loc32);
+	store_p_lower38(prod);
+}
 
 # p.207
-:impyxul P, XT, loc32 is objmode=1 & op0_16=0b0101011001100101; op8_8=0b00000000 & P & XT & loc32 {}
+:impyxul P, XT, loc32 is objmode=1 & op0_16=0b0101011001100101; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * zext(loc32);
+	store_p_lower38(prod);
+}
 
 # p.209
 :in loc16, *(imm16) is objmode=1 & op8_8=0b10110100 & loc16; imm16 {
@@ -1382,13 +1488,33 @@ with : objmode=1 {
 }
 
 # p.242
-:mac P, loc16, 0:imm16 is op8_8=0b00010100 & P & loc16; imm16 {}
+:mac P, loc16, 0:imm16 is op8_8=0b00010100 & P & loc16; imm16 {
+	acc_add_pm_p();
+	T = loc16;
+	local coeff_addr:4 = zext(imm16:2);
+	local coeff:2 = *:2 coeff_addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
 
 # p.244
-:mac P, loc16, *XAR7 is objmode=1 & op0_16=0b0101011000000111; op8_8=0b11000111 & P & loc16 & XAR7 {}
+:mac P, loc16, *XAR7 is objmode=1 & op0_16=0b0101011000000111; op8_8=0b11000111 & P & loc16 & XAR7 {
+	acc_add_pm_p();
+	T = loc16;
+	local coeff:2 = *:2 XAR7;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
 
 # p.244
-:mac P, loc16, *XAR7++ is objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 {}
+:mac P, loc16, *XAR7++ is objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 {
+	acc_add_pm_p();
+	T = loc16;
+	local coeff:2 = *:2 XAR7;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+	XAR7 = XAR7 + 1;
+}
 
 # p.246
 :max ax0, loc16 is objmode=1 & op1_15=0b010101100111001 & ax0; op8_8=0b00000000 & loc16 { # MAX AL, @AH has the @ on ah
@@ -1983,43 +2109,92 @@ with : objmode=1 {
 }
 
 # p.320
-:mpy ACC, loc16, #imm16 is op8_8=0b00110100 & ACC & loc16; imm16 {}
+:mpy ACC, loc16, #imm16 is op8_8=0b00110100 & ACC & loc16; imm16 {
+	T = loc16;
+	local prod:4 = sext(T) * sext(imm16:2);
+	ACC = prod;
+	flagnz(ACC);
+}
 
 # p.321
-:mpy ACC, T, loc16 is op8_8=0b00010010 & ACC & T & loc16 {}
+:mpy ACC, T, loc16 is op8_8=0b00010010 & ACC & T & loc16 {
+	local prod:4 = sext(T) * sext(loc16);
+	ACC = prod;
+	flagnz(ACC);
+}
 
 # p.322
-:mpy P, loc16, #imm16 is objmode=1 & op8_8=0b10001100 & P & loc16; imm16 {}
+:mpy P, loc16, #imm16 is objmode=1 & op8_8=0b10001100 & P & loc16; imm16 {
+	local prod:4 = sext(loc16) * sext(imm16:2);
+	P = prod;
+}
 
 # p.323
-:mpy P, T, loc16 is op8_8=0b00110011 & P & T & loc16 {}
+:mpy P, T, loc16 is op8_8=0b00110011 & P & T & loc16 {
+	local prod:4 = sext(T) * sext(loc16);
+	P = prod;
+}
 
 # p.324
-:mpya P, loc16, #imm16 is op8_8=0b00010101 & P & loc16; imm16 {}
+:mpya P, loc16, #imm16 is op8_8=0b00010101 & P & loc16; imm16 {
+	acc_add_pm_p();
+	T = loc16;
+	local prod:4 = sext(T) * sext(imm16:2);
+	P = prod;
+}
 
 # p.325
-:mpya P, T, loc16 is op8_8=0b00010111 & P & T & loc16 {}
+:mpya P, T, loc16 is op8_8=0b00010111 & P & T & loc16 {
+	acc_add_pm_p();
+	local prod:4 = sext(T) * sext(loc16);
+	P = prod;
+}
 
 # p.326
-:mpyb ACC, T, #imm8 is op8_8=0b00110101 & ACC & T & imm8 {}
+:mpyb ACC, T, #imm8 is op8_8=0b00110101 & ACC & T & imm8 {
+	local prod:4 = sext(T) * zext(imm8:1);
+	ACC = prod;
+	flagnz(ACC);
+}
 
 # p.327
-:mpyb P, T, #imm8 is op8_8=0b00110001 & P & T & imm8 {}
+:mpyb P, T, #imm8 is op8_8=0b00110001 & P & T & imm8 {
+	local prod:4 = sext(T) * zext(imm8:1);
+	P = prod;
+}
 
 # p.328
-:mpys P, T, loc16 is op8_8=0b00010011 & P & T & loc16 {}
+:mpys P, T, loc16 is op8_8=0b00010011 & P & T & loc16 {
+	acc_sub_pm_p();
+	local prod:4 = sext(T) * sext(loc16);
+	P = prod;
+}
 
 # p.329
-:mpyu P, T, loc16 is op8_8=0b00110111 & P & T & loc16 {}
+:mpyu P, T, loc16 is op8_8=0b00110111 & P & T & loc16 {
+	local prod:4 = zext(T) * zext(loc16);
+	P = prod;
+}
 
 # p.330
-:mpyu ACC, T, loc16 is op8_8=0b00110110 & ACC & T & loc16 {}
+:mpyu ACC, T, loc16 is op8_8=0b00110110 & ACC & T & loc16 {
+	local prod:4 = zext(T) * zext(loc16);
+	ACC = prod;
+	flagnz(ACC);
+}
 
 # p.331
-:mpyxu ACC, T, loc16 is op8_8=0b00110000 & ACC & T & loc16 {}
+:mpyxu ACC, T, loc16 is op8_8=0b00110000 & ACC & T & loc16 {
+	local prod:4 = sext(T) * zext(loc16);
+	ACC = prod;
+	flagnz(ACC);
+}
 
 # p.332
-:mpyxu P, T, loc16 is op8_8=0b00110010 & P & T & loc16 {}
+:mpyxu P, T, loc16 is op8_8=0b00110010 & P & T & loc16 {
+	local prod:4 = sext(T) * zext(loc16);
+	P = prod;
+}
 
 # p.333
 :nasp is op0_16=0b0111011000010111 {
@@ -2029,30 +2204,162 @@ with : objmode=1 {
 }
 
 # p.334
-:neg ACC is op0_16=0b1111111101010100 & ACC {}
+:neg ACC is op0_16=0b1111111101010100 & ACC {
+	if (ACC != 0x80000000) goto <normal>;
+	V = 1;
+	if (OVM == 0) goto <normal>;
+	ACC = 0x7fffffff;
+	goto <done>;
+<normal>
+	ACC = -ACC;
+<done>
+	C = (ACC == 0);
+	flagnz(ACC);
+}
 
 # p.335
-:neg ax0 is op1_15=0b111111110101110 & ax0 {}
+:neg ax0 is op1_15=0b111111110101110 & ax0 {
+	if (ax0 != 0x8000) goto <normal>;
+	V = 1;
+<normal>
+	ax0 = -ax0;
+	C = (ax0 == 0);
+	N = ax0[15,1];
+	Z = (ax0 == 0);
+}
 
 # p.336
-:neg64 ACC:P is objmode=1 & op0_16=0b0101011001011000 & ACC & P {}
+:neg64 ACC:P is objmode=1 & op0_16=0b0101011001011000 & ACC & P {
+	local value:8 = (zext(ACC) << 32) | zext(P);
+	if (value != 0x8000000000000000) goto <normal>;
+	V = 1;
+	if (OVM == 0) goto <normal>;
+	ACC = 0x7fffffff;
+	P = 0xffffffff;
+	goto <done>;
+<normal>
+	value = -value;
+	ACC = value[32,32];
+	P = value[0,32];
+<done>
+	C = (value == 0);
+	N = ACC[31,1];
+	Z = ((ACC | P) == 0);
+}
 
 # p.337
-:negtc ACC is objmode=1 & op0_16=0b0101011000110010 & ACC {}
+:negtc ACC is objmode=1 & op0_16=0b0101011000110010 & ACC {
+	if (TC == 0) goto <done>;
+	if (ACC != 0x80000000) goto <normal>;
+	V = 1;
+	if (OVM == 0) goto <normal>;
+	ACC = 0x7fffffff;
+	goto <flags>;
+<normal>
+	ACC = -ACC;
+<flags>
+	C = (ACC == 0);
+<done>
+	flagnz(ACC);
+}
 
 # p.339
 :nop is op8_8=0b01110111 & loc16 {} # TODO ind arpn
 
 # p.340
-:norm ACC, *    is objmode=1 & op0_16=0b0101011000100100 & ACC {}
-:norm ACC, *++  is objmode=1 & op0_16=0b0101011001011010 & ACC {}
-:norm ACC, *--  is objmode=1 & op0_16=0b0101011000100000 & ACC {}
-:norm ACC, *0++ is objmode=1 & op0_16=0b0101011001110111 & ACC {}
-:norm ACC, *0-- is objmode=1 & op0_16=0b0101011000110000 & ACC {}
+:norm ACC, *    is objmode=1 & op0_16=0b0101011000100100 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *++  is objmode=1 & op0_16=0b0101011001011010 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *--  is objmode=1 & op0_16=0b0101011000100000 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *0++ is objmode=1 & op0_16=0b0101011001110111 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + zext(AR0);
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *0-- is objmode=1 & op0_16=0b0101011000110000 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - zext(AR0);
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
 
 # p.341
-:norm ACC, xarn0++ is op3_13=0b1111111101111 & ACC & xarn0 {}
-:norm ACC, xarn0-- is op3_13=0b1111111101110 & ACC & xarn0 {}
+:norm ACC, xarn0++ is op3_13=0b1111111101111 & ACC & xarn0 {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	xarn0 = xarn0 + 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, xarn0-- is op3_13=0b1111111101110 & ACC & xarn0 {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	xarn0 = xarn0 - 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
 
 # p.342
 :not ACC is op0_16=0b1111111101010101 & ACC {
@@ -2363,26 +2670,56 @@ with : objmode=1 {
 }
 
 # p.385
-:qmacl P, loc32, *XAR7   is objmode=1 & op0_16=0b0101011001001111; op8_8=0b11000111 & P & loc32 & XAR7 {}
-:qmacl P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001111; op8_8=0b10000111 & P & loc32 & XAR7 {}
+:qmacl P, loc32, *XAR7   is objmode=1 & op0_16=0b0101011001001111; op8_8=0b11000111 & P & loc32 & XAR7 {
+	acc_add_pm_p();
+	local prod:8 = sext(loc32) * sext(*:4 XAR7);
+	P = prod[32,32];
+}
+:qmacl P, loc32, *XAR7++ is objmode=1 & op0_16=0b0101011001001111; op8_8=0b10000111 & P & loc32 & XAR7 {
+	acc_add_pm_p();
+	local prod:8 = sext(loc32) * sext(*:4 XAR7);
+	P = prod[32,32];
+	XAR7 = XAR7 + 2;
+}
 
 # p.387
-:qmpyal P, XT, loc32 is objmode=1 & op0_16=0b0101011001000110; op8_8=0b00000000 & P & XT & loc32 {}
+:qmpyal P, XT, loc32 is objmode=1 & op0_16=0b0101011001000110; op8_8=0b00000000 & P & XT & loc32 {
+	acc_add_pm_p();
+	local prod:8 = sext(XT) * sext(loc32);
+	P = prod[32,32];
+}
 
 # p.388
-:qmpyl P, XT, loc32 is objmode=1 & op0_16=0b0101011001100111; op8_8=0b00000000 & P & XT & loc32 {}
+:qmpyl P, XT, loc32 is objmode=1 & op0_16=0b0101011001100111; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	P = prod[32,32];
+}
 
 # p.389
-:qmpyl ACC, XT, loc32 is objmode=1 & op0_16=0b0101011001100011; op8_8=0b00000000 & ACC & XT & loc32 {}
+:qmpyl ACC, XT, loc32 is objmode=1 & op0_16=0b0101011001100011; op8_8=0b00000000 & ACC & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	ACC = prod[32,32];
+	flagnz(ACC);
+}
 
 # p.390
-:qmpysl P, XT, loc32 is objmode=1 & op0_16=0b0101011001000101; op8_8=0b00000000 & P & XT & loc32 {}
+:qmpysl P, XT, loc32 is objmode=1 & op0_16=0b0101011001000101; op8_8=0b00000000 & P & XT & loc32 {
+	acc_sub_pm_p();
+	local prod:8 = sext(XT) * sext(loc32);
+	P = prod[32,32];
+}
 
 # p.391
-:qmpyul P, XT, loc32 is objmode=1 & op0_16=0b0101011001000111; op8_8=0b00000000 & P & XT & loc32 {}
+:qmpyul P, XT, loc32 is objmode=1 & op0_16=0b0101011001000111; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = zext(XT) * zext(loc32);
+	P = prod[32,32];
+}
 
 # p.392
-:qmpyxul P, XT, loc32 is objmode=1 & op0_16=0b0101011001000010; op8_8=0b00000000 & P & XT & loc32 {}
+:qmpyxul P, XT, loc32 is objmode=1 & op0_16=0b0101011001000010; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * zext(loc32);
+	P = prod[32,32];
+}
 
 # p.393
 :rol ACC is op0_16=0b1111111101010011 & ACC {
@@ -2410,10 +2747,43 @@ with : objmode=1 {
 }
 
 # p.396
-:sat ACC is op0_16=0b1111111101010111 & ACC {}
+:sat ACC is op0_16=0b1111111101010111 & ACC {
+	C = 0;
+	if (OVC == 0) goto <no_sat>;
+	V = 1;
+	if (OVC[5,1] != 0) goto <neg_sat>;
+	ACC = 0x7fffffff;
+	goto <done>;
+<neg_sat>
+	ACC = 0x80000000;
+	goto <done>;
+<no_sat>
+	V = 0;
+<done>
+	OVC = 0;
+	flagnz(ACC);
+}
 
 # p.397
-:sat64 ACC:P is objmode=1 & op0_16=0b0101011000111110 & ACC & P {}
+:sat64 ACC:P is objmode=1 & op0_16=0b0101011000111110 & ACC & P {
+	C = 0;
+	if (OVC == 0) goto <no_sat>;
+	V = 1;
+	if (OVC[5,1] != 0) goto <neg_sat>;
+	ACC = 0x7fffffff;
+	P = 0xffffffff;
+	goto <done>;
+<neg_sat>
+	ACC = 0x80000000;
+	P = 0;
+	goto <done>;
+<no_sat>
+	V = 0;
+<done>
+	OVC = 0;
+	N = ACC[31,1];
+	Z = ((ACC | P) == 0);
+}
 
 # p.399 Need description here
 :sb off8, cond8 is op12_4=0b0110 & off8 & cond8 {
@@ -2421,7 +2791,11 @@ with : objmode=1 {
 }
 
 # p.400
-:sbbu ACC, loc16 is op8_8=0b00011101 & ACC & loc16 {}
+:sbbu ACC, loc16 is op8_8=0b00011101 & ACC & loc16 {
+	local borrow:4 = zext(C == 0);
+	local subtrahend:4 = zext(loc16) + borrow;
+	acc_sub32(subtrahend);
+}
 
 # p.401
 :sbf off8, "EQ"  is objmode=1 & op8_8=0b11101100 & off8 {
@@ -2521,7 +2895,12 @@ with : objmode=1 {
 }
 
 # p.413
-:sqrs loc16 is objmode=1 & op0_16=0b0101011000010001; loc16 {}
+:sqrs loc16 is objmode=1 & op0_16=0b0101011000010001; loc16 {
+	acc_sub_pm_p();
+	T = loc16;
+	local prod:4 = sext(T) * sext(loc16);
+	P = prod;
+}
 
 # p.414
 :sub ACC, loc16 is objmode=1 & op8_8=0b10101110 & ACC & loc16 {
@@ -2595,13 +2974,44 @@ with : objmode=1 {
 }
 
 # p.423
-:subbl ACC, loc32 is objmode=1 & op0_16=0b0101011001010100; op8_8=0b00000000 & ACC & loc32 {}
+:subbl ACC, loc32 is objmode=1 & op0_16=0b0101011001010100; op8_8=0b00000000 & ACC & loc32 {
+	local borrow:4 = zext(C == 0);
+	local subtrahend:4 = loc32 + borrow;
+	acc_sub32(subtrahend);
+}
 
 # p.424
-:subcu ACC, loc16 is op8_8=0b00011111 & ACC & loc16 {}
+:subcu ACC, loc16 is op8_8=0b00011111 & ACC & loc16 {
+	local old:4 = ACC;
+	local subtrahend:5 = zext(loc16) << 16;
+	local temp:5 = (zext(old) << 1) - subtrahend;
+	C = (temp[32,1] == 0);
+	if (temp[32,1] != 0) goto <no_sub>;
+	if (temp[0,32] == 0) goto <no_sub>;
+	ACC = temp[0,32] + 1;
+	goto <done>;
+<no_sub>
+	ACC = old << 1;
+<done>
+	flagnz(ACC);
+}
 
 # p.426
-:subcul ACC, loc32 is objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {}
+:subcul ACC, loc32 is objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {
+	local old_acc:4 = ACC;
+	local old_p:4 = P;
+	local temp:5 = (zext(old_acc) << 1) + zext(old_p[31,1]) - zext(loc32);
+	C = (temp[32,1] == 0);
+	if (temp[32,1] != 0) goto <no_sub>;
+	ACC = temp[0,32];
+	P = (old_p << 1) + 1;
+	goto <done>;
+<no_sub>
+	ACC = (old_acc << 1) | zext(old_p[31,1]);
+	P = old_p << 1;
+<done>
+	flagnz(ACC);
+}
 
 # p.428
 :subl ACC, loc32 is objmode=1 & op8_8=0b00000011 & ACC & loc32 {
@@ -2610,7 +3020,9 @@ with : objmode=1 {
 }
 
 # p.429
-:subl ACC, P << PM is op0_16=0b0001000110101100 & ACC & P & PM {} # conflict with MOVS T, T
+:subl ACC, P << PM is op0_16=0b0001000110101100 & ACC & P & PM { # conflict with MOVS T, T
+	acc_sub_pm_p();
+}
 
 # p.430
 :subl loc32, ACC is objmode=1 & op0_16=0b0101011001000001; op8_8=0b00000000 & loc32 & ACC {
@@ -2646,7 +3058,16 @@ with : objmode=1 {
 }
 
 # p.435
-:subul P, loc32 is op0_16=0b0101011001011101; op8_8=0b00000000 & P & loc32 {}
+:subul P, loc32 is op0_16=0b0101011001011101; op8_8=0b00000000 & P & loc32 {
+	local old:4 = P;
+	local wide:5 = zext(old) - zext(loc32);
+	P = wide[0,32];
+	C = (wide[32,1] == 0);
+	if (((old ^ loc32) & (old ^ P) & 0x80000000) == 0) goto <done>;
+	V = 1;
+	# TODO: OVC and OVM saturation.
+<done>
+}
 
 # p.436
 :tbit loc16, #imm8_4 is op12_4=0b0100 & imm8_4 & loc16 {
@@ -2675,7 +3096,10 @@ with : objmode=1 {
 }
 
 # p.440
-:trap #imm5 is op5_11=0b00000000001 & imm5 {}
+:trap #imm5 is op5_11=0b00000000001 & imm5 {
+	local vector:4 = 0x3fffc0 + (zext(imm5:1) << 1);
+	intr_enter(vector);
+}
 
 # p.442
 :tset loc16, #imm8_4 is objmode=1 & op0_16=0b0101011000001101; op12_4=0b0000 & loc16 & imm8_4 {
@@ -2692,40 +3116,160 @@ with : objmode=1 {
 }
 
 # p.444
-:xb *AL is objmode=1 & op0_16=0b0101011000010100 & AL {}
+:xb *AL is objmode=1 & op0_16=0b0101011000010100 & AL {
+	local target:4 = 0x3f0000 | zext(AL);
+	goto [target];
+}
 
 # p.445
-:xb imm16, *, "ARP"^imm3 is objmode=1 & op3_13=0b0011111001110 & imm3; imm16 {}
+:xb imm16, *, "ARP"^imm3 is objmode=1 & op3_13=0b0011111001110 & imm3; imm16 {
+	ARP = imm3;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
 
 # p.446
-:xb imm16, cond is objmode=1 & op4_12=0b010101101101 & cond; imm16 {}
+:xb imm16, cond is objmode=1 & op4_12=0b010101101101 & cond; imm16 {
+	if (!cond) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
 
 # p.448
-:xbanz imm16, *                   is objmode=1 & op0_16=0b0101011000001100; imm16 {}
-:xbanz imm16, *++                 is objmode=1 & op0_16=0b0101011000001010; imm16 {}
-:xbanz imm16, *--                 is objmode=1 & op0_16=0b0101011000001011; imm16 {}
-:xbanz imm16, *0++                is objmode=1 & op0_16=0b0101011000001110; imm16 {}
-:xbanz imm16, *0--                is objmode=1 & op0_16=0b0101011000001111; imm16 {}
-:xbanz imm16, *"ARP"^imm3         is objmode=1 & op3_13=0b0011111000110 & imm3; imm16 {}
-:xbanz imm16, *++,  "ARP"^imm3    is objmode=1 & op3_13=0b0011111000111 & imm3; imm16 {}
-:xbanz imm16, *--,  "ARP"^imm3    is objmode=1 & op3_13=0b0011111001000 & imm3; imm16 {}
-:xbanz imm16, *0++, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001001 & imm3; imm16 {}
-:xbanz imm16, *0--, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001010 & imm3; imm16 {}
+:xbanz imm16, *                   is objmode=1 & op0_16=0b0101011000001100; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *++                 is objmode=1 & op0_16=0b0101011000001010; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + 1;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *--                 is objmode=1 & op0_16=0b0101011000001011; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - 1;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0++                is objmode=1 & op0_16=0b0101011000001110; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + zext(AR0);
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0--                is objmode=1 & op0_16=0b0101011000001111; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - zext(AR0);
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *"ARP"^imm3         is objmode=1 & op3_13=0b0011111000110 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *++,  "ARP"^imm3    is objmode=1 & op3_13=0b0011111000111 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + 1;
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *--,  "ARP"^imm3    is objmode=1 & op3_13=0b0011111001000 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - 1;
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0++, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001001 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + zext(AR0);
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0--, "ARP"^imm3    is objmode=1 & op3_13=0b0011111001010 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - zext(AR0);
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
 
 # p.450
-:xcall *AL is objmode=1 & op0_16=0b0101011000110100 & AL {}
+:xcall *AL is objmode=1 & op0_16=0b0101011000110100 & AL {
+	local tmp:4 = inst_next;
+	local ret:2 = tmp[0,16];
+	push16(ret);
+	local target:4 = 0x3f0000 | zext(AL);
+	call [target];
+}
 
 # p.451
-:xcall imm16, *, "ARP"^imm3 is objmode=1 & op3_13=0b0011111001101 & imm3; imm16 {}
+:xcall imm16, *, "ARP"^imm3 is objmode=1 & op3_13=0b0011111001101 & imm3; imm16 {
+	local tmp:4 = inst_next;
+	local ret:2 = tmp[0,16];
+	push16(ret);
+	ARP = imm3;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	call [target];
+}
 
 # p.452
-:xcall imm16, cond is objmode=1 & op4_12=0b010101101110 & cond; imm16 {}
+:xcall imm16, cond is objmode=1 & op4_12=0b010101101110 & cond; imm16 {
+	if (!cond) goto inst_next;
+	local tmp:4 = inst_next;
+	local ret:2 = tmp[0,16];
+	push16(ret);
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	call [target];
+}
 
 # p.454
-:xmac P, loc16, *(imm16) is objmode=1 & op8_8=0b10000100 & P & loc16; imm16 {}
+:xmac P, loc16, *(imm16) is objmode=1 & op8_8=0b10000100 & P & loc16; imm16 {
+	acc_add_pm_p();
+	T = loc16;
+	local addr:4 = 0x3f0000 | zext(imm16:2);
+	local coeff:2 = *:2 addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
 
 # p.456
-:xmacd P, loc16, *(imm16) is objmode=1 & op8_8=0b10100100 & P & loc16; imm16 {}
+:xmacd P, loc16, *(imm16) is objmode=1 & op8_8=0b10100100 & P & loc16; imm16 {
+	acc_add_pm_p();
+	local addr_loc:4 = &loc16;
+	T = loc16;
+	*:2 (addr_loc + 2) = T;
+	local addr:4 = 0x3f0000 | zext(imm16:2);
+	local coeff:2 = *:2 addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
 
 # p.458
 :xor ACC, loc16 is objmode=1 & op8_8=0b10110111 & ACC & loc16 {
