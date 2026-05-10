@@ -261,14 +261,12 @@ macro update_stf_mov(res) {
 # p.41
 :addf32 rah3, rbh3, rch3 is op0_16=0b1110011100010000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
 	rah3 = rbh3 f+ rch3;
-	update_stf(rah3);
 }
 
 # p.37 / p.39 (same encoding)
 :addf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100010 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
 	local imm32:4 = fpu_imm16 << 16;
 	rah3 = rbh3 f+ imm32;
-	update_stf(rah3);
 }
 
 # p.47
@@ -559,17 +557,21 @@ macro update_stf_mov(res) {
 # p.109
 :mpyf32 rah3, rbh3, rch3 is op0_16=0b1110011100000000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
 	rah3 = rbh3 f* rch3;
-	update_stf(rah3);
 }
 
 # p.110/111 (same encoding)
 :mpyf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100001 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
 	local imm32:4 = fpu_imm16 << 16;
 	rah3 = rbh3 f* imm32;
+}
+
+# p.117 - UNCF: always negates, updates NF/ZF
+:negf32 rah3, rbh3, cndf is op4_12=0b111001101010 & cond0_4=0b1111 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = rbh3 ^ 0x80000000;
 	update_stf(rah3);
 }
 
-# p.117
+# p.117 - conditional (non-UNCF): no flags modified
 :negf32 rah3, rbh3, cndf is op4_12=0b111001101010 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
 	local val = rbh3;
 	if (cndf) goto <true>;
@@ -578,20 +580,17 @@ macro update_stf_mov(res) {
 	val = rbh3 ^ 0x80000000;
 	<done>
 	rah3 = val;
-	update_stf(rah3);
 }
 
 # p.134
 :subf32 rah3, rbh3, rch3 is op0_16=0b1110011100100000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
 	rah3 = rbh3 f- rch3;
-	update_stf(rah3);
 }
 
 # p.135 (same encoding as SUBF32 imm)
 :subf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100011 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
 	local imm32:4 = fpu_imm16 << 16;
 	rah3 = imm32 f- rbh3;
-	update_stf(rah3);
 }
 
 # p.121
@@ -727,26 +726,22 @@ par_rfh_odd: "R7H" is p1_f2=3 { export R7H; }
 # p.114 MPYF32 RaH, RbH, RcH || ADDF32 RdH, ReH, RfH
 :mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101000 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
 	rah3 = rbh3 f* rch3;
-	update_stf(rah3);
 	p2_rdh = p2_reh3 f+ par_rfh_even;
 }
 
 :mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101000 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
 	rah3 = rbh3 f* rch3;
-	update_stf(rah3);
 	p2_rdh = p2_reh3 f+ par_rfh_odd;
 }
 
 # p.119 MPYF32 RaH, RbH, RcH || SUBF32 RdH, ReH, RfH
 :mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101010 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
 	rah3 = rbh3 f* rch3;
-	update_stf(rah3);
 	p2_rdh = p2_reh3 f- par_rfh_even;
 }
 
 :mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101010 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
 	rah3 = rbh3 f* rch3;
-	update_stf(rah3);
 	p2_rdh = p2_reh3 f- par_rfh_odd;
 }
 
