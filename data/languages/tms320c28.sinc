@@ -227,6 +227,8 @@ macro rbsub16(result, a, b) {
 }
 
 macro intr_enter(vec) {
+	RB_RAS = RB_RA;
+	RB_RA = 0;
 	packst0(ST0);
 	local ie_v1:4 = zext(ST0) | (zext(T) << 16);
 	SP = SP + 1;
@@ -539,9 +541,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 # RB_RSTART holds the byte address of the first block instruction (set by RPTB body).
 :^instruction is rpt_phase=0 & rptb_flag=1 & instruction [ rpt_phase=1; ] {
     build instruction;
-    if (RB_RC == 0) goto inst_next;
+    if (RB_RC == 0) goto <done>;
     RB_RC = RB_RC - 1;
     goto [RB_RSTART];
+<done>
+    RB_RA = 0;
 }
 
 
@@ -1269,6 +1273,8 @@ with : ctx_objmode=1 {
 	pop32(t_st0);
 	unpackst0(t_st0[0,16]);
 	T = t_st0[16,16];
+	RB_RA = RB_RAS;
+	RB_RAS = 0;
 	return [ret_pc];
 }
 

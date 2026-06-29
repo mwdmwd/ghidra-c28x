@@ -227,18 +227,18 @@ macro update_stf_mov(res) {
 # Parallel MAX/MIN
 :maxf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69c; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
 	update_stf_cmp(rah3, rbh3);
-	rch3 = p2_rdh;
 	if (!STF_NF) goto <done>;
 	rah3 = rbh3;
+	rch3 = p2_rdh;
 	<done>
 	fpu_minmax_output(rah3);
 }
 :minf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69d; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
 	update_stf_cmp(rah3, rbh3);
-	rch3 = p2_rdh;
 	if (STF_NF) goto <done>;
 	if (STF_ZF) goto <done>;
 	rah3 = rbh3;
+	rch3 = p2_rdh;
 	<done>
 	fpu_minmax_output(rah3);
 }
@@ -712,7 +712,7 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel,
 	RB_RSIZE = rsz;
 	local count:2 = loc16;
 	RB_RC = count;
-	local end_addr:4 = (inst_start + zext(rsz) + 1) & 0x7F;
+	local end_addr:4 = (inst_start + zext(rsz) + 2) & 0x7F;
 	RB_RE = end_addr[0,7];
 	RB_RA = (count != 0);
 	RB_RSTART = inst_next;
@@ -724,7 +724,7 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel,
 	RB_RSIZE = rsz;
 	local count:2 = imm16;
 	RB_RC = count;
-	local end_addr:4 = (inst_start + zext(rsz) + 1) & 0x7F;
+	local end_addr:4 = (inst_start + zext(rsz) + 2) & 0x7F;
 	RB_RE = end_addr[0,7];
 	RB_RA = (count != 0);
 	RB_RSTART = inst_next;
