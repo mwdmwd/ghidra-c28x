@@ -7,7 +7,7 @@ import sys
 from pypcode import Context, OpCode
 
 ctx = Context("tms320c28:LE:32:default")
-ctx.setVariableDefault("objmode", 1)
+ctx.setVariableDefault("ctx_objmode", 1)
 
 
 def _fmt(v):

@@ -9,8 +9,8 @@
   </default_symbols>
   <context_data>
     <context_set space="ram">
-        <set name="objmode" val="1" description="TODO"/>
-        <set name="amode" val="0" description="TODO"/>
+        <set name="ctx_objmode" val="1" description="TODO"/>
+        <set name="ctx_amode" val="0" description="TODO"/>
     </context_set>
   </context_data>
 </processor_spec>

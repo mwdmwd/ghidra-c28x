@@ -26,8 +26,8 @@ cndf: "UNCF" is cond0_4=0b1111 { local b:1 = 1; export b; }                    #
 attach variables [ p2_d3 p2_a3 p2_rdh p2_reh3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 attach variables [ p1_f3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
-# All FPU instructions have objmode=1
-with : objmode=1 {
+# All FPU instructions have ctx_objmode=1
+with : ctx_objmode=1 {
 
 macro packstf(res) {
 	local lv:4 = zext(STF_LV);
@@ -244,7 +244,7 @@ macro update_stf_mov(res) {
 }
 
 # p.86 MOV32 mem32, RaH (store)
-:mov32 loc32, rah3_8 is op0_16=0b1110001000000011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+:mov32 loc32, rah3_8 is op0_16=0b1110001000000011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	loc32 = rah3_8;
 }
 
@@ -409,13 +409,13 @@ macro update_stf_mov(res) {
 }
 
 # p.63 - no flags
-:i16tof32 rah3_8, loc16 is op0_16=0b1110001011001000; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+:i16tof32 rah3_8, loc16 is op0_16=0b1110001011001000; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
 	local e:4 = sext(loc16);
 	rah3_8 = int2float(e);
 }
 
 # p.64 - no flags
-:i32tof32 rah3_8, loc32 is op0_16=0b1110001010001000; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+:i32tof32 rah3_8, loc32 is op0_16=0b1110001010001000; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	rah3_8 = int2float(loc32);
 }
 
@@ -425,7 +425,7 @@ macro update_stf_mov(res) {
 }
 
 # p.142 - zext to 32-bit makes it a non-negative signed int, int2float is exact; no flags
-:ui16tof32 rah3_8, loc16 is op0_16=0b1110001011000100; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+:ui16tof32 rah3_8, loc16 is op0_16=0b1110001011000100; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
 	local e:4 = zext(loc16);
 	rah3_8 = int2float(e);
 }
@@ -438,7 +438,7 @@ macro update_stf_mov(res) {
 }
 
 # p.144 - zero-extend to 64-bit so it stays non-negative, then narrow back to f32; no flags
-:ui32tof32 rah3_8, loc32 is op0_16=0b1110001010000100; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+:ui32tof32 rah3_8, loc32 is op0_16=0b1110001010000100; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	local e:8 = zext(loc32);
 	local f:8 = int2float(e);
 	rah3_8 = float2float(f);
@@ -452,7 +452,7 @@ macro update_stf_mov(res) {
 }
 
 # p.82
-:mov16 loc16, rah3_8 is op0_16=0b1110001000010011; amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+:mov16 loc16, rah3_8 is op0_16=0b1110001000010011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
 	loc16 = rah3_8[0,16];
 }
 
@@ -483,25 +483,25 @@ macro update_stf_mov(res) {
 }
 
 # p.88
-:mov32 loc32, STF is op0_16=0b1110001000000000; amode=0 & op11_5=0b00000 & loc32 & STF {
+:mov32 loc32, STF is op0_16=0b1110001000000000; ctx_amode=0 & op11_5=0b00000 & loc32 & STF {
 	packstf(STF);
 	loc32 = STF;
 }
 
 # p.98
-:mov32 STF, loc32 is op0_16=0b1110001010000000; amode=0 & op11_5=0b00000 & loc32 & STF {
+:mov32 STF, loc32 is op0_16=0b1110001010000000; ctx_amode=0 & op11_5=0b00000 & loc32 & STF {
 	STF = loc32;
 	unpackstf(STF);
 }
 
 # p.91 - UNCF: always moves, updates NF/ZF/NI/ZI
-:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cond0_4=0b1111 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cond0_4=0b1111 & cndf; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	rah3_8 = loc32;
 	update_stf_mov(rah3_8);
 }
 
 # p.91 - conditional (non-UNCF): no flags modified
-:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	if (!cndf) goto <done>;
 	rah3_8 = loc32;
 	<done>
@@ -521,7 +521,7 @@ macro update_stf_mov(res) {
 }
 
 # p.101 - load RaH from mem32, copy mem32 to mem32+2
-:movd32 rah3_8, loc32 is op0_16=0b1110001000100011; amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+:movd32 rah3_8, loc32 is op0_16=0b1110001000100011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
 	local val:4 = loc32;
 	rah3_8 = val;
 	local addr:4 = &loc32;
