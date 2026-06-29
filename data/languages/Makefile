@@ -4,6 +4,9 @@ ASFLAGS := --float_support=fpu32
 DIS := $(TIBIN)dis2000
 DISFLAGS ?=
 HEX := $(TIBIN)hex2000
+CFLAGS ?= $(ASFLAGS) --abi=eabi --c11 -O2 --symdebug:none
+GHIDRA_HEADLESS ?= /opt/ghidra/support/analyzeHeadless
+GHIDRA_DECOMP_DIR := ghidra-decomp
 # -l lists conflicting patterns as errors because context-only ^instruction
 # patterns (used for RPT semantics) inherently conflict with every regular instruction
 # in SLEIGH's conflict checker, even though they resolve correctly at runtime by specificity
@@ -30,6 +33,9 @@ tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec
 
 test.obj: test.asm
 	$(Q)$(AS) $(ASFLAGS) $<
+
+abi_test.obj: abi_test.c Makefile
+	$(Q)$(AS) $(CFLAGS) --compile_only --output_file=$@ $<
 
 test.bin: test.obj
 	@$(HEX) $< --binary -o $@ 2>&1 | (grep -v '^Translating\|text ==>' || :)
@@ -93,6 +99,21 @@ qasm:
 	$(Q)$(DIS) $(DISFLAGS) quick.obj | grep . | grep -v Disassembly\ of
 	@rm -f quick.asm quick.obj
 
+# Compile a small C ABI sample with cl2000, import it into Ghidra, and decompile it.
+# Set an isolated environment to avoid using any user Ghidra settings.
+.PHONY: decompile
+decompile: tms320c28.sla abi_test.obj Decompile.java
+	@mkdir -p $(GHIDRA_DECOMP_DIR)/home $(GHIDRA_DECOMP_DIR)/config $(GHIDRA_DECOMP_DIR)/project $(GHIDRA_DECOMP_DIR)/tmp $(GHIDRA_DECOMP_DIR)/cache
+	$(Q)HOME=$$PWD/$(GHIDRA_DECOMP_DIR)/home XDG_CONFIG_HOME=$$PWD/$(GHIDRA_DECOMP_DIR)/config \
+		GHIDRA_HEADLESS_JAVA_OPTIONS="-Dapplication.tempdir=$$PWD/$(GHIDRA_DECOMP_DIR)/tmp -Dapplication.cachedir=$$PWD/$(GHIDRA_DECOMP_DIR)/cache -Djava.io.tmpdir=$$PWD/$(GHIDRA_DECOMP_DIR)/tmp" \
+		$(GHIDRA_HEADLESS) $$PWD/$(GHIDRA_DECOMP_DIR)/project abi_test \
+		-import abi_test.obj -processor tms320c28:LE:32:default -cspec default \
+		-scriptPath $$PWD -postScript Decompile.java \
+		-log $$PWD/$(GHIDRA_DECOMP_DIR)/ghidra.log \
+		-scriptlog $$PWD/$(GHIDRA_DECOMP_DIR)/script.log \
+		-analysisTimeoutPerFile 60 -overwrite -deleteProject
+
 .PHONY: clean
 clean:
-	@rm -f tms320c28.sla test.obj test.bin quick.asm quick.obj
+	@rm -rf $(GHIDRA_DECOMP_DIR)
+	@rm -f tms320c28.sla test.obj test.bin abi_test.obj quick.asm quick.obj

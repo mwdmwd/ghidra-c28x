@@ -2,4 +2,5 @@
 *.bin
 *.obj
 quick.asm
+ghidra-decomp/
 old/
