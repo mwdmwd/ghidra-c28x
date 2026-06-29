@@ -126,10 +126,12 @@ macro update_stf_mov(res) {
 	<stf_done>
 }
 
+# Parallel MOV32 store snapshots its source before the FPU side writes a possibly aliased register.
 # Parallel MOV32 instructions - e=0 (R0H-R3H)
 :addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local mov_src:4 = p2_a3;
 	p2_d3 = fpu_re_low f+ p1_f3;
-	loc32 = p2_a3;
+	loc32 = mov_src;
 }
 :addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f+ p1_f3;
@@ -138,8 +140,9 @@ macro update_stf_mov(res) {
 }
 
 :subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local mov_src:4 = p2_a3;
 	p2_d3 = fpu_re_low f- p1_f3;
-	loc32 = p2_a3;
+	loc32 = mov_src;
 }
 :subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f- p1_f3;
@@ -148,8 +151,9 @@ macro update_stf_mov(res) {
 }
 
 :mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local mov_src:4 = p2_a3;
 	p2_d3 = fpu_re_low f* p1_f3;
-	loc32 = p2_a3;
+	loc32 = mov_src;
 }
 :mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
 	p2_d3 = fpu_re_low f* p1_f3;
@@ -172,8 +176,9 @@ macro update_stf_mov(res) {
 
 # Parallel MOV32 instructions - e=1 (R4H-R7H)
 :addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local mov_src:4 = p2_a3;
 	p2_d3 = fpu_re_high f+ p1_f3;
-	loc32 = p2_a3;
+	loc32 = mov_src;
 }
 :addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f+ p1_f3;
@@ -182,8 +187,9 @@ macro update_stf_mov(res) {
 }
 
 :subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local mov_src:4 = p2_a3;
 	p2_d3 = fpu_re_high f- p1_f3;
-	loc32 = p2_a3;
+	loc32 = mov_src;
 }
 :subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f- p1_f3;
@@ -192,8 +198,9 @@ macro update_stf_mov(res) {
 }
 
 :mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local mov_src:4 = p2_a3;
 	p2_d3 = fpu_re_high f* p1_f3;
-	loc32 = p2_a3;
+	loc32 = mov_src;
 }
 :mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
 	p2_d3 = fpu_re_high f* p1_f3;
