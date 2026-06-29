@@ -30,6 +30,10 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
     <range space="ram"/>
   </global>
 
+  <returnaddress>
+    <register name="RPC"/>
+  </returnaddress>
+
   <stackpointer register="SP" space="ram" growth="positive"/>
 
   <default_proto>
@@ -37,13 +41,18 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
       <input>
         <!-- Class 3: Hidden return pointer (structure returns) -->
         <!-- Placed in XAR6 (manual sec 7.3.2) -->
-        <pentry minsize="1" maxsize="4" metatype="hiddenret">
+        <pentry minsize="1" maxsize="4" storage="hiddenret">
           <register name="XAR6"/>
         </pentry>
 
         <!-- Class 2: Pointers -->
         <!-- Placed in XAR4 and XAR5 (Manual Sec 7.3.1) -->
-        <!-- omitted, conflict -->
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR5"/>
+        </pentry>
 
         <!-- Class 1: 32-bit floats go to R0H-R3H -->
         <pentry minsize="3" maxsize="4" metatype="float">
@@ -66,7 +75,7 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="ACC"/>
         </pentry>
 
-        <!-- XAR4/XAR5: general-purpose (also used for pointer args, but they will incorrectly go to ACC first...) -->
+        <!-- XAR4/XAR5: general-purpose when not consumed by pointer arguments -->
         <pentry minsize="1" maxsize="4">
           <register name="XAR4"/>
         </pentry>
@@ -106,6 +115,28 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <register name="R7H"/>
         <register name="SP"/>
       </unaffected>
+
+      <killedbycall>
+        <register name="ACC"/>
+        <register name="P"/>
+        <register name="XT"/>
+        <register name="XAR0"/>
+        <register name="XAR4"/>
+        <register name="XAR5"/>
+        <register name="XAR6"/>
+        <register name="XAR7"/>
+        <register name="R0H"/>
+        <register name="R1H"/>
+        <register name="R2H"/>
+        <register name="R3H"/>
+        <register name="STF"/>
+        <register name="DP"/>
+        <register name="IFR"/>
+        <register name="IER"/>
+        <register name="DBGIER"/>
+        <register name="ST0"/>
+        <register name="ST1"/>
+      </killedbycall>
     </prototype>
   </default_proto>
   <prototype name="interrupt" extrapop="0" stackshift="0">
