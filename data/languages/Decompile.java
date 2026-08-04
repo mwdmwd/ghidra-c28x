@@ -12,11 +12,14 @@ public class Decompile extends GhidraScript {
             throw new RuntimeException("failed to open program in decompiler");
         }
 
-        String[] names = {
-            "abi_scale_sum",
-            "abi_make_pair",
-            "abi_dot4",
-        };
+        String[] names = getScriptArgs();
+        if (names.length == 0) {
+            names = new String[] {
+                "abi_scale_sum",
+                "abi_make_pair",
+                "abi_dot4",
+            };
+        }
 
         int count = 0;
         for (String name : names) {
