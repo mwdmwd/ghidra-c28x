@@ -1,4 +1,7 @@
-TIBIN := /home/user/re/inverter/tms320/ti-cgt-c2000_22.6.1.LTS/bin/
+
+TIBIN ?= /home/user/re/inverter/tms320/ti-cgt-c2000_22.6.1.LTS/bin/
+SLEIGH ?= /opt/ghidra/support/sleigh
+PYTHON ?= python3
 AS := $(TIBIN)cl2000
 ASFLAGS := --float_support=fpu32
 DIS := $(TIBIN)dis2000
@@ -33,7 +36,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -o pipefail -c
 
 tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec $(wildcard tms320c28*.sinc) tms320c28.slaspec
-	$(Q)/opt/ghidra/support/sleigh $(SLEIGH_REPORT_CONFLICTS) -u -t -c -a $$PWD $(SLEIGH_GREP) # -f unused fields
+	$(Q)$(SLEIGH) $(SLEIGH_REPORT_CONFLICTS) -u -t -c tms320c28.slaspec $(SLEIGH_GREP) # -f unused fields
 
 test.obj: test.asm
 	$(Q)$(AS) $(ASFLAGS) $<
@@ -69,7 +72,7 @@ dis: test.obj
 
 .PHONY: test
 test: tms320c28.sla test.bin
-	./test.py | sed -E 's/  +/ /g' | ./unhex_immediate.py
+	$(PYTHON) ./test.py | sed -E 's/  +/ /g' | ./unhex_immediate.py
 
 # Full visual diff
 .PHONY: diff
@@ -84,12 +87,17 @@ qdiff: tms320c28.sla test.bin
 # Disassemble hex words from stdin with Ghidra, to assembly
 .PHONY: qghidra
 qghidra: tms320c28.sla
-	$(Q)python3 qghidra.py
+	$(Q)$(PYTHON) qghidra.py
 
 # Disassemble hex words from stdin with Ghidra, to P-Code
 .PHONY: qpcode
 qpcode: tms320c28.sla
-	$(Q)python3 qpcode.py
+	$(Q)$(PYTHON) qpcode.py
+
+# Focused P-Code semantic regressions for compiler-critical instructions.
+.PHONY: semantic-test
+semantic-test: tms320c28.sla semantic_tests.py
+	$(Q)$(PYTHON) semantic_tests.py
 
 # Assemble instructions from stdin, print along with hex words
 .PHONY: qasm
