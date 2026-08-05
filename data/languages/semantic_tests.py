@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Focused semantic regressions for high-value C28x P-Code behavior.
 
-These tests inspect P-Code rather than instruction text. Assertions protect
-control-flow ordering, parallel source snapshotting, status updates, and
-effective-address side effects.
+These tests inspect P-Code rather than instruction text.  Most assertions protect
+structure, data dependencies, update order, and effective-address side effects;
+a small integer-only evaluator also executes boundary vectors for selected
+register-form arithmetic constructors.  It is not a hardware emulator.
 """
 
 from __future__ import annotations
@@ -199,6 +200,143 @@ def _evaluates_to_constant(ops: list, varnode, value: int) -> bool:
 
     resolved = evaluate(varnode)
     return resolved == value
+
+
+def _execute_integer_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
+    """Execute the integer-only P-Code subset used by focused flag tests.
+
+    This intentionally rejects memory and control-flow operations.  It is a
+    small execution harness for register-form arithmetic constructors, not a
+    general C28x emulator.
+    """
+
+    cells: dict[tuple[str, int], int] = {}
+    registers: dict[str, object] = {}
+
+    for op in ops:
+        for node in (*op.inputs, op.output):
+            name = _reg(node)
+            if name is not None:
+                registers.setdefault(name, node)
+
+    def mask(size: int) -> int:
+        return (1 << (size * 8)) - 1
+
+    def signed(value: int, size: int) -> int:
+        sign = 1 << (size * 8 - 1)
+        value &= mask(size)
+        return value - (1 << (size * 8)) if value & sign else value
+
+    def read(node) -> int:
+        if node.space.name == "const":
+            return node.offset & mask(node.size)
+        value = 0
+        for index in range(node.size):
+            value |= cells.get((node.space.name, node.offset + index), 0) << (index * 8)
+        return value
+
+    def write(node, value: int) -> None:
+        value &= mask(node.size)
+        for index in range(node.size):
+            cells[(node.space.name, node.offset + index)] = (value >> (index * 8)) & 0xFF
+
+    for name, value in initial.items():
+        node = registers.get(name)
+        if node is None:
+            raise AssertionError(f"register {name} is absent from P-Code")
+        write(node, value)
+
+    for op in ops:
+        if op.output is None:
+            raise AssertionError(f"unsupported side-effect P-Code op {op.opcode.name}")
+        args = [read(node) for node in op.inputs]
+        opcode = op.opcode
+        result: int
+        if opcode in (OpCode.COPY, OpCode.INT_ZEXT):
+            result = args[0]
+        elif opcode == OpCode.INT_SEXT:
+            result = signed(args[0], op.inputs[0].size)
+        elif opcode == OpCode.INT_ADD:
+            result = args[0] + args[1]
+        elif opcode == OpCode.INT_SUB:
+            result = args[0] - args[1]
+        elif opcode == OpCode.INT_MULT:
+            result = args[0] * args[1]
+        elif opcode == OpCode.INT_AND:
+            result = args[0] & args[1]
+        elif opcode == OpCode.INT_OR:
+            result = args[0] | args[1]
+        elif opcode == OpCode.INT_XOR:
+            result = args[0] ^ args[1]
+        elif opcode == OpCode.INT_NEGATE:
+            result = ~args[0]
+        elif opcode == OpCode.INT_2COMP:
+            result = -args[0]
+        elif opcode == OpCode.INT_LEFT:
+            result = args[0] << args[1]
+        elif opcode == OpCode.INT_RIGHT:
+            result = args[0] >> args[1]
+        elif opcode == OpCode.INT_SRIGHT:
+            result = signed(args[0], op.inputs[0].size) >> args[1]
+        elif opcode == OpCode.INT_EQUAL:
+            result = int(args[0] == args[1])
+        elif opcode == OpCode.INT_NOTEQUAL:
+            result = int(args[0] != args[1])
+        elif opcode == OpCode.INT_LESS:
+            result = int(args[0] < args[1])
+        elif opcode == OpCode.INT_LESSEQUAL:
+            result = int(args[0] <= args[1])
+        elif opcode == OpCode.INT_SLESS:
+            result = int(
+                signed(args[0], op.inputs[0].size) < signed(args[1], op.inputs[1].size)
+            )
+        elif opcode == OpCode.INT_SLESSEQUAL:
+            result = int(
+                signed(args[0], op.inputs[0].size) <= signed(args[1], op.inputs[1].size)
+            )
+        elif opcode == OpCode.BOOL_AND:
+            result = int(bool(args[0]) and bool(args[1]))
+        elif opcode == OpCode.BOOL_OR:
+            result = int(bool(args[0]) or bool(args[1]))
+        elif opcode == OpCode.BOOL_XOR:
+            result = int(bool(args[0]) ^ bool(args[1]))
+        elif opcode == OpCode.BOOL_NEGATE:
+            result = int(not bool(args[0]))
+        elif opcode == OpCode.SUBPIECE:
+            result = args[0] >> (args[1] * 8)
+        elif opcode == OpCode.PIECE:
+            result = (args[0] << (op.inputs[1].size * 8)) | args[1]
+        elif opcode == OpCode.INT_CARRY:
+            result = int(args[0] + args[1] > mask(op.inputs[0].size))
+        elif opcode == OpCode.INT_SCARRY:
+            width = op.inputs[0].size
+            total = signed(args[0], width) + signed(args[1], width)
+            minimum = -(1 << (width * 8 - 1))
+            maximum = (1 << (width * 8 - 1)) - 1
+            result = int(total < minimum or total > maximum)
+        elif opcode == OpCode.INT_SBORROW:
+            width = op.inputs[0].size
+            total = signed(args[0], width) - signed(args[1], width)
+            minimum = -(1 << (width * 8 - 1))
+            maximum = (1 << (width * 8 - 1)) - 1
+            result = int(total < minimum or total > maximum)
+        else:
+            raise AssertionError(f"unsupported integer P-Code op {opcode.name}")
+        write(op.output, result)
+
+    return {name: read(node) for name, node in registers.items()}
+
+
+def _assert_execution(
+    ops: list, initial: dict[str, int], expected: dict[str, int], description: str
+) -> None:
+    actual = _execute_integer_pcode(ops, initial)
+    mismatches = {
+        name: (actual.get(name), value)
+        for name, value in expected.items()
+        if actual.get(name) != value
+    }
+    assert not mismatches, f"{description}: actual/expected {mismatches}"
 
 
 def _last_load(ops: list, width: int):
@@ -940,6 +1078,290 @@ def check_signed_acc_status(ops: list) -> None:
     ), "OVM path must construct positive/negative saturation values"
 
 
+def check_signed_carry_acc_status(ops: list) -> None:
+    check_signed_acc_status(ops)
+    carry_extend = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_ZEXT
+        and op.output.size == 5
+        and op.inputs
+        and _reg(op.inputs[0]) == "C",
+        "five-byte carry-in extension",
+    )
+    _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_ADD
+        and op.output.size == 5
+        and _key(carry_extend.output) in {_key(value) for value in op.inputs},
+        "carry-in contribution to the full-width sum",
+    )
+
+
+def check_addcl_status(ops: list) -> None:
+    check_signed_carry_acc_status(ops)
+    vectors = (
+        (
+            {"ACC": 0xFFFFFFFF, "XAR6": 0xFFFFFFFF, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0xFFFFFFFF, "C": 1, "V": 0, "OVC": 0, "N": 1, "Z": 0},
+            "ADDCL retains the second carry without a signed overflow",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "XAR6": 0, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+            "ADDCL positive overflow increments OVC",
+        ),
+        (
+            {"ACC": 0x80000000, "XAR6": 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 0xFF, "N": 0, "Z": 0},
+            "ADDCL negative overflow decrements OVC",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "XAR6": 0, "C": 1, "V": 0, "OVC": 5, "OVM": 1},
+            {"ACC": 0x7FFFFFFF, "C": 0, "V": 1, "OVC": 5, "N": 0, "Z": 0},
+            "ADDCL OVM saturation suppresses OVC",
+        ),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_addcu_status(ops: list) -> None:
+    check_signed_carry_acc_status(ops)
+    vectors = (
+        (
+            {"ACC": 0xFFFFFFFF, "T": 0, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0, "C": 1, "V": 0, "OVC": 0, "N": 0, "Z": 1},
+            "ADDCU includes carry across 32 bits",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "T": 0, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+            "ADDCU carry-in participates in signed overflow",
+        ),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_signed_borrow_acc_status(ops: list) -> None:
+    check_signed_acc_status(ops)
+    borrow = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_EQUAL
+        and any(_reg(value) == "C" for value in op.inputs)
+        and any(_is_const(value, 0) for value in op.inputs),
+        "inverse-carry borrow input",
+    )
+    borrow_extend = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_ZEXT
+        and op.output.size == 5
+        and op.inputs
+        and _key(op.inputs[0]) == _key(borrow.output),
+        "five-byte borrow extension",
+    )
+    _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_SUB
+        and op.output.size == 5
+        and _key(borrow_extend.output) in {_key(value) for value in op.inputs},
+        "borrow contribution to the full-width difference",
+    )
+
+
+def check_subbl_status(ops: list) -> None:
+    check_signed_borrow_acc_status(ops)
+    vectors = (
+        (
+            {"ACC": 0, "XAR6": 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0, "C": 0, "V": 0, "OVC": 0, "N": 0, "Z": 1},
+            "SUBBL preserves borrow when operand plus inverse carry wraps",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "XAR6": 0xFFFFFFFF, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+            "SUBBL positive overflow increments OVC",
+        ),
+        (
+            {"ACC": 0x80000000, "XAR6": 1, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 0xFF, "N": 0, "Z": 0},
+            "SUBBL negative overflow decrements OVC",
+        ),
+        (
+            {"ACC": 0x80000000, "XAR6": 1, "C": 1, "V": 0, "OVC": 7, "OVM": 1},
+            {"ACC": 0x80000000, "C": 1, "V": 1, "OVC": 7, "N": 1, "Z": 0},
+            "SUBBL OVM negative saturation suppresses OVC",
+        ),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_sbbu_status(ops: list) -> None:
+    check_signed_borrow_acc_status(ops)
+    vectors = (
+        (
+            {"ACC": 0, "T": 0, "C": 0, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0, "N": 1, "Z": 0},
+            "SBBU subtracts inverse carry even for a zero operand",
+        ),
+        (
+            {"ACC": 0x80000000, "T": 1, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+            {"ACC": 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 0xFF, "N": 0, "Z": 0},
+            "SBBU negative overflow decrements OVC",
+        ),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def _check_unsigned_ovcu(ops: list, destination: str) -> None:
+    _no_internal_cfg(ops)
+    _find(ops, lambda op: _reg(op.output) == destination, f"{destination} result write")
+    _find(ops, lambda op: _reg(op.output) == "C", "carry/no-borrow write")
+    _find(
+        ops,
+        lambda op: op.opcode == OpCode.BOOL_OR and _reg(op.output) == "V",
+        "sticky signed-overflow flag",
+    )
+    ovc_write = _find(ops, lambda op: _reg(op.output) == "OVC", "OVCU counter update")
+    assert ovc_write.opcode == OpCode.INT_OR
+    assert any(
+        op.opcode == OpCode.INT_AND and any(_is_const(value, 0x3F) for value in op.inputs)
+        for op in ops
+    ), "OVCU must wrap in the architectural six-bit counter"
+    assert not any(
+        any(_reg(value) == "OVM" for value in op.inputs) for op in ops
+    ), "OVM must not suppress unsigned OVCU carry/borrow accounting"
+    _find(ops, lambda op: _reg(op.output) == "N", "negative flag update")
+    _find(ops, lambda op: _reg(op.output) == "Z", "zero flag update")
+
+
+def check_addul_acc(ops: list) -> None:
+    _check_unsigned_ovcu(ops, destination="ACC")
+    _check_addul_execution(ops, destination="ACC")
+
+
+def check_addul_p(ops: list) -> None:
+    _check_unsigned_ovcu(ops, destination="P")
+    _check_addul_execution(ops, destination="P")
+
+
+def check_subul_acc(ops: list) -> None:
+    _check_unsigned_ovcu(ops, destination="ACC")
+    _check_subul_execution(ops, destination="ACC")
+
+
+def check_subul_p(ops: list) -> None:
+    _check_unsigned_ovcu(ops, destination="P")
+    _check_subul_execution(ops, destination="P")
+
+
+def _check_addul_execution(ops: list, destination: str) -> None:
+    vectors = (
+        (
+            {destination: 0xFFFFFFFF, "XAR6": 1, "V": 0, "OVC": 0x1F},
+            {destination: 0, "C": 1, "V": 0, "OVC": 0xE0, "N": 0, "Z": 1},
+            f"ADDUL {destination} wraps OVCU from +31 to -32 on carry",
+        ),
+        (
+            {destination: 0x7FFFFFFF, "XAR6": 1, "V": 0, "OVC": 5},
+            {destination: 0x80000000, "C": 0, "V": 1, "OVC": 5, "N": 1, "Z": 0},
+            f"ADDUL {destination} sets sticky V without changing OVCU when no carry occurs",
+        ),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def _check_subul_execution(ops: list, destination: str) -> None:
+    vectors = (
+        (
+            {destination: 0, "XAR6": 1, "V": 0, "OVC": 0xE0},
+            {destination: 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0x1F, "N": 1, "Z": 0},
+            f"SUBUL {destination} wraps OVCU from -32 to +31 on borrow",
+        ),
+        (
+            {destination: 0x80000000, "XAR6": 1, "V": 0, "OVC": 5},
+            {destination: 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 5, "N": 0, "Z": 0},
+            f"SUBUL {destination} sets sticky V without changing OVCU when no borrow occurs",
+        ),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_cmpl_infinite_precision(ops: list) -> None:
+    acc_extend = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_SEXT
+        and op.output.size == 5
+        and op.inputs
+        and _reg(op.inputs[0]) == "ACC",
+        "CMPL five-byte ACC sign extension",
+    )
+    operand_extend = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_SEXT
+        and op.output.size == 5
+        and op.inputs
+        and _depends_on_register(ops, op.inputs[0], "XAR6"),
+        "CMPL five-byte operand sign extension",
+    )
+    difference = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_SUB
+        and op.output.size == 5
+        and {_key(value) for value in op.inputs}
+        == {_key(acc_extend.output), _key(operand_extend.output)},
+        "CMPL infinite-precision difference",
+    )
+    n_write = _find(ops, lambda op: _reg(op.output) == "N", "CMPL N update")
+    assert _key(difference.output) in {_key(value) for value in n_write.inputs}
+    _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_LESSEQUAL
+        and any(_depends_on_register(ops, value, "ACC") for value in op.inputs)
+        and any(_depends_on_register(ops, value, "XAR6") for value in op.inputs),
+        "CMPL unsigned no-borrow comparison",
+    )
+    assert not any(_reg(op.output) == "V" for op in ops), "CMPL must leave sticky V unchanged"
+    vectors = (
+        (
+            {"ACC": 0x80000000, "XAR6": 1},
+            {"N": 1, "Z": 0, "C": 1},
+            "CMPL infinite-precision signed negative with unsigned no-borrow",
+        ),
+        (
+            {"ACC": 0, "XAR6": 0xFFFFFFFF},
+            {"N": 0, "Z": 0, "C": 0},
+            "CMPL signed positive result with unsigned borrow",
+        ),
+        (
+            {"ACC": 0x12345678, "XAR6": 0x12345678},
+            {"N": 0, "Z": 1, "C": 1},
+            "CMPL equality",
+        ),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_cmpl_signed_branch(ops: list) -> None:
+    branch = _find(ops, lambda op: op.opcode == OpCode.CBRANCH, "signed CMPL branch")
+    predicate = branch.inputs[1]
+    assert _depends_on_register(ops, predicate, "N")
+    assert not _depends_on_register(ops, predicate, "C")
+
+
+def check_cmpl_unsigned_branch(ops: list) -> None:
+    branch = _find(ops, lambda op: op.opcode == OpCode.CBRANCH, "unsigned CMPL branch")
+    predicate = branch.inputs[1]
+    assert _depends_on_register(ops, predicate, "C")
+    assert _depends_on_register(ops, predicate, "Z")
+    assert not _depends_on_register(ops, predicate, "N")
+
+
 def check_max_snapshot(ops: list) -> None:
     snapshot = _find_index(
         ops,
@@ -1193,6 +1615,25 @@ CASES = (
         check_xar_predecrement32,
     ),
     Case("SUBL models V, signed OVC, and OVM branch-free", (0x11AC,), check_signed_acc_status),
+    Case("ADDCL includes carry in signed status", (0x5640, 0x00A6), check_addcl_status),
+    Case("ADDCU includes carry in signed status", (0x0CAC,), check_addcu_status),
+    Case("SUBBL preserves full-width inverse borrow", (0x5654, 0x00A6), check_subbl_status),
+    Case("SBBU preserves full-width inverse borrow", (0x1DAC,), check_sbbu_status),
+    Case("ADDUL ACC counts unsigned carry in OVCU", (0x5653, 0x00A6), check_addul_acc),
+    Case("ADDUL P counts unsigned carry in OVCU", (0x5657, 0x00A6), check_addul_p),
+    Case("SUBUL ACC counts unsigned borrow in OVCU", (0x5655, 0x00A6), check_subul_acc),
+    Case("SUBUL P counts unsigned borrow in OVCU", (0x565D, 0x00A6), check_subul_p),
+    Case("CMPL uses infinite-precision N and unsigned C", (0x0FA6,), check_cmpl_infinite_precision),
+    Case(
+        "compiler signed CMPL/SB LT sequence branches from N",
+        (0x0FA6, 0x6403),
+        check_cmpl_signed_branch,
+    ),
+    Case(
+        "compiler unsigned CMPL/SB HI sequence branches from C and Z",
+        (0x0FA6, 0x6603),
+        check_cmpl_unsigned_branch,
+    ),
     Case("MAXF32||MOV32 snapshots aliased source", (0xE69C, 0x0088), check_max_snapshot),
     Case("PUSH ST0 encodes decoded PM and six-bit OVC", (0x7618,), check_push_st0_encoding),
     Case("POP ST0 decodes PM and sign-extends OVC", (0x7613,), check_pop_st0_decoding),

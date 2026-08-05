@@ -370,6 +370,81 @@ macro acc_sub32(value) {
 	commit_acc_signed(wrapped, old, overflow);
 }
 
+# Carry/borrow-chain variants use full-width arithmetic for both the unsigned
+# carry/no-borrow result and the signed overflow decision.  Keeping the
+# incoming C contribution five bytes wide avoids losing a second carry or
+# borrow when the 32-bit intermediate itself wraps.
+macro acc_add_carry32(value) {
+	local old:4 = ACC;
+	local carry_wide:5 = zext(C);
+	local unsigned_wide:5 = zext(old) + zext(value) + carry_wide;
+	local signed_wide:5 = sext(old) + sext(value) + carry_wide;
+	local wrapped:4 = unsigned_wide[0,32];
+	local overflow:1 = (signed_wide != sext(wrapped));
+	C = unsigned_wide[32,1];
+	commit_acc_signed(wrapped, old, overflow);
+}
+
+macro acc_sub_borrow32(value) {
+	local old:4 = ACC;
+	local borrow:1 = (C == 0);
+	local borrow_wide:5 = zext(borrow);
+	local unsigned_wide:5 = zext(old) - zext(value) - borrow_wide;
+	local signed_wide:5 = sext(old) - sext(value) - borrow_wide;
+	local wrapped:4 = unsigned_wide[0,32];
+	local overflow:1 = (signed_wide != sext(wrapped));
+	C = (unsigned_wide[32,1] == 0);
+	commit_acc_signed(wrapped, old, overflow);
+}
+
+# OVCU is the same physical six-bit signed counter as OVC, but unsigned
+# ADD/SUB instructions count carry/borrow independently of OVM.
+macro ovcu_increment(event) {
+	local event_mask:1 = 0 - event;
+	local delta:1 = 1 & event_mask;
+	local next:1 = OVC + delta;
+	local raw:1 = next & 0x3f;
+	local sign_mask:1 = 0 - raw[5,1];
+	OVC = raw | (sign_mask & 0xc0);
+}
+
+macro ovcu_decrement(event) {
+	local event_mask:1 = 0 - event;
+	local delta:1 = 0xff & event_mask;
+	local next:1 = OVC + delta;
+	local raw:1 = next & 0x3f;
+	local sign_mask:1 = 0 - raw[5,1];
+	OVC = raw | (sign_mask & 0xc0);
+}
+
+macro add_unsigned32(destination, value) {
+	local old:4 = destination;
+	local unsigned_wide:5 = zext(old) + zext(value);
+	local signed_wide:5 = sext(old) + sext(value);
+	local wrapped:4 = unsigned_wide[0,32];
+	local carry:1 = unsigned_wide[32,1];
+	local overflow:1 = (signed_wide != sext(wrapped));
+	destination = wrapped;
+	C = carry;
+	V = V || overflow;
+	ovcu_increment(carry);
+	flagnz(destination);
+}
+
+macro sub_unsigned32(destination, value) {
+	local old:4 = destination;
+	local unsigned_wide:5 = zext(old) - zext(value);
+	local signed_wide:5 = sext(old) - sext(value);
+	local wrapped:4 = unsigned_wide[0,32];
+	local borrow:1 = (unsigned_wide[32,1] != 0);
+	local overflow:1 = (signed_wide != sext(wrapped));
+	destination = wrapped;
+	C = (borrow == 0);
+	V = V || overflow;
+	ovcu_decrement(borrow);
+	flagnz(destination);
+}
+
 # MOVB indexed offsets are byte indices over the word-addressed C28x data
 # space (SPRU430F Section 5.10).  Divide the offset by two for the RAM word
 # address and use bit zero to select the low or high byte.  The branch-free
@@ -1868,22 +1943,16 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	xarn8 = xarn8 + imm7;
 }
 
-# p.138
+# p.138; SPRU430F ADDCL flags and modes.
 :addcl ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {
-	local result:5 = zext(ACC) + zext(loc32) + zext(C);
-	ACC = result[0, 32];
-	C = result[32, 1];
-	flagnz(ACC);
-	# TODO V, OVC, OVM
+	local value:4 = loc32;
+	acc_add_carry32(value);
 }
 
-# p.139
+# p.139; SPRU430F ADDCU flags and modes.
 :addcu ACC, loc16 is op8_8=0b00001100 & ACC & loc16 {
-	local result:5 = zext(ACC) + zext(loc16) + zext(C);
-	ACC = result[0, 32];
-	C = result[32, 1];
-	flagnz(ACC);
-	# TODO V, OVC, OVM
+	local value:4 = zext(loc16);
+	acc_add_carry32(value);
 }
 
 # p.140
@@ -1910,22 +1979,16 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	acc_add32(value);
 }
 
-# p.144
+# p.144; SPRU430F ADDUL P uses unsigned carry-counting OVCU.
 :addul P, loc32 is ctx_objmode=1 & op0_16=0b0101011001010111 & P; op8_8=0b00000000 & loc32 {
-	local result:5 = zext(P) + zext(loc32);
-	P = result[0, 32];
-	C = result[32, 1];
-	flagnz(P);
-	# TODO V, OVCU
+	local value:4 = loc32;
+	add_unsigned32(P, value);
 }
 
-# p.145
+# p.145; SPRU430F ADDUL ACC uses unsigned carry-counting OVCU.
 :addul ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001010011 & ACC; loc32 {
-	local result:5 = zext(ACC) + zext(loc32);
-	ACC = result[0, 32];
-	C = result[32, 1];
-	flagnz(ACC);
-	# TODO V, OVCU
+	local value:4 = loc32;
+	add_unsigned32(ACC, value);
 }
 
 # p.146
@@ -4122,11 +4185,10 @@ with : ctx_objmode=1 {
 	if (cond8) goto off8;
 }
 
-# p.400
+# p.400; SPRU430F SBBU flags and modes.
 :sbbu ACC, loc16 is op8_8=0b00011101 & ACC & loc16 {
-	local borrow:4 = zext(C == 0);
-	local subtrahend:4 = zext(loc16) + borrow;
-	acc_sub32(subtrahend);
+	local value:4 = zext(loc16);
+	acc_sub_borrow32(value);
 }
 
 # p.401
@@ -4316,11 +4378,10 @@ with : ctx_objmode=1 {
 	xarn8 = xarn8 - imm7;
 }
 
-# p.423
+# p.423; SPRU430F SUBBL flags and modes.
 :subbl ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001010100; op8_8=0b00000000 & ACC & loc32 {
-	local borrow:4 = zext(C == 0);
-	local subtrahend:4 = loc32 + borrow;
-	acc_sub32(subtrahend);
+	local value:4 = loc32;
+	acc_sub_borrow32(value);
 }
 
 # p.424
@@ -4394,22 +4455,16 @@ with : ctx_objmode=1 {
 	acc_sub32(value);
 }
 
-# p.434
+# p.434; SPRU430F SUBUL ACC uses unsigned borrow-counting OVCU.
 :subul ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001010101; op8_8=0b00000000 & ACC & loc32 {
-	ACC = ACC - loc32;
-	flagnz(ACC);
+	local value:4 = loc32;
+	sub_unsigned32(ACC, value);
 }
 
-# p.435
+# p.435; SPRU430F SUBUL P uses unsigned borrow-counting OVCU.
 :subul P, loc32 is op0_16=0b0101011001011101; op8_8=0b00000000 & P & loc32 {
-	local old:4 = P;
-	local wide:5 = zext(old) - zext(loc32);
-	P = wide[0,32];
-	C = (wide[32,1] == 0);
-	if (((old ^ loc32) & (old ^ P) & 0x80000000) == 0) goto <done>;
-	V = 1;
-	# TODO: OVC and OVM saturation.
-<done>
+	local value:4 = loc32;
+	sub_unsigned32(P, value);
 }
 
 # p.436

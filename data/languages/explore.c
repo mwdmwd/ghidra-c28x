@@ -2,6 +2,8 @@ typedef unsigned int u16;
 typedef int s16;
 typedef unsigned long u32;
 typedef long s32;
+typedef unsigned long long u64;
+typedef long long s64;
 
 typedef struct {
     u16 lo;
@@ -60,6 +62,43 @@ u16 probe_cmp_u32(u32 a, u32 b)
 {
     if (a >= b) return 11u;
     return 13u;
+}
+
+s16 probe_cmp_s32_boundaries(s32 value)
+{
+    if (value == (-2147483647L - 1L)) return -2;
+    if (value < -1L) return -1;
+    if (value == 0L) return 0;
+    if (value >= 2147483647L) return 2;
+    return 1;
+}
+
+u16 probe_cmp_u32_boundaries(u32 value)
+{
+    if (value == 0UL) return 0u;
+    if (value < 0x80000000UL) return 1u;
+    if (value == 0xffffffffUL) return 3u;
+    return 2u;
+}
+
+u64 probe_add_u64(u64 a, u64 b)
+{
+    return a + b;
+}
+
+u64 probe_sub_u64(u64 a, u64 b)
+{
+    return a - b;
+}
+
+u64 probe_add_u64_mem(const u64 *a, const u64 *b)
+{
+    return *a + *b;
+}
+
+u64 probe_sub_u64_mem(const u64 *a, const u64 *b)
+{
+    return *a - *b;
 }
 
 u32 probe_sum_u16(const u16 *p, u16 n)
