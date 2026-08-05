@@ -104,12 +104,12 @@ define pcodeop iack;
 define pcodeop intr_emu;
 
 macro mext(out, in) {
-	if (SXM) goto <sext>;
-	out = zext(in);
-	goto <ret>;
-	<sext>
-	out = sext(in);
-	<ret>
+	local sxm_mask:4 = 0 - zext(SXM);
+	local zval:4 = zext(in);
+	local sval:4 = sext(in);
+	# Sign extension only contributes upper bits, the low 16 bits are identical in both forms.
+	# This equivalent expression is easier for the decompiler to fold when the sign bit is known.
+	out = zval | (sval & sxm_mask);
 }
 
 macro push16(val16) {
@@ -252,62 +252,90 @@ macro intr_enter(vec) {
 	call [vec];
 }
 
-# PM positive - left shift, PM negative - right shift, PM zero - no shift
+# PM positive - left shift, PM negative - arithmetic right shift, PM zero - no shift.
+# Keep this branch-free so a status-controlled data operation does not manufacture CFG edges.
 macro pmshift(result, in) {
-	if (PM s>= 0) goto <l>;
-	result = in s>> (-PM);
-	goto <d>;
-<l>
-	result = in << PM;
-<d>
+	local is_right:1 = (PM s< 0);
+	local right_mask:4 = 0 - zext(is_right);
+	local pm_value:4 = sext(PM);
+	local left_count:4 = pm_value & ~right_mask;
+	local right_count:4 = (-pm_value) & right_mask;
+	local left_value:4 = in << left_count;
+	local right_value:4 = in s>> right_count;
+	result = (left_value & ~right_mask) | (right_value & right_mask);
+}
+
+macro pmshift64(result, in) {
+	local is_right:1 = (PM s< 0);
+	local right_mask:8 = 0 - zext(is_right);
+	local pm_value:8 = sext(PM);
+	local left_count:8 = pm_value & ~right_mask;
+	local right_count:8 = (-pm_value) & right_mask;
+	local left_value:8 = in << left_count;
+	local right_value:8 = in s>> right_count;
+	result = (left_value & ~right_mask) | (right_value & right_mask);
 }
 
 # Store lower 38 bits of a 64-bit product into P, applying PM shift mode
 macro store_p_lower38(prod64) {
 	local t:8 = prod64 & 0x3FFFFFFFFF;
 	local s:8;
-	pmshift(s, t);
+	pmshift64(s, t);
 	P = s[0,32];
 }
 
-macro acc_add_pm_p() {
-	local shifted:4;
-	pmshift(shifted, P);
-	local old:4 = ACC;
-	local wide:5 = zext(old) + zext(shifted);
-	ACC = wide[0,32];
-	C = wide[32,1];
-	if (((old ^ ACC) & (shifted ^ ACC) & 0x80000000) == 0) goto <done>;
-	V = 1;
-	# TODO: OVC/OVCU and OVM saturation.
-<done>
+# Commit a signed 32-bit ACC result, including the sticky V flag, signed six-bit
+# overflow counter, and OVM saturation. Positive/negative overflow direction
+# is determined by the sign of the original ACC for both addition and
+# subtraction. The branch-free selects avoid manufacturing analysis CFG edges.
+macro commit_acc_signed(wrapped, old, overflow) {
+	local old_negative:1 = old[31,1];
+	local count_active:1 = overflow && (OVM == 0);
+	local count_mask:1 = 0 - count_active;
+	local count_direction:1 = 1 - (old_negative << 1); # +1 positive, -1 negative
+	local ovc_delta:1 = count_direction & count_mask;
+	local ovc_next:1 = OVC + ovc_delta;
+	local ovc_raw:1 = ovc_next & 0x3f;
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+
+	local saturate:1 = overflow && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	local result_sign_mask:4 = 0 - zext(old_negative);
+	local saturation_value:4 = 0x7fffffff ^ result_sign_mask;
+	ACC = (wrapped & ~saturate_mask) | (saturation_value & saturate_mask);
+	V = V || overflow;
 	flagnz(ACC);
 }
 
-macro acc_sub_pm_p() {
-	local shifted:4;
-	pmshift(shifted, P);
+macro acc_add32(value) {
 	local old:4 = ACC;
-	local wide:5 = zext(old) - zext(shifted);
-	ACC = wide[0,32];
-	C = (wide[32,1] == 0);
-	if (((old ^ shifted) & (old ^ ACC) & 0x80000000) == 0) goto <done>;
-	V = 1;
-	# TODO: OVC and OVM saturation.
-<done>
-	flagnz(ACC);
+	local wide:5 = zext(old) + zext(value);
+	local wrapped:4 = wide[0,32];
+	C = wide[32,1];
+	local overflow:1 = (((old ^ wrapped) & (value ^ wrapped) & 0x80000000) != 0);
+	commit_acc_signed(wrapped, old, overflow);
 }
 
 macro acc_sub32(value) {
 	local old:4 = ACC;
 	local wide:5 = zext(old) - zext(value);
-	ACC = wide[0,32];
+	local wrapped:4 = wide[0,32];
 	C = (wide[32,1] == 0);
-	if (((old ^ value) & (old ^ ACC) & 0x80000000) == 0) goto <done>;
-	V = 1;
-	# TODO: OVC and OVM saturation.
-<done>
-	flagnz(ACC);
+	local overflow:1 = (((old ^ value) & (old ^ wrapped) & 0x80000000) != 0);
+	commit_acc_signed(wrapped, old, overflow);
+}
+
+macro acc_add_pm_p() {
+	local shifted:4;
+	pmshift(shifted, P);
+	acc_add32(shifted);
+}
+
+macro acc_sub_pm_p() {
+	local shifted:4;
+	pmshift(shifted, P);
+	acc_sub32(shifted);
 }
 
 ################################################################
@@ -590,48 +618,47 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :add ACC, #imm16 << #shift0_4 is op4_12=0b111111110001 & ACC & shift0_4; imm16 {
 	local tmp:4;
 	mext(tmp, imm16:2);
-	ACC = ACC + (tmp << shift0_4);
-	flagnz(ACC);
+	local value:4 = tmp << shift0_4;
+	acc_add32(value);
 }
 
 # p.129
 :add ACC, loc16 << T is ctx_objmode=1 & op0_16=0b0101011000100011 & ACC & T; op8_8=0 & loc16 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC + (tmp << T[0,4]);
-	flagnz(ACC);
+	local value:4 = tmp << T[0,4];
+	acc_add32(value);
 }
 
 # p.130
 :add ACC, loc16 is ctx_objmode=1 & op8_8=0b10000001 & ACC & loc16 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC + tmp;
-	flagnz(ACC);
+	acc_add32(tmp);
 }
 
 # p.130
 :add ACC, loc16 << #shift8_4 is ctx_objmode=1 & op0_16=0b0101011000000100; op12_4=0b0000 & ACC & loc16 & shift8_4 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC + (tmp << shift8_4);
-	flagnz(ACC);
+	local value:4 = tmp << shift8_4;
+	acc_add32(value);
 }
 
 # p.130
 :add ACC, loc16 << #16 is op8_8=0b00000101 & ACC & loc16 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC + (tmp << 16);
-	flagnz(ACC);
+	local value:4 = tmp << 16;
+	acc_add32(value);
 }
 
 # p.130
 :add ACC, loc16 << #shift0_4 is op12_4=0b1010 & ctx_objmode=0 & ACC & loc16 & shift0_4 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC + (tmp << shift0_4);
-	flagnz(ACC);
+	local value:4 = tmp << shift0_4;
+	acc_add32(value);
 }
 
 # p.131
@@ -656,9 +683,8 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.134
 :addb ACC, #imm8 is op8_8=0b00001001 & ACC & imm8 {
-	ACC = ACC + imm8;
-	flagnz(ACC);
-	# TODO C V OVC OVM (saturate)
+	local value:4 = zext(imm8:1);
+	acc_add32(value);
 }
 
 # p.135
@@ -698,8 +724,8 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.140
 :addl ACC, loc32 is op8_8=0b00000111 & ACC & loc32 {
-	ACC = ACC + loc32;
-	flagnz(ACC);
+	local value:4 = loc32;
+	acc_add32(value);
 }
 
 # p.141
@@ -716,12 +742,8 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.143
 :addu ACC, loc16 is op8_8=0b00001101 & ACC & loc16 {
-	ACC = ACC + zext(loc16);
-	flagnz(ACC);
-	# TODO C flag
-	# TODO V flag
-	# TODO OVC overflow counter
-	# TODO OVM saturation
+	local value:4 = zext(loc16);
+	acc_add32(value);
 }
 
 # p.144
@@ -2951,43 +2973,41 @@ with : ctx_objmode=1 {
 :sub ACC, loc16 is ctx_objmode=1 & op8_8=0b10101110 & ACC & loc16 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC - tmp;
-	flagnz(ACC);
+	acc_sub32(tmp);
 }
 :sub ACC, loc16 is ctx_objmode=0 & op8_8=0b10000000 & ACC & loc16 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC - tmp;
-	flagnz(ACC);
+	acc_sub32(tmp);
 }
 :sub ACC, loc16 << #shift8_4 is ctx_objmode=1 & op0_16=0b0101011000000000; op12_4=0b0000 & ACC & loc16 & shift8_4 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC - (tmp << shift8_4);
-	flagnz(ACC);
+	local value:4 = tmp << shift8_4;
+	acc_sub32(value);
 }
 #:sub ACC, loc16 << #shift8_4 is ctx_objmode=0 & op12_4=0b1000 & ACC & loc16 & shift8_4 {} # TODO conflict with `POP XT`
 :sub ACC, loc16 << #16 is op8_8=0b00000100 & ACC & loc16 {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC - (tmp << 16);
-	flagnz(ACC);
+	local value:4 = tmp << 16;
+	acc_sub32(value);
 }
 
 # p.416
 :sub ACC, loc16 << T is ctx_objmode=1 & op0_16=0b0101011000100111; op8_8=0b00000000 & ACC & loc16 & T {
 	local tmp:4;
 	mext(tmp, loc16);
-	ACC = ACC - (tmp << T[0,4]);
-	flagnz(ACC);
+	local value:4 = tmp << T[0,4];
+	acc_sub32(value);
 }
 
 # p.417
 :sub ACC, #imm16 << #shift0_4 is op4_12=0b111111110000 & shift0_4; ACC & imm16 {
 	local tmp:4;
 	mext(tmp, imm16:2);
-	ACC = ACC - (tmp << shift0_4);
-	flagnz(ACC);
+	local value:4 = tmp << shift0_4;
+	acc_sub32(value);
 }
 
 # p.418
@@ -3005,7 +3025,8 @@ with : ctx_objmode=1 {
 
 # p.420
 :subb ACC, #imm8 is op8_8=0b00011001 & ACC & imm8 {
-	ACC = ACC - imm8;
+	local value:4 = zext(imm8:1);
+	acc_sub32(value);
 }
 
 # p.421
@@ -3060,8 +3081,8 @@ with : ctx_objmode=1 {
 
 # p.428
 :subl ACC, loc32 is ctx_objmode=1 & op8_8=0b00000011 & ACC & loc32 {
-	ACC = ACC - loc32;
-	flagnz(ACC);
+	local value:4 = loc32;
+	acc_sub32(value);
 }
 
 # p.429
@@ -3092,8 +3113,8 @@ with : ctx_objmode=1 {
 
 # p.433
 :subu ACC, loc16 is op8_8=0b00000001 & ACC & loc16 {
-	ACC = ACC - zext(loc16);
-	flagnz(ACC);
+	local value:4 = zext(loc16);
+	acc_sub32(value);
 }
 
 # p.434
