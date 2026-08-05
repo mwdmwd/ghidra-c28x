@@ -137,6 +137,13 @@ macro pop32(ret32) {
 }
 
 macro packst0(res) {
+	# Internally PM is kept as its decoded signed shift (-6..+4), while ST0
+	# stores the architectural 3-bit code.  For every normal code the mapping
+	# is raw = (1 - shift) & 7; raw 101 represents either -4 or +4 depending
+	# on AMODE, and both encode to the same value.
+	local pm_signed:2 = sext(PM);
+	local pm_raw:2 = (1 - pm_signed) & 7;
+	local ovc_raw:2 = zext(OVC) & 0x3f;
 	res = (zext(SXM)
 		| (zext(OVM) << 1)
 		| (zext(TC) << 2)
@@ -144,13 +151,24 @@ macro packst0(res) {
 		| (zext(Z) << 4)
 		| (zext(N) << 5)
 		| (zext(V) << 6)
-		| (zext(PM) << 7)
-		| (zext(OVC) << 10));
+		| (pm_raw << 7)
+		| (ovc_raw << 10));
 }
 
 macro unpackst0(in) {
-	OVC = in[10,6];
-	PM  = in[7,3];
+	# OVC is a signed six-bit counter. Preserve that signed interpretation in
+	# the one-byte internal register so comparisons and wraparound are correct.
+	local ovc_raw:1 = in[10,6];
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+
+	# Decode the raw PM field into the signed shift used by pmshift().  Raw 101
+	# is the sole AMODE-dependent value: -4 in C28x mode, +4 in C2xLP mode.
+	local pm_raw:1 = in[7,3];
+	local pm_default:1 = 1 - pm_raw;
+	local pm_plus4:1 = (AMODE != 0) && (pm_raw == 5);
+	local pm_plus4_mask:1 = 0 - pm_plus4;
+	PM = (pm_default & ~pm_plus4_mask) | (4 & pm_plus4_mask);
 	V   = in[6,1];
 	N   = in[5,1];
 	Z   = in[4,1];
