@@ -116,14 +116,11 @@ macro fpu_minmax_output(out) {
 
 # MOV32/MOVD32 flag update: ZF/NF based on exponent field; also NI/ZI
 macro update_stf_mov(res) {
+	local zero_exp:1 = ((res & 0x7F800000) == 0);
 	STF_NI = res[31,1];
 	STF_ZI = (res == 0);
-	STF_NF = res[31,1];
-	STF_ZF = 0;
-	if ((res & 0x7F800000) != 0) goto <stf_done>;
-	STF_ZF = 1;
-	STF_NF = 0;
-	<stf_done>
+	STF_ZF = zero_exp;
+	STF_NF = res[31,1] && !zero_exp;
 }
 
 # Parallel MOV32 store snapshots its source before the FPU side writes a possibly aliased register.
@@ -233,19 +230,25 @@ macro update_stf_mov(res) {
 
 # Parallel MAX/MIN
 :maxf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69c; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
+	# Parallel sources are read before either destination is written. RdH is allowed
+	# to alias RaH, so preserve it before MAXF32 potentially replaces RaH.
+	local move_src:4 = p2_rdh;
 	update_stf_cmp(rah3, rbh3);
 	if (!STF_NF) goto <done>;
 	rah3 = rbh3;
-	rch3 = p2_rdh;
+	rch3 = move_src;
 	<done>
 	fpu_minmax_output(rah3);
 }
 :minf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69d; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
+	# Parallel sources are read before either destination is written. RdH is allowed
+	# to alias RaH, so preserve it before MINF32 potentially replaces RaH.
+	local move_src:4 = p2_rdh;
 	update_stf_cmp(rah3, rbh3);
 	if (STF_NF) goto <done>;
 	if (STF_ZF) goto <done>;
 	rah3 = rbh3;
-	rch3 = p2_rdh;
+	rch3 = move_src;
 	<done>
 	fpu_minmax_output(rah3);
 }
@@ -542,7 +545,8 @@ macro update_stf_mov(res) {
 
 # p.106
 :movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
-	rah3[16,16] = fpu_imm16;
+	# MOVXI replaces only RaH[15:0]; the upper half from a preceding MOVIZ is retained.
+	rah3 = (rah3 & 0xFFFF0000) | zext(fpu_imm16:2);
 }
 
 # p.106 - copy selected STF flags to ST0; clear LUF/LVF if selected
@@ -768,24 +772,48 @@ par_rfh_odd: "R7H" is p1_f2=3 { export R7H; }
 
 # p.114 MPYF32 RaH, RbH, RcH || ADDF32 RdH, ReH, RfH
 :mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101000 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
-	rah3 = rbh3 f* rch3;
-	p2_rdh = p2_reh3 f+ par_rfh_even;
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local add_lhs:4 = p2_reh3;
+	local add_rhs:4 = par_rfh_even;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local add_result:4 = add_lhs f+ add_rhs;
+	rah3 = mul_result;
+	p2_rdh = add_result;
 }
 
 :mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101000 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
-	rah3 = rbh3 f* rch3;
-	p2_rdh = p2_reh3 f+ par_rfh_odd;
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local add_lhs:4 = p2_reh3;
+	local add_rhs:4 = par_rfh_odd;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local add_result:4 = add_lhs f+ add_rhs;
+	rah3 = mul_result;
+	p2_rdh = add_result;
 }
 
 # p.119 MPYF32 RaH, RbH, RcH || SUBF32 RdH, ReH, RfH
 :mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101010 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
-	rah3 = rbh3 f* rch3;
-	p2_rdh = p2_reh3 f- par_rfh_even;
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local sub_lhs:4 = p2_reh3;
+	local sub_rhs:4 = par_rfh_even;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local sub_result:4 = sub_lhs f- sub_rhs;
+	rah3 = mul_result;
+	p2_rdh = sub_result;
 }
 
 :mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101010 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
-	rah3 = rbh3 f* rch3;
-	p2_rdh = p2_reh3 f- par_rfh_odd;
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local sub_lhs:4 = p2_reh3;
+	local sub_rhs:4 = par_rfh_odd;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local sub_result:4 = sub_lhs f- sub_rhs;
+	rah3 = mul_result;
+	p2_rdh = sub_result;
 }
 
 }
