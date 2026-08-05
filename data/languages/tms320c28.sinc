@@ -64,6 +64,7 @@ define token opcode (16)
 	imm4		= (0,3)
 	imm5		= (0,4)
 	imm6		= (0,5)
+	page0_bit	= (6,6)
 	imm7		= (0,6)
 	imm8		= (0,7)
 	imm8_4		= (8,11)
@@ -244,6 +245,31 @@ macro rbsub16(result, a, b) {
 	result = rr;
 }
 
+# AMODE=0 circular mode: use the old XAR6 as the effective address, then
+# either clear AR6[7:0] at the AR1[7:0] limit or advance by the operand width.
+# Preserve XAR6[31:16] and AR6[15:8] without intra-instruction branches.
+macro circular_amode0_update(delta) {
+	local at_limit:1 = (AR6:1 == AR1:1);
+	local limit_mask:2 = 0 - zext(at_limit);
+	local advanced:2 = AR6 + delta;
+	local wrapped:2 = AR6 & 0xff00;
+	local next:2 = (advanced & ~limit_mask) | (wrapped & limit_mask);
+	XAR6 = (XAR6 & 0xffff0000) | zext(next);
+}
+
+# AMODE=1 circular mode: XAR6 is the fixed base and XAR1[15:0] is the
+# index.  Compare the old index with XAR1[31:16], wrap to zero at the limit,
+# otherwise advance by the operand width, and preserve the upper limit half.
+macro circular_amode1_address(addr, delta) {
+	local index:2 = AR1;
+	addr = XAR6 + zext(index);
+	local at_limit:1 = (index == AR1H);
+	local limit_mask:2 = 0 - zext(at_limit);
+	local advanced:2 = index + delta;
+	local next:2 = advanced & ~limit_mask;
+	XAR1 = (XAR1 & 0xffff0000) | zext(next);
+}
+
 macro intr_enter(vec) {
 	RB_RAS = RB_RA;
 	RB_RA = 0;
@@ -344,6 +370,30 @@ macro acc_sub32(value) {
 	commit_acc_signed(wrapped, old, overflow);
 }
 
+# MOVB indexed offsets are byte indices over the word-addressed C28x data
+# space (SPRU430F Section 5.10).  Divide the offset by two for the RAM word
+# address and use bit zero to select the low or high byte.  The branch-free
+# shift/select keeps data-dependent byte parity out of the instruction CFG.
+macro byte_word_address(result, base, offset) {
+	local word_offset:2 = offset >> 1;
+	result = base + zext(word_offset);
+}
+
+macro select_word_byte(result, word, high) {
+	local shift:2 = zext(high) << 3;
+	local shifted:2 = word >> shift;
+	result = shifted:1;
+}
+
+macro store_word_byte(addr, high, value) {
+	local old_word:2 = *:2 addr;
+	local shift:2 = zext(high) << 3;
+	local byte_mask:2 = 0xff << shift;
+	local inserted:2 = zext(value) << shift;
+	local merged:2 = (old_word & ~byte_mask) | (inserted & byte_mask);
+	*:2 addr = merged;
+}
+
 macro acc_add_pm_p() {
 	local shifted:4;
 	pmshift(shifted, P);
@@ -372,395 +422,1265 @@ off8: rel is simm8 [ rel = inst_start + simm8; ] {
 	export *:4 rel;
 }
 
-# Direct Addressing Modes (DP)
-loc16: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {local addr:4 = (zext(DP) << 6) | imm6; export *:2 addr;}
-# Stack Addressing Modes (SP)
-loc16: *-SP[imm6]      is ctx_amode=0 & op6_2=0b01 & SP & imm6 {local addr = SP - imm6; export *:2 addr;}
-loc16: *SP++           is ctx_amode=0 & op0_8=0b10111101 & SP {local addr = SP; SP = SP + 1; export *:2 addr;}
-loc16: *--SP           is ctx_amode=0 & op0_8=0b10111110 & SP {SP = SP - 1; export *:2 SP;}
-# C28x Indirect Addressing Modes (XAR0 to XAR7). imm3 is the raw numeric value of xarn0 to set ARP
-loc16: *xarn0++        is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {ARP = imm3; local addr = xarn0; xarn0 = xarn0 + 1; export *:2 addr;}
-loc16: *--xarn0        is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {ARP = imm3; xarn0 = xarn0 - 1; export *:2 xarn0;}
-loc16: *+xarn0[AR0]    is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR0); export *:2 addr;}
-loc16: *+xarn0[AR1]    is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR1); export *:2 addr;}
-loc16: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {ARP = imm3; local addr = xarn0 + imm3_3; export *:2 addr;}
-# C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
-loc16: *               is ctx_amode=0 & op0_8=0b10111000 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; export *:2 rv;}
-loc16: *++             is ctx_amode=0 & op0_8=0b10111001 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv + 1; export *:2 rv;}
-loc16: *--             is ctx_amode=0 & op0_8=0b10111010 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv - 1; export *:2 rv;} # manual says post *increment* here too, sigh
-loc16: *0++            is ctx_amode=0 & op0_8=0b10111011 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv + zext(AR0); export *:2 rv;} # TODO verify
-loc16: *0--            is ctx_amode=0 & op0_8=0b10111100 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv - zext(AR0); export *:2 rv;} # TODO verify
-loc16: *"BR0"++        is ctx_amode=0 & op0_8=0b10101110 {
-	local rp:4 = &XAR0 + zext(ARP * 4);
-	local rv:4 = *[register]rp;
-	local new_lo:2;
-	rcadd16(new_lo, rv:2, AR0);
-	*[register]rp = (rv & 0xFFFF0000) | zext(new_lo);
-	export *:2 rv;
-}
-loc16: *"BR0"--        is ctx_amode=0 & op0_8=0b10101111 {
-	local rp:4 = &XAR0 + zext(ARP * 4);
-	local rv:4 = *[register]rp;
-	local new_lo:2;
-	rbsub16(new_lo, rv:2, AR0);
-	*[register]rp = (rv & 0xFFFF0000) | zext(new_lo);
-	export *:2 rv;
-}
-loc16: *"ARP"^imm3     is ctx_amode=0 & op3_5=0b10110 & imm3 {
-	local rp:4 = &XAR0 + zext(ARP * 4);
-	local rv:4 = *[register]rp;
-	ARP = imm3;
-	export *:2 rv;
-}
-# Circular Indirect Addressing Modes (XAR6, XAR1)
-loc16: *AR6%++         is ctx_amode=0 & op0_8=0b10111111 & AR6 {
-	ARP = 6;
-	local addr:4 = XAR6;
-	if (XAR6:1 != XAR1:1) goto <inc>;
-	XAR6 = XAR6 & 0xFFFFFF00;
-	goto <done>;
-	<inc>
-	XAR6 = (XAR6 & 0xFFFF0000) | zext(AR6 + 1);
-	<done>
+# Direct, stack, indirect, and register addressing modes for loc16/loc32.
+# SPRU430F Sections 5.2-5.6.  RAM pointers are C28x word addresses; access
+# sizes below are P-Code byte sizes.  Constructors are explicitly split by
+# AMODE so PAGE0+AMODE can remain excluded and the register forms cannot
+# overlap AMODE-specific encodings.  The 3-bit XAR offset remains AMODE=0,
+# while AMODE=1 adds 7-bit direct and ARP-update encodings.
+
+# 16-bit operand.
+loc16: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
 	export *:2 addr;
 }
-# 16-Bit Register Addressing Modes (AR0 to AR7, AH, AL, PH, PL, TH, SP)
-loc16: reg16           is ctx_amode=0 & op4_4=0b1010 & reg16 {export reg16;}
-
-# Direct Addressing Modes (DP)
-loc32: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {local addr:4 = (zext(DP) << 6) | imm6; export *:4 addr;}
-# Stack Addressing Modes (SP)
-loc32: *-SP[imm6]      is ctx_amode=0 & op6_2=0b01 & SP & imm6 {local addr = SP - imm6; export *:4 addr;}
-loc32: *SP++           is ctx_amode=0 & op0_8=0b10111101 & SP {local addr = SP; SP = SP + 2; export *:4 addr;}
-loc32: *--SP           is ctx_amode=0 & op0_8=0b10111110 & SP {SP = SP - 2; export *:4 SP;}
-# C28x Indirect Addressing Modes (XAR0 to XAR7)
-loc32: *xarn0++        is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {ARP = imm3; local addr = xarn0; xarn0 = xarn0 + 2; export *:4 addr;}
-loc32: *--xarn0        is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {ARP = imm3; xarn0 = xarn0 - 2; export *:4 xarn0;}
-loc32: *+xarn0[AR0]    is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR0); export *:4 addr;}
-loc32: *+xarn0[AR1]    is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {ARP = imm3; local addr = xarn0 + zext(AR1); export *:4 addr;}
-loc32: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {ARP = imm3; local addr = xarn0 + imm3_3; export *:4 addr;}
-# C2xLP Indirect Addressing Modes (ARP, XAR0 to XAR7)
-loc32: *               is ctx_amode=0 & op0_8=0b10111000 {local rp:4 = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; export *:4 rv;}
-loc32: *++             is ctx_amode=0 & op0_8=0b10111001 {local rp:4 = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv + 2; export *:4 rv;}
-loc32: *--             is ctx_amode=0 & op0_8=0b10111010 {local rp:4 = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv - 2; export *:4 rv;}
-loc32: *0++            is ctx_amode=0 & op0_8=0b10111011 {local rp:4 = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv + zext(AR0); export *:4 rv;}
-loc32: *0--            is ctx_amode=0 & op0_8=0b10111100 {local rp:4 = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv - zext(AR0); export *:4 rv;}
-loc32: *"BR0"++        is ctx_amode=0 & op0_8=0b10101110 {
-	local rp:4 = &XAR0 + zext(ARP * 4);
-	local rv:4 = *[register]rp;
-	local new_lo:2;
-	rcadd16(new_lo, rv:2, AR0);
-	*[register]rp = (rv & 0xFFFF0000) | zext(new_lo);
-	export *:4 rv;
+loc16: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export *:2 addr;
 }
-loc32: *"BR0"--        is ctx_amode=0 & op0_8=0b10101111 {
-	local rp:4 = &XAR0 + zext(ARP * 4);
-	local rv:4 = *[register]rp;
-	local new_lo:2;
-	rbsub16(new_lo, rv:2, AR0);
-	*[register]rp = (rv & 0xFFFF0000) | zext(new_lo);
-	export *:4 rv;
+loc16: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = zext(SP) - imm6;
+	export *:2 addr;
 }
-loc32: *"ARP"^imm3     is ctx_amode=0 & op3_5=0b10110 & imm3 {
-	local rp:4 = &XAR0 + zext(ARP * 4);
-	local rv:4 = *[register]rp;
+# The manual's AMODE column for @@7bit is printed as 0, but Section 5.2,
+# Section 5.3, the examples, and assembler behavior all establish AMODE=1.
+loc16: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export *:2 addr;
+}
+loc16: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 1;
+	export *:2 addr;
+}
+loc16: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 1;
+	export *:2 addr;
+}
+loc16: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
+	SP = SP - 1;
+	local addr:4 = zext(SP);
+	export *:2 addr;
+}
+loc16: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	SP = SP - 1;
+	local addr:4 = zext(SP);
+	export *:2 addr;
+}
+loc16: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
 	ARP = imm3;
-	export *:4 rv;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export *:2 addr;
 }
-# Circular Indirect Addressing Modes (XAR6, XAR1)
-loc32: *AR6%++         is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+loc16: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export *:2 addr;
+}
+loc16: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export *:2 addr;
+}
+loc16: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export *:2 addr;
+}
+loc16: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:2 addr;
+}
+loc16: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:2 addr;
+}
+loc16: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:2 addr;
+}
+loc16: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:2 addr;
+}
+loc16: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export *:2 addr;
+}
+loc16: *                 is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:2 addr;
+}
+loc16: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:2 addr;
+}
+loc16: *++               is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export *:2 addr;
+}
+loc16: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export *:2 addr;
+}
+# The prose tables accidentally say increment for *--.  The mnemonic,
+# glossary, examples, and DIS2000 all identify a decrement, which is modeled.
+loc16: *--               is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export *:2 addr;
+}
+loc16: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export *:2 addr;
+}
+loc16: *0++              is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:2 addr;
+}
+loc16: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:2 addr;
+}
+loc16: *0--              is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:2 addr;
+}
+loc16: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:2 addr;
+}
+loc16: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:2 addr;
+}
+# AMODE=1-only C2xLP forms update the XAR selected by the old ARP, then set ARP.
+loc16: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
 	ARP = 6;
 	local addr:4 = XAR6;
-	if (XAR6:1 != XAR1:1) goto <inc>;
-	XAR6 = XAR6 & 0xFFFFFF00;
-	goto <done>;
-	<inc>
-	XAR6 = (XAR6 & 0xFFFF0000) | zext(AR6 + 2);
-	<done>
+	circular_amode0_update(1);
+	export *:2 addr;
+}
+loc16: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 1);
+	export *:2 addr;
+}
+loc16: reg16             is ctx_amode=0 & op4_4=0b1010 & reg16 { export reg16; }
+loc16: reg16             is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16 { export reg16; }
+
+# 32-bit operand.  Pointer deltas are two C28x words; AR0/bit-reversed
+# modifiers remain independent of operand width as specified by Section 5.6.2.
+loc32: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
 	export *:4 addr;
 }
-# 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
-loc32: reg32           is ctx_amode=0 & op4_4=0b1010 & reg32 {export reg32;}
+loc32: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export *:4 addr;
+}
+loc32: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = zext(SP) - imm6;
+	export *:4 addr;
+}
+loc32: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export *:4 addr;
+}
+loc32: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 2;
+	export *:4 addr;
+}
+loc32: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 2;
+	export *:4 addr;
+}
+loc32: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
+	SP = SP - 2;
+	local addr:4 = zext(SP);
+	export *:4 addr;
+}
+loc32: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	SP = SP - 2;
+	local addr:4 = zext(SP);
+	export *:4 addr;
+}
+loc32: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export *:4 addr;
+}
+loc32: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export *:4 addr;
+}
+loc32: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export *:4 addr;
+}
+loc32: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export *:4 addr;
+}
+loc32: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:4 addr;
+}
+loc32: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:4 addr;
+}
+loc32: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:4 addr;
+}
+loc32: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:4 addr;
+}
+loc32: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export *:4 addr;
+}
+loc32: *                 is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:4 addr;
+}
+loc32: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:4 addr;
+}
+loc32: *++               is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export *:4 addr;
+}
+loc32: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export *:4 addr;
+}
+loc32: *--               is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export *:4 addr;
+}
+loc32: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export *:4 addr;
+}
+loc32: *0++              is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:4 addr;
+}
+loc32: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:4 addr;
+}
+loc32: *0--              is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:4 addr;
+}
+loc32: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:4 addr;
+}
+loc32: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+	ARP = 6;
+	local addr:4 = XAR6;
+	circular_amode0_update(2);
+	export *:4 addr;
+}
+loc32: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 2);
+	export *:4 addr;
+}
+loc32: reg32             is ctx_amode=0 & op4_4=0b1010 & reg32 { export reg32; }
+loc32: reg32             is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg32 { export reg32; }
 
-# Effective-address forms for instructions that both read an operand and write a
-# neighbouring memory location (DMOV, MOVAD, MOVDL, MOVD32, and XMACD). Taking
-# `&loc16` or `&loc32` does not recover the architectural effective address of a
-# dynamic export; it yields the address of SLEIGH's temporary LOAD result. These
-# subtables therefore export the address itself while preserving all addressing-
-# mode register side effects.
-
-# 16-bit memory effective address (register-direct modes are architecturally illegal
-# for the data-move instructions that use this subtable).
-mem16_addr: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {
+# Address-only mirrors for instructions whose semantics need the effective
+# RAM address itself (DMOV/MOVAD/MOVDL/MOVD32/XMACD).  These remain separate
+# from loc16/loc32 so their exports cannot be mistaken for dereferenced values;
+# width-specific update deltas are intentionally mirrored and regression-tested.
+mem16_addr: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
 	local addr:4 = (zext(DP) << 6) | imm6;
 	export addr;
 }
-mem16_addr: *-SP[imm6]      is ctx_amode=0 & op6_2=0b01 & SP & imm6 {
+mem16_addr: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export addr;
+}
+mem16_addr: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
 	local addr:4 = zext(SP) - imm6;
 	export addr;
 }
-mem16_addr: *SP++           is ctx_amode=0 & op0_8=0b10111101 & SP {
+mem16_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export addr;
+}
+mem16_addr: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
 	local addr:4 = zext(SP);
 	SP = SP + 1;
 	export addr;
 }
-mem16_addr: *--SP           is ctx_amode=0 & op0_8=0b10111110 & SP {
+mem16_addr: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 1;
+	export addr;
+}
+mem16_addr: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
 	SP = SP - 1;
 	local addr:4 = zext(SP);
 	export addr;
 }
-mem16_addr: *xarn0++        is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+mem16_addr: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	SP = SP - 1;
+	local addr:4 = zext(SP);
+	export addr;
+}
+mem16_addr: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0;
 	xarn0 = xarn0 + 1;
 	export addr;
 }
-mem16_addr: *--xarn0        is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+mem16_addr: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export addr;
+}
+mem16_addr: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
 	ARP = imm3;
 	xarn0 = xarn0 - 1;
 	local addr:4 = xarn0;
 	export addr;
 }
-mem16_addr: *+xarn0[AR0]    is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+mem16_addr: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem16_addr: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0 + zext(AR0);
 	export addr;
 }
-mem16_addr: *+xarn0[AR1]    is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+mem16_addr: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem16_addr: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0 + zext(AR1);
 	export addr;
 }
-mem16_addr: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+mem16_addr: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem16_addr: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0 + imm3_3;
 	export addr;
 }
-mem16_addr: *               is ctx_amode=0 & op0_8=0b10111000 {
+mem16_addr: *                 is ctx_amode=0 & op0_8=0b10111000 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	export addr;
 }
-mem16_addr: *++             is ctx_amode=0 & op0_8=0b10111001 {
+mem16_addr: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem16_addr: *++               is ctx_amode=0 & op0_8=0b10111001 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr + 1;
 	export addr;
 }
-mem16_addr: *--             is ctx_amode=0 & op0_8=0b10111010 {
+mem16_addr: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export addr;
+}
+mem16_addr: *--               is ctx_amode=0 & op0_8=0b10111010 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr - 1;
 	export addr;
 }
-mem16_addr: *0++            is ctx_amode=0 & op0_8=0b10111011 {
+mem16_addr: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export addr;
+}
+mem16_addr: *0++              is ctx_amode=0 & op0_8=0b10111011 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr + zext(AR0);
 	export addr;
 }
-mem16_addr: *0--            is ctx_amode=0 & op0_8=0b10111100 {
+mem16_addr: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem16_addr: *0--              is ctx_amode=0 & op0_8=0b10111100 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr - zext(AR0);
 	export addr;
 }
-mem16_addr: *"BR0"++        is ctx_amode=0 & op0_8=0b10101110 {
+mem16_addr: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem16_addr: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	local new_lo:2;
 	rcadd16(new_lo, addr:2, AR0);
-	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
 	export addr;
 }
-mem16_addr: *"BR0"--        is ctx_amode=0 & op0_8=0b10101111 {
+mem16_addr: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	local new_lo:2;
 	rbsub16(new_lo, addr:2, AR0);
-	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
 	export addr;
 }
-mem16_addr: *"ARP"^imm3     is ctx_amode=0 & op3_5=0b10110 & imm3 {
+mem16_addr: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	ARP = imm3;
 	export addr;
 }
-mem16_addr: *AR6%++         is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+mem16_addr: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
 	ARP = 6;
 	local addr:4 = XAR6;
-	if (XAR6:1 != XAR1:1) goto <inc>;
-	XAR6 = XAR6 & 0xFFFFFF00;
-	goto <done>;
-<inc>
-	XAR6 = (XAR6 & 0xFFFF0000) | zext(AR6 + 1);
-<done>
+	circular_amode0_update(1);
+	export addr;
+}
+mem16_addr: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 1);
 	export addr;
 }
 
-# 32-bit memory effective address.
-mem32_addr: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {
+mem32_addr: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
 	local addr:4 = (zext(DP) << 6) | imm6;
 	export addr;
 }
-mem32_addr: *-SP[imm6]      is ctx_amode=0 & op6_2=0b01 & SP & imm6 {
+mem32_addr: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export addr;
+}
+mem32_addr: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
 	local addr:4 = zext(SP) - imm6;
 	export addr;
 }
-mem32_addr: *SP++           is ctx_amode=0 & op0_8=0b10111101 & SP {
+mem32_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export addr;
+}
+mem32_addr: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
 	local addr:4 = zext(SP);
 	SP = SP + 2;
 	export addr;
 }
-mem32_addr: *--SP           is ctx_amode=0 & op0_8=0b10111110 & SP {
+mem32_addr: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 2;
+	export addr;
+}
+mem32_addr: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
 	SP = SP - 2;
 	local addr:4 = zext(SP);
 	export addr;
 }
-mem32_addr: *xarn0++        is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+mem32_addr: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	SP = SP - 2;
+	local addr:4 = zext(SP);
+	export addr;
+}
+mem32_addr: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0;
 	xarn0 = xarn0 + 2;
 	export addr;
 }
-mem32_addr: *--xarn0        is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+mem32_addr: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export addr;
+}
+mem32_addr: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
 	ARP = imm3;
 	xarn0 = xarn0 - 2;
 	local addr:4 = xarn0;
 	export addr;
 }
-mem32_addr: *+xarn0[AR0]    is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+mem32_addr: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem32_addr: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0 + zext(AR0);
 	export addr;
 }
-mem32_addr: *+xarn0[AR1]    is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+mem32_addr: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem32_addr: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0 + zext(AR1);
 	export addr;
 }
-mem32_addr: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+mem32_addr: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem32_addr: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
 	ARP = imm3;
 	local addr:4 = xarn0 + imm3_3;
 	export addr;
 }
-mem32_addr: *               is ctx_amode=0 & op0_8=0b10111000 {
+mem32_addr: *                 is ctx_amode=0 & op0_8=0b10111000 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	export addr;
 }
-mem32_addr: *++             is ctx_amode=0 & op0_8=0b10111001 {
+mem32_addr: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem32_addr: *++               is ctx_amode=0 & op0_8=0b10111001 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr + 2;
 	export addr;
 }
-mem32_addr: *--             is ctx_amode=0 & op0_8=0b10111010 {
+mem32_addr: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export addr;
+}
+mem32_addr: *--               is ctx_amode=0 & op0_8=0b10111010 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr - 2;
 	export addr;
 }
-mem32_addr: *0++            is ctx_amode=0 & op0_8=0b10111011 {
+mem32_addr: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export addr;
+}
+mem32_addr: *0++              is ctx_amode=0 & op0_8=0b10111011 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr + zext(AR0);
 	export addr;
 }
-mem32_addr: *0--            is ctx_amode=0 & op0_8=0b10111100 {
+mem32_addr: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem32_addr: *0--              is ctx_amode=0 & op0_8=0b10111100 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	*[register]rp = addr - zext(AR0);
 	export addr;
 }
-mem32_addr: *"BR0"++        is ctx_amode=0 & op0_8=0b10101110 {
+mem32_addr: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem32_addr: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	local new_lo:2;
 	rcadd16(new_lo, addr:2, AR0);
-	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
 	export addr;
 }
-mem32_addr: *"BR0"--        is ctx_amode=0 & op0_8=0b10101111 {
+mem32_addr: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	local new_lo:2;
 	rbsub16(new_lo, addr:2, AR0);
-	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
 	export addr;
 }
-mem32_addr: *"ARP"^imm3     is ctx_amode=0 & op3_5=0b10110 & imm3 {
+mem32_addr: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
 	local addr:4 = *[register]rp;
 	ARP = imm3;
 	export addr;
 }
-mem32_addr: *AR6%++         is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+mem32_addr: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
 	ARP = 6;
 	local addr:4 = XAR6;
-	if (XAR6:1 != XAR1:1) goto <inc>;
-	XAR6 = XAR6 & 0xFFFFFF00;
-	goto <done>;
-<inc>
-	XAR6 = (XAR6 & 0xFFFF0000) | zext(AR6 + 2);
-<done>
+	circular_amode0_update(2);
+	export addr;
+}
+mem32_addr: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 2);
 	export addr;
 }
 
-# 8-Bit Subset of 16-Bit Addressing Modes (for LSB / MSB instructions)
-# Direct Addressing Modes (DP)
-loc8: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {local addr:4 = (zext(DP) << 6) | imm6; local w:2 = *:2 addr; local b:1 = w:1; export b;}
-# Stack Addressing Modes (SP)
-loc8: *-SP[imm6]      is ctx_amode=0 & op6_2=0b01 & SP & imm6 {local addr:4 = zext(SP) - imm6; local w:2 = *:2 addr; local b:1 = w:1; export b;}
-loc8: *SP++           is ctx_amode=0 & op0_8=0b10111101 & SP {local addr:4 = zext(SP); SP = SP + 1; local w:2 = *:2 addr; local b:1 = w:1; export b;}
-loc8: *--SP           is ctx_amode=0 & op0_8=0b10111110 & SP {SP = SP - 1; local addr:4 = zext(SP); local w:2 = *:2 addr; local b:1 = w:1; export b;}
-# C28x Indirect Addressing Modes (XAR0 to XAR7). imm3 is the raw numeric value of xarn0 to set ARP
-loc8: *xarn0++        is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {ARP = imm3; local addr:4 = xarn0; xarn0 = xarn0 + 1; local w:2 = *:2 addr; local b:1 = w:1; export b;}
-loc8: *--xarn0        is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {ARP = imm3; xarn0 = xarn0 - 1; local w:2 = *:2 xarn0; local b:1 = w:1; export b;}
-loc8: *+xarn0[AR0]    is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+# 8-bit subset of the loc16 addressing modes used by MOVB loads.
+#
+# Indexed MOVB operands use byte offsets even though the C28x data space is
+# word addressed.  byte_index_info exports the word address in bits 31:0 and
+# the selected byte (0 = LSB, 1 = MSB) in bit 32 so loads and stores share the
+# same effective-address calculation.
+byte_index_info: *+xarn0[AR0] is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
 	ARP = imm3;
-	local addr:4 = xarn0 + zext(AR0);
-	local w:2 = *:2 addr;
-	local b:1;
-	if ((AR0 & 1) != 0) goto <odd>;
-	b = w:1;
-	goto <done>;
-<odd>
-	b = w[8,8];
-<done>
-	export b;
+	local offset:2 = AR0;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
 }
-loc8: *+xarn0[AR1]     is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+byte_index_info: *+xarn0[AR0] is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
 	ARP = imm3;
-	local addr:4 = xarn0 + zext(AR1);
-	local w:2 = *:2 addr;
-	local b:1;
-	if ((AR1 & 1) != 0) goto <odd>;
-	b = w:1;
-	goto <done>;
-<odd>
-	b = w[8,8];
-<done>
-	export b;
+	local offset:2 = AR0;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
 }
-loc8: *+xarn0[imm3_3]  is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 & imm3_3_p=0 {ARP = imm3; local addr = xarn0 + imm3_3; local w:2 = *:2 addr; local b:1 = w:1; export b;} # Even, LSB
-loc8: *+xarn0[imm3_3]  is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 & imm3_3_p=1 {ARP = imm3; local addr = xarn0 + imm3_3; local w:2 = *:2 addr; local b:1 = w[8,8]; export b;} # Odd, MSB
-# C2xLP Indirect Addressing Modes (no offset, always LSB)
-loc8: *                is ctx_amode=0 & op0_8=0b10111000 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; local w:2 = *:2 rv; local b:1 = w:1; export b;}
-loc8: *++              is ctx_amode=0 & op0_8=0b10111001 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv + 1; local w:2 = *:2 rv; local b:1 = w:1; export b;}
-loc8: *--              is ctx_amode=0 & op0_8=0b10111010 {local rp = &XAR0 + zext(ARP * 4); local rv:4 = *[register]rp; *[register]rp = rv - 1; local w:2 = *:2 rv; local b:1 = w:1; export b;}
-loc8: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
+byte_index_info: *+xarn0[AR1] is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local offset:2 = AR1;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+byte_index_info: *+xarn0[AR1] is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local offset:2 = AR1;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+byte_index_info: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local offset:2 = imm3_3;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+
+loc8: byte_index_info is byte_index_info {
+	local addr:4 = byte_index_info:4;
+	local high:1 = byte_index_info[32,8];
+	local word:2 = *:2 addr;
+	local byte:1;
+	select_word_byte(byte, word, high);
+	export byte;
+}
+
+# Direct addressing modes.
+loc8: @imm6 is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: @imm6 is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *-SP[imm6] is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = zext(SP) - imm6;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: @@imm7 is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+
+# Stack and C28x XAR modes.  MOVB advances pointers by one C28x word.
+loc8: *SP++ is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *SP++ is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--SP is ctx_amode=0 & op0_8=0b10111110 & SP {
+	SP = SP - 1;
+	local addr:4 = zext(SP);
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--SP is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	SP = SP - 1;
+	local addr:4 = zext(SP);
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *xarn0++ is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *xarn0++ is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--xarn0 is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--xarn0 is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+
+# C2xLP modes whose MOVB result is defined: no offset, +/- one word, and ARP
+# selection.  The MOVB instruction pages explicitly leave AMODE=0 circular,
+# *0, BR0, and the AMODE=1 *0...,ARPn/*BR0...,ARPn variants undefined; those
+# forms remain outside loc8 rather than receiving guessed byte semantics.
+loc8: * is ctx_amode=0 & op0_8=0b10111000 {
 	local rp:4 = &XAR0 + zext(ARP * 4);
-	local rv:4 = *[register]rp;
-	ARP = imm3;
-	local w:2 = *:2 rv;
-	local b:1 = w:1;
-	export b;
+	local addr:4 = *[register]rp;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
 }
-# AR0/BR0/circular variants omitted: undefined
-# 16-Bit Register Addressing Modes
-loc8: reg16            is ctx_amode=0 & op4_4=0b1010 & reg16 {local b:1 = reg16[0,8]; export b;}
+loc8: * is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *++ is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *++ is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *-- is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *-- is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"ARP"^imm3 is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+# AMODE=1 circular addressing is not in the MOVB undefined-result list.  It
+# accesses the low byte of the selected word and advances XAR1 by one word.
+loc8: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	local addr:4;
+	circular_amode1_address(addr, 1);
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+
+# Register modes always address the low byte.
+loc8: reg16 is ctx_amode=0 & op4_4=0b1010 & reg16 {
+	local byte:1 = reg16:1;
+	export byte;
+}
+loc8: reg16 is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16 {
+	local byte:1 = reg16:1;
+	export byte;
+}
 
 cond:  "NEQ"  is cond0_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
 cond:  "EQ"   is cond0_4=0b0001 { local cnd:1 = Z   == 1; export cnd; }
@@ -1183,7 +2103,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.171, p.168 (C28ADDR)
-:clrc AMODE is op0_16=0b0101011000010110 & AMODE {
+:clrc AMODE is op0_16=0b0101011000010110 & AMODE [ ctx_amode=0; globalset(inst_next, ctx_amode); ] {
 	AMODE = 0;
 }
 
@@ -1208,7 +2128,18 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.176
-:clrc imm8 is op8_8=0b00101001 & imm8 { # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP
+:clrc imm8 is op8_8=0b00101001 & page0_bit=0 & imm8 {
+	local bimm8:1 = imm8;
+	SXM   = SXM   && (bimm8[0,1] == 0);
+	OVM   = OVM   && (bimm8[1,1] == 0);
+	TC    = TC    && (bimm8[2,1] == 0);
+	C     = C     && (bimm8[3,1] == 0);
+	INTM  = INTM  && (bimm8[4,1] == 0);
+	DBGM  = DBGM  && (bimm8[5,1] == 0);
+	PAGE0 = PAGE0 && (bimm8[6,1] == 0);
+	VMAP  = VMAP  && (bimm8[7,1] == 0);
+}
+:clrc imm8 is op8_8=0b00101001 & page0_bit=1 & imm8 [ ctx_page0=0; globalset(inst_next, ctx_page0); ] {
 	local bimm8:1 = imm8;
 	SXM   = SXM   && (bimm8[0,1] == 0);
 	OVM   = OVM   && (bimm8[1,1] == 0);
@@ -1610,7 +2541,7 @@ with : ctx_objmode=1 {
 }
 
 # p.226 (LPADDR)
-:setc AMODE is op0_16=0b0101011000011110 & AMODE {
+:setc AMODE is op0_16=0b0101011000011110 & AMODE [ ctx_amode=1; globalset(inst_next, ctx_amode); ] {
 	AMODE = 1;
 }
 
@@ -1977,7 +2908,11 @@ with : ctx_objmode=1 {
 :mov loc16, #imm16 is op8_8=0b00101000 & loc16; imm16 {
 	loc16 = imm16;
 }
-:mov regax, #imm16 is op8_8=0b00101000 & regax; imm16 {
+:mov regax, #imm16 is op8_8=0b00101000 & regax & regax=8 & op4_4=0b1010; imm16 {
+	regax = imm16;
+	flagnz(regax);
+}
+:mov regax, #imm16 is op8_8=0b00101000 & regax & regax=9 & op4_4=0b1010; imm16 {
 	regax = imm16;
 	flagnz(regax);
 }
@@ -1987,7 +2922,12 @@ with : ctx_objmode=1 {
 	local addr:4 = imm16;
 	loc16 = *:2 addr;
 }
-:mov regax, *(0:imm16) is op8_8=0b11110101 & regax; imm16 {
+:mov regax, *(0:imm16) is op8_8=0b11110101 & regax & regax=8 & op4_4=0b1010; imm16 {
+	local addr:4 = imm16;
+	regax = *:2 addr;
+	flagnz(regax);
+}
+:mov regax, *(0:imm16) is op8_8=0b11110101 & regax & regax=9 & op4_4=0b1010; imm16 {
 	local addr:4 = imm16;
 	regax = *:2 addr;
 	flagnz(regax);
@@ -1997,7 +2937,12 @@ with : ctx_objmode=1 {
 :mov loc16, #0 is op8_8=0b00101011 & loc16 {
 	loc16 = 0;
 }
-:mov regax, #0 is op8_8=0b00101011 & regax {
+:mov regax, #0 is op8_8=0b00101011 & regax & regax=8 & op4_4=0b1010 {
+	regax = 0;
+	N = 0;
+	Z = 1;
+}
+:mov regax, #0 is op8_8=0b00101011 & regax & regax=9 & op4_4=0b1010 {
 	regax = 0;
 	N = 0;
 	Z = 1;
@@ -2025,7 +2970,11 @@ with : ctx_objmode=1 {
 :mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 {
 	loc16 = arn8;
 }
-:mov regax, arn8 is op11_5=0b01111 & arn8 & regax {
+:mov regax, arn8 is op11_5=0b01111 & arn8 & regax & regax=8 & op4_4=0b1010 {
+	regax = arn8;
+	flagnz(regax);
+}
+:mov regax, arn8 is op11_5=0b01111 & arn8 & regax & regax=9 & op4_4=0b1010 {
 	regax = arn8;
 	flagnz(regax);
 }
@@ -2034,7 +2983,11 @@ with : ctx_objmode=1 {
 :mov loc16, ax8 is op9_7=0b1001011 & ax8 & loc16 {
 	loc16 = ax8;
 }
-:mov regax, ax8 is op9_7=0b1001011 & ax8 & regax {
+:mov regax, ax8 is op9_7=0b1001011 & ax8 & regax & regax=8 & op4_4=0b1010 {
+	regax = ax8;
+	flagnz(regax);
+}
+:mov regax, ax8 is op9_7=0b1001011 & ax8 & regax & regax=9 & op4_4=0b1010 {
 	regax = ax8;
 	flagnz(regax);
 }
@@ -2054,7 +3007,11 @@ with : ctx_objmode=1 {
 :mov loc16, OVC is ctx_objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & loc16 & OVC {
 	loc16 = zext(OVC) << 10;
 }
-:mov regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & regax & OVC {
+:mov regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & regax & regax=8 & op4_4=0b1010 & OVC {
+	regax = zext(OVC) << 10;
+	flagnz(regax);
+}
+:mov regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & regax & regax=9 & op4_4=0b1010 & OVC {
 	regax = zext(OVC) << 10;
 	flagnz(regax);
 }
@@ -2150,19 +3107,60 @@ with : ctx_objmode=1 {
 }
 
 # p.288
-:movb loc16, #imm8_8, cond is ctx_objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & loc16 {
+# Indexed MOVB stores use byte_index_info so byte offsets select a byte within
+# the correct word.  Address-register side effects are built before the
+# condition, as required even when the conditional store is not taken.
+:movb byte_index_info, #imm8_8, cond is ctx_objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & byte_index_info {
+	local addr:4 = byte_index_info:4;
+	local high:1 = byte_index_info[32,8];
 	if (!cond) goto inst_next;
-	loc16 = zext(imm8_8:1);
+	store_word_byte(addr, high, imm8_8:1);
+}
+:movb loc16, #imm8_8, cond is ctx_objmode=1 & ctx_amode=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op3_5!=0b10010 & op3_5!=0b10011 & op6_2!=0b11 & loc16 {
+	if (!cond) goto inst_next;
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(imm8_8:1);
+}
+:movb loc16, #imm8_8, cond is ctx_objmode=1 & ctx_amode=1 & ctx_page0=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op3_5!=0b10010 & op3_5!=0b10011 & loc16 {
+	if (!cond) goto inst_next;
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(imm8_8:1);
 }
 
 # p.290
-:movb loc16, ax8lsb is op9_7=0b0011110 & ax8 & ax8lsb & loc16 {
-	loc16 = zext(ax8lsb);
+:movb byte_index_info, ax8lsb is op9_7=0b0011110 & ax8 & ax8lsb & byte_index_info {
+	local addr:4 = byte_index_info:4;
+	local high:1 = byte_index_info[32,8];
+	store_word_byte(addr, high, ax8lsb);
+}
+:movb loc16, ax8lsb is ctx_amode=0 & op9_7=0b0011110 & ax8 & ax8lsb
+	& op3_5!=0b10010 & op3_5!=0b10011 & op6_2!=0b11 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8lsb);
+}
+:movb loc16, ax8lsb is ctx_amode=1 & ctx_page0=0 & op9_7=0b0011110 & ax8 & ax8lsb
+	& op3_5!=0b10010 & op3_5!=0b10011 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8lsb);
 }
 
 # p.292
-:movb loc16, ax8msb is op9_7=0b1100100 & ax8 & ax8msb & loc16 {
-	loc16 = zext(ax8msb);
+:movb byte_index_info, ax8msb is op9_7=0b1100100 & ax8 & ax8msb & byte_index_info {
+	local addr:4 = byte_index_info:4;
+	local high:1 = byte_index_info[32,8];
+	store_word_byte(addr, high, ax8msb);
+}
+:movb loc16, ax8msb is ctx_amode=0 & op9_7=0b1100100 & ax8 & ax8msb
+	& op3_5!=0b10010 & op3_5!=0b10011 & op6_2!=0b11 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8msb);
+}
+:movb loc16, ax8msb is ctx_amode=1 & ctx_page0=0 & op9_7=0b1100100 & ax8 & ax8msb
+	& op3_5!=0b10010 & op3_5!=0b10011 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8msb);
 }
 
 # p.294
@@ -2192,7 +3190,12 @@ with : ctx_objmode=1 {
 	local sh:4 = ACC << 1;
 	loc16 = sh[16,16];
 }
-:movh regax, ACC << #1 is ctx_objmode=1 & op8_8=0b10110011 & regax & ACC {
+:movh regax, ACC << #1 is ctx_objmode=1 & op8_8=0b10110011 & regax & regax=8 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << 1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, ACC << #1 is ctx_objmode=1 & op8_8=0b10110011 & regax & regax=9 & op4_4=0b1010 & ACC {
 	local sh:4 = ACC << 1;
 	regax = sh[16,16];
 	flagnz(regax);
@@ -2203,7 +3206,12 @@ with : ctx_objmode=1 {
 	local sh:4 = ACC << shift8_3_1;
 	loc16 = sh[16,16];
 }
-:movh regax, ACC << #shift8_3_1 is ctx_objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & regax & ACC {
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & regax & regax=8 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & regax & regax=9 & op4_4=0b1010 & ACC {
 	local sh:4 = ACC << shift8_3_1;
 	regax = sh[16,16];
 	flagnz(regax);
@@ -2214,7 +3222,12 @@ with : ctx_objmode=1 {
 	local sh:4 = ACC << shift8_3_1;
 	loc16 = sh[16,16];
 }
-:movh regax, ACC << #shift8_3_1 is ctx_objmode=0 & op11_5=0b10110 & shift8_3_1 & regax & ACC {
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=0 & op11_5=0b10110 & shift8_3_1 & regax & regax=8 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=0 & op11_5=0b10110 & shift8_3_1 & regax & regax=9 & op4_4=0b1010 & ACC {
 	local sh:4 = ACC << shift8_3_1;
 	regax = sh[16,16];
 	flagnz(regax);
@@ -2226,7 +3239,13 @@ with : ctx_objmode=1 {
 	pmshift(sh, P);
 	loc16 = sh[16,16];
 }
-:movh regax, P is op8_8=0b01010111 & regax & P {
+:movh regax, P is op8_8=0b01010111 & regax & regax=8 & op4_4=0b1010 & P {
+	local sh:4;
+	pmshift(sh, P);
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, P is op8_8=0b01010111 & regax & regax=9 & op4_4=0b1010 & P {
 	local sh:4;
 	pmshift(sh, P);
 	regax = sh[16,16];
@@ -2856,7 +3875,11 @@ with : ctx_objmode=1 {
 :pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {
 	loc16 = *:2 XAR7;
 }
-:pread regax, *XAR7 is op8_8=0b00100100 & regax & XAR7 {
+:pread regax, *XAR7 is op8_8=0b00100100 & regax & regax=8 & op4_4=0b1010 & XAR7 {
+	regax = *:2 XAR7;
+	flagnz(regax);
+}
+:pread regax, *XAR7 is op8_8=0b00100100 & regax & regax=9 & op4_4=0b1010 & XAR7 {
 	regax = *:2 XAR7;
 	flagnz(regax);
 }
@@ -3128,7 +4151,18 @@ with : ctx_objmode=1 {
 }
 
 # p.403
-:setc imm8 is op8_8=0b00111011 & imm8 { # TODO SXM|OVM|TC|C|INTM|DBGM|PAGE0|VMAP in dasm
+:setc imm8 is op8_8=0b00111011 & page0_bit=0 & imm8 {
+	local bimm8:1 = imm8;
+	SXM   = SXM   || (bimm8[0,1] != 0);
+	OVM   = OVM   || (bimm8[1,1] != 0);
+	TC    = TC    || (bimm8[2,1] != 0);
+	C     = C     || (bimm8[3,1] != 0);
+	INTM  = INTM  || (bimm8[4,1] != 0);
+	DBGM  = DBGM  || (bimm8[5,1] != 0);
+	PAGE0 = PAGE0 || (bimm8[6,1] != 0);
+	VMAP  = VMAP  || (bimm8[7,1] != 0);
+}
+:setc imm8 is op8_8=0b00111011 & page0_bit=1 & imm8 [ ctx_page0=1; globalset(inst_next, ctx_page0); ] {
 	local bimm8:1 = imm8;
 	SXM   = SXM   || (bimm8[0,1] != 0);
 	OVM   = OVM   || (bimm8[1,1] != 0);

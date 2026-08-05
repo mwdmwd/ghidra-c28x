@@ -44,9 +44,10 @@ define register offset=0x340 size=4  [  R0H_sh  R1H_sh  R2H_sh  R3H_sh  R4H_sh  
 define register offset=0xf00 size=4   contextreg;
 
 define context contextreg
-	ctx_amode      = (0,0)			# ST0
-	ctx_objmode    = (1,1)			# ST0
+	ctx_amode      = (0,0)			# ST1 AMODE address-decode context
+	ctx_objmode    = (1,1)			# ST1 OBJMODE decode context
 	rpt_active = (2,2) noflow	# set by RPT for the one following instruction
+	ctx_page0      = (4,4)			# ST1 PAGE0 address-decode context
 	rptb_flag  = (3,3) noflow	# set by RPTB on the last instruction of its block
 	rpt_phase  = (31,31)		# internal: prevents recursive ^instruction matching
 ;

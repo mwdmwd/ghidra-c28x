@@ -82,6 +82,38 @@ u32 probe_sum_u32(const u32 *p, u16 n)
     return sum;
 }
 
+u32 probe_sum_reverse_u16(const u16 *end, u16 n)
+{
+    u32 sum = 0u;
+    while (n != 0u) {
+        --end;
+        sum += *end;
+        --n;
+    }
+    return sum;
+}
+
+u32 probe_sum_reverse_u32(const u32 *end, u16 n)
+{
+    u32 sum = 0u;
+    while (n != 0u) {
+        --end;
+        sum += *end;
+        --n;
+    }
+    return sum;
+}
+
+u16 probe_byte_read(const u16 *base, u16 byte_index)
+{
+    return (u16)__byte((int *)base, byte_index);
+}
+
+void probe_byte_write(u16 *base, u16 byte_index, u16 value)
+{
+    __byte((int *)base, byte_index) = value;
+}
+
 void probe_copy_u16(u16 *dst, const u16 *src, u16 n)
 {
     u16 i;
