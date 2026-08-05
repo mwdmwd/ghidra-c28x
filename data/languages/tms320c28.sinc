@@ -482,6 +482,232 @@ loc32: *AR6%++         is ctx_amode=0 & op0_8=0b10111111 & AR6 {
 # 32-Bit Register Addressing Modes (XAR0 to XAR7, ACC, P, XT)
 loc32: reg32           is ctx_amode=0 & op4_4=0b1010 & reg32 {export reg32;}
 
+# Effective-address forms for instructions that both read an operand and write a
+# neighbouring memory location (DMOV, MOVAD, MOVDL, MOVD32, and XMACD). Taking
+# `&loc16` or `&loc32` does not recover the architectural effective address of a
+# dynamic export; it yields the address of SLEIGH's temporary LOAD result. These
+# subtables therefore export the address itself while preserving all addressing-
+# mode register side effects.
+
+# 16-bit memory effective address (register-direct modes are architecturally illegal
+# for the data-move instructions that use this subtable).
+mem16_addr: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	export addr;
+}
+mem16_addr: *-SP[imm6]      is ctx_amode=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = zext(SP) - imm6;
+	export addr;
+}
+mem16_addr: *SP++           is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 1;
+	export addr;
+}
+mem16_addr: *--SP           is ctx_amode=0 & op0_8=0b10111110 & SP {
+	SP = SP - 1;
+	local addr:4 = zext(SP);
+	export addr;
+}
+mem16_addr: *xarn0++        is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export addr;
+}
+mem16_addr: *--xarn0        is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem16_addr: *+xarn0[AR0]    is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem16_addr: *+xarn0[AR1]    is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem16_addr: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export addr;
+}
+mem16_addr: *               is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem16_addr: *++             is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export addr;
+}
+mem16_addr: *--             is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export addr;
+}
+mem16_addr: *0++            is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem16_addr: *0--            is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem16_addr: *"BR0"++        is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"BR0"--        is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"ARP"^imm3     is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *AR6%++         is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+	ARP = 6;
+	local addr:4 = XAR6;
+	if (XAR6:1 != XAR1:1) goto <inc>;
+	XAR6 = XAR6 & 0xFFFFFF00;
+	goto <done>;
+<inc>
+	XAR6 = (XAR6 & 0xFFFF0000) | zext(AR6 + 1);
+<done>
+	export addr;
+}
+
+# 32-bit memory effective address.
+mem32_addr: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	export addr;
+}
+mem32_addr: *-SP[imm6]      is ctx_amode=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = zext(SP) - imm6;
+	export addr;
+}
+mem32_addr: *SP++           is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = zext(SP);
+	SP = SP + 2;
+	export addr;
+}
+mem32_addr: *--SP           is ctx_amode=0 & op0_8=0b10111110 & SP {
+	SP = SP - 2;
+	local addr:4 = zext(SP);
+	export addr;
+}
+mem32_addr: *xarn0++        is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export addr;
+}
+mem32_addr: *--xarn0        is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem32_addr: *+xarn0[AR0]    is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem32_addr: *+xarn0[AR1]    is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem32_addr: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export addr;
+}
+mem32_addr: *               is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem32_addr: *++             is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export addr;
+}
+mem32_addr: *--             is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export addr;
+}
+mem32_addr: *0++            is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem32_addr: *0--            is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem32_addr: *"BR0"++        is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"BR0"--        is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xFFFF0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"ARP"^imm3     is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *AR6%++         is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+	ARP = 6;
+	local addr:4 = XAR6;
+	if (XAR6:1 != XAR1:1) goto <inc>;
+	XAR6 = XAR6 & 0xFFFFFF00;
+	goto <done>;
+<inc>
+	XAR6 = (XAR6 & 0xFFFF0000) | zext(AR6 + 2);
+<done>
+	export addr;
+}
+
 # 8-Bit Subset of 16-Bit Addressing Modes (for LSB / MSB instructions)
 # Direct Addressing Modes (DP)
 loc8: @imm6           is ctx_amode=0 & op6_2=0b00 & imm6 {local addr:4 = (zext(DP) << 6) | imm6; local w:2 = *:2 addr; local b:1 = w:1; export b;}
@@ -1138,9 +1364,9 @@ with : ctx_objmode=1 {
 }
 
 # p.189
-:dmov loc16 is ctx_objmode=1 & op8_8=0b10100101 & loc16 {
-	local addr:4 = &loc16;
-	*:2 (addr + 2) = loc16;
+:dmov mem16_addr is ctx_objmode=1 & op8_8=0b10100101 & mem16_addr {
+	local value:2 = *:2 mem16_addr;
+	*:2 (mem16_addr + 1) = value;
 }
 
 # p.190
@@ -1886,10 +2112,9 @@ with : ctx_objmode=1 {
 }
 
 # p.280
-:movad T, loc16 is ctx_objmode=1 & op8_8=0b10100111 & T & loc16 {
-	local addr:4 = &loc16;
-	T = loc16;
-	*:2 (addr + 2) = T;
+:movad T, mem16_addr is ctx_objmode=1 & op8_8=0b10100111 & T & mem16_addr {
+	T = *:2 mem16_addr;
+	*:2 (mem16_addr + 1) = T;
 	acc_add_pm_p();
 }
 
@@ -1955,11 +2180,10 @@ with : ctx_objmode=1 {
 }
 
 # p.295
-:movdl XT, loc32 is ctx_objmode=1 & op8_8=0b10100110 & XT & loc32 {
-	local addr:4 = &loc32;
-	local old_xt:4 = XT;
-	XT = loc32;
-	*:4 (addr + 4) = old_xt;
+:movdl XT, mem32_addr is ctx_objmode=1 & op8_8=0b10100110 & XT & mem32_addr {
+	local value:4 = *:4 mem32_addr;
+	XT = value;
+	*:4 (mem32_addr + 2) = value;
 }
 
 # p.296
@@ -3344,11 +3568,10 @@ with : ctx_objmode=1 {
 }
 
 # p.456
-:xmacd P, loc16, *(imm16) is ctx_objmode=1 & op8_8=0b10100100 & P & loc16; imm16 {
+:xmacd P, mem16_addr, *(imm16) is ctx_objmode=1 & op8_8=0b10100100 & P & mem16_addr; imm16 {
 	acc_add_pm_p();
-	local addr_loc:4 = &loc16;
-	T = loc16;
-	*:2 (addr_loc + 2) = T;
+	T = *:2 mem16_addr;
+	*:2 (mem16_addr + 1) = T;
 	local addr:4 = 0x3f0000 | zext(imm16:2);
 	local coeff:2 = *:2 addr;
 	local prod:4 = sext(T) * sext(coeff);

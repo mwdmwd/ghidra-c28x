@@ -528,11 +528,10 @@ macro update_stf_mov(res) {
 }
 
 # p.101 - load RaH from mem32, copy mem32 to mem32+2
-:movd32 rah3_8, loc32 is op0_16=0b1110001000100011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
-	local val:4 = loc32;
+:movd32 rah3_8, mem32_addr is op0_16=0b1110001000100011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & mem32_addr {
+	local val:4 = *:4 mem32_addr;
 	rah3_8 = val;
-	local addr:4 = &loc32;
-	*:4 (addr + 2) = val;
+	*:4 (mem32_addr + 2) = val;
 	update_stf_mov(rah3_8);
 }
 
