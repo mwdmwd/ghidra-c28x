@@ -26,6 +26,21 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
     <pointer_size value="4" />
   </data_organization>
 
+  <!--
+    TI-generated C/C++ code assumes these status fields have their documented
+    run-time-environment values at every function boundary (SPRU514, Table 7-4).
+    The architectural PM field value 1 denotes "no product shift"; the SLEIGH
+    PM register stores the decoded signed shift amount, so that boundary value
+    is represented here as 0.
+  -->
+  <context_data>
+    <tracked_set space="ram">
+      <set name="PM" val="0" description="TI C run-time product shift: no shift"/>
+      <set name="OVM" val="0" description="TI C run-time overflow mode disabled"/>
+      <set name="PAGE0" val="0" description="TI C run-time direct/stack address mode"/>
+    </tracked_set>
+  </context_data>
+
   <global>
     <range space="ram"/>
   </global>
