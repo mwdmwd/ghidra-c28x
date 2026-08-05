@@ -772,8 +772,8 @@ cond:  "HI"   is cond0_4=0b0110 { local cnd:1 = C   == 1 && Z == 0; export cnd; 
 cond:  "HIS"  is cond0_4=0b0111 { local cnd:1 = C   == 1; export cnd; }
 cond:  "LO"   is cond0_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
 cond:  "LOS"  is cond0_4=0b1001 { local cnd:1 = C   == 0 || Z == 1; export cnd; }
-cond:  "NOV"  is cond0_4=0b1010 { local cnd:1 = V   == 0; export cnd; }
-cond:  "OV"   is cond0_4=0b1011 { local cnd:1 = V   == 1; export cnd; }
+cond:  "NOV"  is cond0_4=0b1010 { local cnd:1 = V   == 0; V = 0; export cnd; }
+cond:  "OV"   is cond0_4=0b1011 { local cnd:1 = V   == 1; V = 0; export cnd; }
 cond:  "NTC"  is cond0_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
 cond:  "TC"   is cond0_4=0b1101 { local cnd:1 = TC  == 1; export cnd; }
 cond:  "NBIO" is cond0_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
@@ -789,8 +789,8 @@ cond8: "HI"   is cond8_4=0b0110 { local cnd:1 = C   == 1 && Z == 0; export cnd; 
 cond8: "HIS"  is cond8_4=0b0111 { local cnd:1 = C   == 1; export cnd; }
 cond8: "LO"   is cond8_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
 cond8: "LOS"  is cond8_4=0b1001 { local cnd:1 = C   == 0 || Z == 1; export cnd; }
-cond8: "NOV"  is cond8_4=0b1010 { local cnd:1 = V   == 0; export cnd; }
-cond8: "OV"   is cond8_4=0b1011 { local cnd:1 = V   == 1; export cnd; }
+cond8: "NOV"  is cond8_4=0b1010 { local cnd:1 = V   == 0; V = 0; export cnd; }
+cond8: "OV"   is cond8_4=0b1011 { local cnd:1 = V   == 1; V = 0; export cnd; }
 cond8: "NTC"  is cond8_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
 cond8: "TC"   is cond8_4=0b1101 { local cnd:1 = TC  == 1; export cnd; }
 cond8: "NBIO" is cond8_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
@@ -1152,8 +1152,9 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.163
 :banz off16, arn0-- is op3_13=0b0000000000001 & arn0; off16 {
-	if (arn0 != 0) goto off16;
+	local take:1 = (arn0 != 0);
 	arn0 = arn0 - 1;
+	if (take) goto off16;
 }
 
 # p.164
