@@ -81,6 +81,27 @@ switch_test.out: switch_test.linked.out
 	$(Q)$(STRIP) --postlink --outfile=$@.new $<
 	$(Q)mv -f $@.new $@
 
+switch_native_test.obj: switch_test.c Makefile
+	$(Q)$(AS) $(CFLAGS) --unified_memory --compile_only --output_file=$@ $<
+
+switch_native_test.linked.out: switch_native_test.obj switch_test.cmd
+	$(Q)$(AS) $(ASFLAGS) --run_linker --entry_point=switch_probe --output_file=$@ $^
+
+switch_native_test.out: switch_native_test.linked.out
+	$(Q)$(STRIP) --postlink --outfile=$@.new $<
+	$(Q)mv -f $@.new $@
+
+switch_validation.obj: switch_validation.asm Makefile
+	$(Q)$(AS) $(ASFLAGS) --abi=eabi --compile_only --output_file=$@ $<
+
+switch_validation.linked.out: switch_validation.obj switch_validation.cmd
+	$(Q)$(AS) $(ASFLAGS) --abi=eabi --run_linker \
+		--entry_point=switch_validation_entry --output_file=$@ $^
+
+switch_validation.out: switch_validation.linked.out
+	$(Q)$(STRIP) --postlink --outfile=$@.new $<
+	$(Q)mv -f $@.new $@
+
 test.bin: test.obj
 	@$(HEX) $< --binary -o $@ 2>&1 | (grep -v '^Translating\|text ==>' || :)
 
@@ -163,15 +184,17 @@ decompile: tms320c28.sla $(DECOMPILE_OBJECT) Decompile.java
 		-scriptlog $$PWD/$(GHIDRA_DECOMP_DIR)/script.log \
 		-analysisTimeoutPerFile 60 -overwrite -deleteProject
 
-# Exercise TI's linked switch-table relocations and Ghidra's automatic computed-jump recovery.
-# A relocatable .obj is insufficient here: its .switch entries are unresolved zeroes.
+# Exercise linked, stripped TI switch tables and Ghidra's automatic recovery.
+# A relocatable .obj is insufficient: its table entries are unresolved zeroes.
 .PHONY: switch-test
-switch-test: tms320c28.sla analyzer switch_test.out SwitchTest.java
+switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
+		switch_validation.out SwitchTest.java
 	@mkdir -p $(GHIDRA_SWITCH_DIR)/home $(GHIDRA_SWITCH_DIR)/config $(GHIDRA_SWITCH_DIR)/project $(GHIDRA_SWITCH_DIR)/tmp $(GHIDRA_SWITCH_DIR)/cache
 	$(Q)HOME=$$PWD/$(GHIDRA_SWITCH_DIR)/home XDG_CONFIG_HOME=$$PWD/$(GHIDRA_SWITCH_DIR)/config \
 		GHIDRA_HEADLESS_JAVA_OPTIONS="-Dapplication.tempdir=$$PWD/$(GHIDRA_SWITCH_DIR)/tmp -Dapplication.cachedir=$$PWD/$(GHIDRA_SWITCH_DIR)/cache -Djava.io.tmpdir=$$PWD/$(GHIDRA_SWITCH_DIR)/tmp" \
 		$(GHIDRA_HEADLESS) $$PWD/$(GHIDRA_SWITCH_DIR)/project switch-test \
-		-import switch_test.out -processor tms320c28:LE:32:default -cspec default \
+		-import switch_test.out switch_native_test.out switch_validation.out \
+		-processor tms320c28:LE:32:default -cspec default \
 		-scriptPath $$PWD -postScript SwitchTest.java \
 		-log $$PWD/$(GHIDRA_SWITCH_DIR)/ghidra.log \
 		-scriptlog $$PWD/$(GHIDRA_SWITCH_DIR)/script.log \
@@ -182,4 +205,7 @@ clean:
 	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR)
 	@rm -rf $(ANALYZER_BUILD_DIR)
 	@rm -f $(ANALYZER_JAR)
-	@rm -f tms320c28.sla test.obj test.bin abi_test.obj switch_test.obj switch_test.linked.out switch_test.out switch_test.out.new quick.asm quick.obj
+	@rm -f tms320c28.sla test.obj test.bin abi_test.obj quick.asm quick.obj
+	@rm -f switch_test.obj switch_test.linked.out switch_test.out switch_test.out.new
+	@rm -f switch_native_test.obj switch_native_test.linked.out switch_native_test.out switch_native_test.out.new
+	@rm -f switch_validation.obj switch_validation.linked.out switch_validation.out switch_validation.out.new

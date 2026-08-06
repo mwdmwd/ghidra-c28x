@@ -4,5 +4,6 @@
 *.out
 quick.asm
 ghidra-decomp/
+analyzer-build/
 ghidra-switch-test/
 old/
