@@ -1460,6 +1460,13 @@ def check_branch_v_clear(ops: list) -> None:
     assert ops.index(clear) < ops.index(negate) < ops.index(branch)
 
 
+def check_unconditional_direct_branch(ops: list) -> None:
+    branches = [op for op in ops if op.opcode == OpCode.BRANCH]
+    conditional = [op for op in ops if op.opcode == OpCode.CBRANCH]
+    assert len(branches) == 1, f"expected one direct branch, got {len(branches)}"
+    assert not conditional, "UNC branch must not expose a conditional fallthrough"
+
+
 def _check_xar7_code_target(ops: list, opcode: OpCode) -> None:
     flow = _find(ops, lambda op: op.opcode == opcode, f"{opcode.name} through XAR7")
     definitions = _unique_definitions(ops)
@@ -1657,6 +1664,9 @@ CASES = (
     Case("B OV snapshots then clears V", (0xFFEB, 0x0001), check_branch_v_clear),
     Case("BF NOV snapshots then clears V", (0x56CA, 0x0001), check_branch_v_clear),
     Case("SB OV snapshots then clears V", (0x6B02,), check_branch_v_clear),
+    Case("B UNC is an unconditional branch", (0xFFEF, 0x0001), check_unconditional_direct_branch),
+    Case("BF UNC is an unconditional branch", (0x56CF, 0x0001), check_unconditional_direct_branch),
+    Case("SB UNC is an unconditional branch", (0x6F02,), check_unconditional_direct_branch),
     Case("conditional MOVB OV snapshots then clears V", (0x56BB, 0x0511), check_branch_v_clear),
     Case("XRETC OV snapshots then clears V", (0x56FB,), check_branch_v_clear),
     Case("LB *XAR7 masks its target to 22 code-address bits", (0x7620,), check_lb_xar7_target),

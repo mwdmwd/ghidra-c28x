@@ -2129,7 +2129,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.162
-:b off16, cond is op4_12=0b111111111110 & cond; off16 {
+:b off16, "UNC" is op4_12=0b111111111110 & cond0_4=0b1111; off16 {
+	goto off16;
+}
+
+:b off16, cond is op4_12=0b111111111110 & cond0_4!=0b1111 & cond; off16 {
 	if (cond) goto off16;
 }
 
@@ -2151,7 +2155,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.165
-:bf off16, cond is ctx_objmode=1 & op4_12=0b010101101100 & cond; off16 {
+:bf off16, "UNC" is ctx_objmode=1 & op4_12=0b010101101100 & cond0_4=0b1111; off16 {
+	goto off16;
+}
+
+:bf off16, cond is ctx_objmode=1 & op4_12=0b010101101100 & cond0_4!=0b1111 & cond; off16 {
 	if (cond) goto off16;
 }
 
@@ -4204,7 +4212,11 @@ with : ctx_objmode=1 {
 }
 
 # p.399 Need description here
-:sb off8, cond8 is op12_4=0b0110 & off8 & cond8 {
+:sb off8, "UNC" is op12_4=0b0110 & cond8_4=0b1111 & off8 {
+	goto off8;
+}
+
+:sb off8, cond8 is op12_4=0b0110 & cond8_4!=0b1111 & off8 & cond8 {
 	if (cond8) goto off8;
 }
 
