@@ -1,4 +1,6 @@
 
+.DEFAULT_GOAL := all
+
 TIBIN ?= /home/user/re/inverter/tms320/ti-cgt-c2000_22.6.1.LTS/bin/
 SLEIGH ?= /opt/ghidra/support/sleigh
 PYTHON ?= python3
@@ -45,6 +47,9 @@ endif
 
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -o pipefail -c
+
+.PHONY: all
+all: tms320c28.sla analyzer
 
 tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec $(wildcard tms320c28*.sinc) tms320c28.slaspec
 	$(Q)$(SLEIGH) $(SLEIGH_REPORT_CONFLICTS) -u -t -c tms320c28.slaspec $(SLEIGH_GREP) # -f unused fields
