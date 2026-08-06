@@ -2540,7 +2540,15 @@ with : ctx_objmode=1 {
 }
 
 # p.216
-:lb *XAR7 is op0_16=0b0111011000100000 & XAR7 {
+:lb *XAR7 is switch_canonical=1 & op0_16=0b0111011000100000 & XAR7 {
+	# The switch analyzer has validated that every loaded table entry is a
+	# 22-bit code address.  Keeping the loaded value directly on BRANCHIND lets
+	# Ghidra's generic native jump-table model recognize the data dependency.
+	goto [XAR7];
+}
+
+# p.216
+:lb *XAR7 is switch_canonical=0 & op0_16=0b0111011000100000 & XAR7 {
 	# Only XAR7(21:0) is loaded into the architectural PC.
 	local target:4 = XAR7 & 0x003fffff;
 	goto [target];
@@ -2926,7 +2934,18 @@ with : ctx_objmode=1 {
 }
 
 # p.255
-:mov ACC, loc16 << #shift8_4 is ctx_objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {
+# A processor analyzer selects this variant only after proving that an unsigned
+# range guard restricts the compiler's switch selector below bit 15.  On that
+# path SXM cannot affect the result, and the canonical zext lets Ghidra bound
+# the subsequent native jump table.
+:mov ACC, loc16 << #shift8_4 is switch_canonical=1 & ctx_objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {
+	local tmp:4 = zext(loc16);
+	ACC = tmp << shift8_4;
+	flagnz(ACC);
+}
+
+# p.255
+:mov ACC, loc16 << #shift8_4 is switch_canonical=0 & ctx_objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {
 	local tmp:4;
 	mext(tmp, loc16);
 	ACC = tmp << shift8_4;

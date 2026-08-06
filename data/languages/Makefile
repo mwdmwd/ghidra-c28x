@@ -7,9 +7,20 @@ ASFLAGS := --float_support=fpu32
 DIS := $(TIBIN)dis2000
 DISFLAGS ?=
 HEX := $(TIBIN)hex2000
+STRIP := $(TIBIN)strip2000
 CFLAGS ?= $(ASFLAGS) --abi=eabi --c11 -O2 --symdebug:none
 GHIDRA_HEADLESS ?= /opt/ghidra/support/analyzeHeadless
+GHIDRA_INSTALL_DIR ?= /opt/ghidra
+JAVAC ?= javac
+JAR ?= jar
 GHIDRA_DECOMP_DIR := ghidra-decomp
+GHIDRA_SWITCH_DIR := ghidra-switch-test
+MODULE_DIR ?= ../..
+ANALYZER_SOURCE ?= $(MODULE_DIR)/src/main/java/ghidra/app/plugin/core/analysis/TMS320C28SwitchAnalyzer.java
+ANALYZER_BUILD_DIR := analyzer-build
+ANALYZER_CLASSES := $(ANALYZER_BUILD_DIR)/classes
+ANALYZER_JAR := $(MODULE_DIR)/lib/TMS320C28.jar
+GHIDRA_CLASSPATH = $(shell find $(GHIDRA_INSTALL_DIR)/Ghidra -path '*/lib/*.jar' -type f -print | paste -sd:)
 DECOMPILE_SOURCE ?= abi_test.c
 DECOMPILE_OBJECT ?= abi_test.obj
 DECOMPILE_NAME ?= $(basename $(notdir $(DECOMPILE_OBJECT)))
@@ -38,11 +49,32 @@ SHELL := /usr/bin/env bash
 tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec $(wildcard tms320c28*.sinc) tms320c28.slaspec
 	$(Q)$(SLEIGH) $(SLEIGH_REPORT_CONFLICTS) -u -t -c tms320c28.slaspec $(SLEIGH_GREP) # -f unused fields
 
+.PHONY: analyzer
+analyzer: $(ANALYZER_JAR)
+
+$(ANALYZER_JAR): $(ANALYZER_SOURCE)
+	@mkdir -p $(ANALYZER_CLASSES) $(dir $(ANALYZER_JAR))
+	$(Q)$(JAVAC) -proc:none -cp '$(GHIDRA_CLASSPATH)' -d $(ANALYZER_CLASSES) $<
+	$(Q)$(JAR) --create --file $@ -C $(ANALYZER_CLASSES) .
+
 test.obj: test.asm
 	$(Q)$(AS) $(ASFLAGS) $<
 
 $(DECOMPILE_OBJECT): $(DECOMPILE_SOURCE) Makefile
 	$(Q)$(AS) $(CFLAGS) --compile_only --output_file=$@ $<
+
+switch_test.obj: switch_test.c Makefile
+	$(Q)$(AS) $(CFLAGS) --compile_only --output_file=$@ $<
+
+switch_test.linked.out: switch_test.obj switch_test.cmd
+	$(Q)$(AS) $(ASFLAGS) --run_linker --entry_point=switch_probe --output_file=$@ $^
+
+# TI's linked ELF exposes compiler-local $C$L labels as symbols.  Ghidra treats
+# those labels as function starts, which is unlike the stripped firmware image
+# this test models and prevents ordinary switch analysis from seeing the guard.
+switch_test.out: switch_test.linked.out
+	$(Q)$(STRIP) --postlink --outfile=$@.new $<
+	$(Q)mv -f $@.new $@
 
 test.bin: test.obj
 	@$(HEX) $< --binary -o $@ 2>&1 | (grep -v '^Translating\|text ==>' || :)
@@ -126,7 +158,23 @@ decompile: tms320c28.sla $(DECOMPILE_OBJECT) Decompile.java
 		-scriptlog $$PWD/$(GHIDRA_DECOMP_DIR)/script.log \
 		-analysisTimeoutPerFile 60 -overwrite -deleteProject
 
+# Exercise TI's linked switch-table relocations and Ghidra's automatic computed-jump recovery.
+# A relocatable .obj is insufficient here: its .switch entries are unresolved zeroes.
+.PHONY: switch-test
+switch-test: tms320c28.sla analyzer switch_test.out SwitchTest.java
+	@mkdir -p $(GHIDRA_SWITCH_DIR)/home $(GHIDRA_SWITCH_DIR)/config $(GHIDRA_SWITCH_DIR)/project $(GHIDRA_SWITCH_DIR)/tmp $(GHIDRA_SWITCH_DIR)/cache
+	$(Q)HOME=$$PWD/$(GHIDRA_SWITCH_DIR)/home XDG_CONFIG_HOME=$$PWD/$(GHIDRA_SWITCH_DIR)/config \
+		GHIDRA_HEADLESS_JAVA_OPTIONS="-Dapplication.tempdir=$$PWD/$(GHIDRA_SWITCH_DIR)/tmp -Dapplication.cachedir=$$PWD/$(GHIDRA_SWITCH_DIR)/cache -Djava.io.tmpdir=$$PWD/$(GHIDRA_SWITCH_DIR)/tmp" \
+		$(GHIDRA_HEADLESS) $$PWD/$(GHIDRA_SWITCH_DIR)/project switch-test \
+		-import switch_test.out -processor tms320c28:LE:32:default -cspec default \
+		-scriptPath $$PWD -postScript SwitchTest.java \
+		-log $$PWD/$(GHIDRA_SWITCH_DIR)/ghidra.log \
+		-scriptlog $$PWD/$(GHIDRA_SWITCH_DIR)/script.log \
+		-analysisTimeoutPerFile 60 -overwrite -deleteProject
+
 .PHONY: clean
 clean:
-	@rm -rf $(GHIDRA_DECOMP_DIR)
-	@rm -f tms320c28.sla test.obj test.bin abi_test.obj quick.asm quick.obj
+	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR)
+	@rm -rf $(ANALYZER_BUILD_DIR)
+	@rm -f $(ANALYZER_JAR)
+	@rm -f tms320c28.sla test.obj test.bin abi_test.obj switch_test.obj switch_test.linked.out switch_test.out switch_test.out.new quick.asm quick.obj

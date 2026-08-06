@@ -1,6 +1,8 @@
 *.sla
 *.bin
 *.obj
+*.out
 quick.asm
 ghidra-decomp/
+ghidra-switch-test/
 old/
