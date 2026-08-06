@@ -1460,6 +1460,23 @@ def check_branch_v_clear(ops: list) -> None:
     assert ops.index(clear) < ops.index(negate) < ops.index(branch)
 
 
+def _check_xar7_code_target(ops: list, opcode: OpCode) -> None:
+    flow = _find(ops, lambda op: op.opcode == opcode, f"{opcode.name} through XAR7")
+    definitions = _unique_definitions(ops)
+    target = _definition_for(definitions, flow.inputs[0])
+    assert target is not None and target.opcode == OpCode.INT_AND
+    assert any(_is_const(value, 0x3FFFFF) for value in target.inputs)
+    assert any(_depends_on_register(ops, value, "XAR7") for value in target.inputs)
+
+
+def check_lb_xar7_target(ops: list) -> None:
+    _check_xar7_code_target(ops, OpCode.BRANCHIND)
+
+
+def check_lc_xar7_target(ops: list) -> None:
+    _check_xar7_code_target(ops, OpCode.CALLIND)
+
+
 CASES = (
     Case("BANZ decrements before branching", (0x000A, 0x0001), check_banz),
     Case("MOV32 UNCF flags are branch-free", (0xE2AF, 0x0021), check_mov32_uncf),
@@ -1642,6 +1659,8 @@ CASES = (
     Case("SB OV snapshots then clears V", (0x6B02,), check_branch_v_clear),
     Case("conditional MOVB OV snapshots then clears V", (0x56BB, 0x0511), check_branch_v_clear),
     Case("XRETC OV snapshots then clears V", (0x56FB,), check_branch_v_clear),
+    Case("LB *XAR7 masks its target to 22 code-address bits", (0x7620,), check_lb_xar7_target),
+    Case("LC *XAR7 masks its target to 22 code-address bits", (0x7604,), check_lc_xar7_target),
 )
 
 

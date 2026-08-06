@@ -2541,7 +2541,9 @@ with : ctx_objmode=1 {
 
 # p.216
 :lb *XAR7 is op0_16=0b0111011000100000 & XAR7 {
-	goto [XAR7];
+	# Only XAR7(21:0) is loaded into the architectural PC.
+	local target:4 = XAR7 & 0x003fffff;
+	goto [target];
 }
 
 # p.217
@@ -2553,7 +2555,9 @@ with : ctx_objmode=1 {
 :lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {
 	local tmp:4 = inst_next;
 	push32(tmp);
-	call [XAR7];
+	# Like LB *XAR7, LC ignores XAR7(31:22).
+	local target:4 = XAR7 & 0x003fffff;
+	call [target];
 }
 
 # p.219
