@@ -11,7 +11,7 @@ switch_validation_entry:
     LCR       #function_pointer_dispatch
     LCR       #function_pointer_target0
     LCR       #function_pointer_target1
-    LCR       #function_pointer_target2
+    LCR       #saved_selector_valid
     LRETR
     .endasmfunc
 
@@ -173,6 +173,64 @@ function_pointer_target2:
     LRETR
     .endasmfunc
 
+    ; Mirrors a TI firmware schedule that preserves a 32-bit selector in XAR7
+    ; across two unsigned ranges, then scales and adjusts ACC for native tables.
+    ; The first dispatch immediately follows an unconditional default branch.
+    .asmfunc
+saved_selector_valid:
+    LCR       #function_pointer_target2
+    MOVB      XAR6, #3
+    MOVL      XAR7, ACC
+    SUB       ACC, #0xc0 << #1       ; low case 0x180
+    CMPL      ACC, XAR6
+    SB        saved_selector_dispatch0, LOS
+    MOVB      XAR6, #2
+    MOVL      ACC, XAR7
+    SUB       ACC, #0x19 << #4       ; low case 0x190
+    CMPL      ACC, XAR6
+    SB        saved_selector_dispatch1, LOS
+    SB        saved_selector_default, UNC
+saved_selector_dispatch0:
+    MOVL      ACC, XAR7
+    MOVL      XAR7, #saved_selector_table0
+    LSL       ACC, #1
+    SUB       ACC, #0xc0 << #2       ; two-word entries, low case 0x180
+    ADDL      XAR7, ACC
+    MOVL      XAR7, *XAR7
+    LB        *XAR7
+saved_selector_dispatch1:
+    MOVL      ACC, XAR7
+    MOVL      XAR7, #saved_selector_table1
+    LSL       ACC, #1
+    SUB       ACC, #0x19 << #5       ; two-word entries, low case 0x190
+    ADDL      XAR7, ACC
+    MOVL      XAR7, *XAR7
+    LB        *XAR7
+saved_selector_default:
+    LRETR
+saved_selector_case0:
+    MOVB      AL, #0x81
+    LRETR
+saved_selector_case1:
+    MOVB      AL, #0x82
+    LRETR
+saved_selector_case2:
+    MOVB      AL, #0x83
+    LRETR
+saved_selector_case3:
+    MOVB      AL, #0x84
+    LRETR
+saved_selector_case4:
+    MOVB      AL, #0x91
+    LRETR
+saved_selector_case5:
+    MOVB      AL, #0x92
+    LRETR
+saved_selector_case6:
+    MOVB      AL, #0x93
+    LRETR
+    .endasmfunc
+
     .sect ".switch"
 compact_valid_table:
     .long compact_valid_case0
@@ -195,6 +253,15 @@ high_target_bits_table:
     .long high_target_bits_case0 + 0x400000
     .long high_target_bits_case1 + 0x400000
     .long high_target_bits_case2 + 0x400000
+saved_selector_table0:
+    .long saved_selector_case0
+    .long saved_selector_case1
+    .long saved_selector_case2
+    .long saved_selector_case3
+saved_selector_table1:
+    .long saved_selector_case4
+    .long saved_selector_case5
+    .long saved_selector_case6
 
     .sect ".data"
 writable_table_data:

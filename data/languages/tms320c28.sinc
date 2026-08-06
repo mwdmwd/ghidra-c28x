@@ -4377,7 +4377,22 @@ with : ctx_objmode=1 {
 }
 
 # p.417
-:sub ACC, #imm16 << #shift0_4 is op4_12=0b111111110000 & shift0_4; ACC & imm16 {
+# The switch analyzer selects this form only for a matched 32-bit range guard
+# or its dispatch adjustment.  Bit 15 of the immediate is clear, so SXM cannot
+# change the operand.  The guard's CMPL overwrites C/N/Z; on its taken path, and
+# at the corresponding dispatch, the validated bounds prove no borrow, signed
+# overflow, OVC update, or OVM saturation.  Keeping that proven path simple lets
+# stock switch analysis recover the native table.  Ordinary SUB sites retain
+# the complete SXM/OVM-sensitive semantics below.
+:sub ACC, #imm16 << #shift0_4 is switch_canonical=1 & op4_12=0b111111110000 & shift0_4; ACC & imm16 {
+	local value:4 = zext(imm16:2) << shift0_4;
+	ACC = ACC - value;
+	C = 1;
+	flagnz(ACC);
+}
+
+# p.417
+:sub ACC, #imm16 << #shift0_4 is switch_canonical=0 & op4_12=0b111111110000 & shift0_4; ACC & imm16 {
 	local tmp:4;
 	mext(tmp, imm16:2);
 	local value:4 = tmp << shift0_4;

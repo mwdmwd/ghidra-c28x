@@ -25,6 +25,9 @@ public class SwitchTest extends GhidraScript {
     private static final long VALID_FUNCTION = 0x13015;
     private static final long VALID_INDEX = 0x1301d;
     private static final long VALID_BRANCH = 0x13024;
+    private static final long SAVED_FUNCTION = 0x13092;
+    private static final long SAVED_BRANCH0 = 0x130aa;
+    private static final long SAVED_BRANCH1 = 0x130b4;
 
     private static void require(boolean condition, String message) {
         if (!condition) {
@@ -127,6 +130,8 @@ public class SwitchTest extends GhidraScript {
 
         Map<Long, Integer> expectedReferences = new LinkedHashMap<>();
         expectedReferences.put(VALID_BRANCH, 4);
+        expectedReferences.put(SAVED_BRANCH0, 4);
+        expectedReferences.put(SAVED_BRANCH1, 3);
         expectedReferences.put(0x1303cL, 0); // malformed one-entry bound
         expectedReferences.put(0x1304fL, 0); // inconsistent table arithmetic
         expectedReferences.put(0x13062L, 0); // raw target bit 22 set
@@ -151,6 +156,22 @@ public class SwitchTest extends GhidraScript {
 
         require(isCanonical(wordAddress(VALID_INDEX), context),
             "valid compact index was not canonicalized");
+        require(isCanonical(wordAddress(0x13096), context) &&
+                isCanonical(wordAddress(0x1309c), context),
+            "saved-selector range guards were not canonicalized");
+        require(isCanonical(wordAddress(0x130a5), context) &&
+                isCanonical(wordAddress(0x130af), context),
+            "saved-selector dispatch adjustments were not canonicalized");
+        require(!isCanonical(wordAddress(0x130a4), context) &&
+                !isCanonical(wordAddress(0x130ae), context),
+            "saved-selector LSL instructions were unnecessarily canonicalized");
+        Instruction unconditionalDefault = getInstructionAt(wordAddress(0x130a0));
+        require(unconditionalDefault != null &&
+                unconditionalDefault.getMnemonicString().equalsIgnoreCase("SB") &&
+                unconditionalDefault.getFlowType().isJump() &&
+                !unconditionalDefault.getFlowType().isConditional() &&
+                unconditionalDefault.getFallThrough() == null,
+            "SB ...,UNC still exposes a conditional fallthrough");
         require(!isCanonical(wordAddress(0x13035), context),
             "malformed-bound index was canonicalized");
         require(!isCanonical(wordAddress(0x13048), context),
@@ -169,7 +190,7 @@ public class SwitchTest extends GhidraScript {
             "inconsistent-arithmetic fixture no longer has the mismatched adjustment");
 
         Memory memory = currentProgram.getMemory();
-        long highWord = memory.getShort(wordAddress(0x130ad), false) & 0xffffL;
+        long highWord = memory.getShort(wordAddress(0x130df), false) & 0xffffL;
         require((highWord & 0x40) != 0,
             "high-target-bits fixture did not retain raw address bit 22");
         MemoryBlock writable = memory.getBlock(wordAddress(0x2000));
@@ -193,10 +214,27 @@ public class SwitchTest extends GhidraScript {
         require(c.contains("case 0x120:") && c.contains("case 0x123:"),
             "compact switch lost its original nonzero labels\n" + c);
 
-        println("SWITCH_VALIDATION_POSITIVE_REFS=4");
+        Function savedFunction = getFunctionAt(wordAddress(SAVED_FUNCTION));
+        require(savedFunction != null, "missing saved-selector switch function");
+        long[] savedTargets = {
+            0x130b6, 0x130b8, 0x130ba, 0x130bc, 0x130be, 0x130c0, 0x130c2
+        };
+        for (long target : savedTargets) {
+            require(savedFunction.getBody().contains(wordAddress(target)),
+                "saved-selector switch target not in function body: " + wordAddress(target));
+        }
+        String savedC = decompile(savedFunction);
+        require(!savedC.contains("Could not recover jumptable"),
+            "saved-selector switch remains unrecovered\n" + savedC);
+        require(savedC.contains("case 0x180:") && savedC.contains("case 0x183:") &&
+                (savedC.contains("case 0x190:") || savedC.contains("case 400:")) &&
+                savedC.contains("case 0x192:"),
+            "saved-selector switch lost its original nonzero labels\n" + savedC);
+
+        println("SWITCH_VALIDATION_POSITIVE_REFS=4,4,3");
         println("SWITCH_VALIDATION_REJECTED=6");
-        println("SWITCH_VALIDATION_CASE_RANGE=0x120-0x123");
-        println("SWITCH_VALIDATION_BODY_TARGETS=4");
+        println("SWITCH_VALIDATION_CASE_RANGES=0x120-0x123,0x180-0x183,0x190-0x192");
+        println("SWITCH_VALIDATION_BODY_TARGETS=4,7");
     }
 
     private String decompile(Function function) {
