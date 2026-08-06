@@ -11,7 +11,7 @@ switch_validation_entry:
     LCR       #function_pointer_dispatch
     LCR       #function_pointer_target0
     LCR       #function_pointer_target1
-    LCR       #saved_selector_valid
+    LCR       #validation_tail
     LRETR
     .endasmfunc
 
@@ -262,6 +262,173 @@ saved_selector_table1:
     .long saved_selector_case4
     .long saved_selector_case5
     .long saved_selector_case6
+
+    ; Keep this extension after the original .text/.switch corpus so the
+    ; established negative-fixture addresses remain stable.
+    .sect ".extra"
+    .asmfunc
+validation_tail:
+    LCR       #saved_selector_valid
+    LCR       #saved_p_valid
+    SB        saved_hi_valid, UNC
+    .endasmfunc
+
+    ; Mirrors the real-firmware schedule at 0x8e1ec: subtract the low case,
+    ; branch to default on HI, and fall through on the bounded unsigned range.
+    ; P preserves the original 32-bit selector using the unshifted MOVL forms.
+    .asmfunc
+saved_p_valid:
+    MOVB      XAR7, #0x1b
+    MOVL      P, ACC
+    SUB       ACC, #1 << #9          ; low case 0x200
+    CMPL      ACC, XAR7
+    SB        saved_p_default, HI
+    MOVL      ACC, P
+    MOVL      XAR7, #saved_p_table
+    LSL       ACC, #1
+    SUB       ACC, #1 << #10         ; two-word entries, low case 0x200
+    ADDL      XAR7, ACC
+    MOVL      XAR7, *XAR7
+    LB        *XAR7
+saved_p_default:
+    LRETR
+saved_p_case00:
+    MOVB      AL, #0x00
+    LRETR
+saved_p_case01:
+    MOVB      AL, #0x01
+    LRETR
+saved_p_case02:
+    MOVB      AL, #0x02
+    LRETR
+saved_p_case03:
+    MOVB      AL, #0x03
+    LRETR
+saved_p_case04:
+    MOVB      AL, #0x04
+    LRETR
+saved_p_case05:
+    MOVB      AL, #0x05
+    LRETR
+saved_p_case06:
+    MOVB      AL, #0x06
+    LRETR
+saved_p_case07:
+    MOVB      AL, #0x07
+    LRETR
+saved_p_case08:
+    MOVB      AL, #0x08
+    LRETR
+saved_p_case09:
+    MOVB      AL, #0x09
+    LRETR
+saved_p_case10:
+    MOVB      AL, #0x0a
+    LRETR
+saved_p_case11:
+    MOVB      AL, #0x0b
+    LRETR
+saved_p_case12:
+    MOVB      AL, #0x0c
+    LRETR
+saved_p_case13:
+    MOVB      AL, #0x0d
+    LRETR
+saved_p_case14:
+    MOVB      AL, #0x0e
+    LRETR
+saved_p_case15:
+    MOVB      AL, #0x0f
+    LRETR
+saved_p_case16:
+    MOVB      AL, #0x10
+    LRETR
+saved_p_case17:
+    MOVB      AL, #0x11
+    LRETR
+saved_p_case22:
+    MOVB      AL, #0x16
+    LRETR
+saved_p_case23:
+    MOVB      AL, #0x17
+    LRETR
+saved_p_case24:
+    MOVB      AL, #0x18
+    LRETR
+saved_p_case25:
+    MOVB      AL, #0x19
+    LRETR
+saved_p_case26:
+    MOVB      AL, #0x1a
+    LRETR
+saved_p_case27:
+    MOVB      AL, #0x1b
+    LRETR
+    .endasmfunc
+
+    ; Standalone 32-bit switches from cl2000 22.6.1 use this XAR7-saved
+    ; sibling of the P-saved firmware form, with the same inverted HI guard.
+    .asmfunc
+saved_hi_valid:
+    MOVB      XAR6, #0x02
+    MOVL      XAR7, ACC
+    SUB       ACC, #0x110 << #1       ; low case 0x220
+    CMPL      ACC, XAR6
+    SB        saved_hi_default, HI
+    MOVL      ACC, XAR7
+    MOVL      XAR7, #saved_hi_table
+    LSL       ACC, #1
+    SUB       ACC, #0x110 << #2       ; two-word entries, low case 0x220
+    ADDL      XAR7, ACC
+    MOVL      XAR7, *XAR7
+    LB        *XAR7
+saved_hi_default:
+    LRETR
+saved_hi_case0:
+    MOVB      AL, #0x21
+    LRETR
+saved_hi_case1:
+    MOVB      AL, #0x22
+    LRETR
+saved_hi_case2:
+    MOVB      AL, #0x23
+    LRETR
+    .endasmfunc
+
+    .sect ".extra_switch"
+saved_p_table:
+    .long saved_p_case00
+    .long saved_p_case01
+    .long saved_p_case02
+    .long saved_p_case03
+    .long saved_p_case04
+    .long saved_p_case05
+    .long saved_p_case06
+    .long saved_p_case07
+    .long saved_p_case08
+    .long saved_p_case09
+    .long saved_p_case10
+    .long saved_p_case11
+    .long saved_p_case12
+    .long saved_p_case13
+    .long saved_p_case14
+    .long saved_p_case15
+    .long saved_p_case16
+    .long saved_p_case17
+    .long saved_p_default
+    .long saved_p_default
+    .long saved_p_default
+    .long saved_p_default
+    .long saved_p_case22
+    .long saved_p_case23
+    .long saved_p_case24
+    .long saved_p_case25
+    .long saved_p_case26
+    .long saved_p_case27
+saved_hi_table:
+    .long saved_hi_case0
+    .long saved_hi_case1
+    .long saved_hi_case2
 
     .sect ".data"
 writable_table_data:

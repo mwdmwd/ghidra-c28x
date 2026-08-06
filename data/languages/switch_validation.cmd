@@ -7,5 +7,7 @@ SECTIONS
 {
     .text   : > PROG
     .switch : > PROG
+    .extra  : > PROG
+    .extra_switch : > PROG
     .data   : > DATA
 }

@@ -229,11 +229,11 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 	}
 
 	/**
-	 * Recover the 32-bit-selector schedule used by TI firmware that keeps the
-	 * unadjusted selector in XAR7 across one or more range guards:
+	 * Recover 32-bit-selector schedules used by TI firmware that keep the
+	 * unadjusted selector in either XAR7 or P across a range guard:
 	 *
 	 * <pre>
-	 * MOVL ACC,XAR7
+	 * MOVL ACC,XAR7 | MOVL ACC,P
 	 * MOVL XAR7,#table
 	 * LSL  ACC,1
 	 * SUB  ACC,#(2 * low)
@@ -255,19 +255,30 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		Instruction selectorCopy = contiguousPrevious(tableInstruction);
 		Scalar tableScalar = immediateTableBase(tableInstruction);
 		Long subtraction = recoverAccImmediateSubtraction(adjustmentInstruction);
+		String savedRegister;
+		DispatchVariant variant;
+		if (isRegisterMove(selectorCopy, "movl", "ACC", "XAR7")) {
+			savedRegister = "XAR7";
+			variant = DispatchVariant.NATIVE_SAVED_LONG;
+		}
+		else if (isRegisterMove(selectorCopy, "movl", "ACC", "P")) {
+			savedRegister = "P";
+			variant = DispatchVariant.NATIVE_SAVED_P;
+		}
+		else {
+			return null;
+		}
 		if (!isNativeLongwordLoad(load) ||
 			!isRegisterMove(add, "addl", "XAR7", "ACC") ||
-			!isLslAccByOne(scaleInstruction) || tableScalar == null || subtraction == null ||
-			!isRegisterMove(selectorCopy, "movl", "ACC", "XAR7")) {
+			!isLslAccByOne(scaleInstruction) || tableScalar == null || subtraction == null) {
 			return null;
 		}
 
 		Address table = tableAddress(tableInstruction, tableScalar);
 		IndexExpression expression =
-			new IndexExpression(adjustmentInstruction, "XAR7", TABLE_ENTRY_WORDS,
+			new IndexExpression(adjustmentInstruction, savedRegister, TABLE_ENTRY_WORDS,
 				-subtraction.longValue());
-		return new DispatchCandidate(selectorCopy, branch, table, expression,
-			DispatchVariant.NATIVE_SAVED_LONG);
+		return new DispatchCandidate(selectorCopy, branch, table, expression, variant);
 	}
 
 	private static DispatchCandidate recoverPlAddressComputation(Instruction addressCopy,
@@ -428,16 +439,23 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			}
 			match = guard;
 		}
+
+		// Some TI schedules invert the usual layout: HI branches to the default
+		// while the bounded LOS path falls through directly into the dispatch.
+		Guard fallthroughGuard =
+			recoverUnsignedRange(contiguousPrevious(dispatch.entryInstruction), dispatch);
+		if (fallthroughGuard != null) {
+			if (match != null) {
+				return null;
+			}
+			match = fallthroughGuard;
+		}
 		return match;
 	}
 
 	private static Guard recoverUnsignedRange(Instruction guard, DispatchCandidate dispatch) {
-		if (!isUnsignedConditionalBranch(guard) ||
-			!flowsTo(guard, dispatch.entryInstruction.getMinAddress())) {
-			return null;
-		}
-		Address defaultPath = guard.getFallThrough();
-		if (defaultPath == null || isWithinDispatch(defaultPath, dispatch)) {
+		Address defaultPath = unsignedGuardDefaultPath(guard, dispatch);
+		if (defaultPath == null) {
 			return null;
 		}
 
@@ -482,21 +500,32 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 
 	private static Guard recoverUnsignedLongRange(Instruction guard, DispatchCandidate dispatch,
 			Address defaultPath, Instruction compare, Instruction subtract) {
-		if (!dispatch.indexExpression.sourceRegister.equals("XAR7") ||
-			!isRegisterOperand(compare, 0, "ACC") ||
-			!isRegisterOperand(compare, 1, "XAR6")) {
+		String savedRegister = dispatch.indexExpression.sourceRegister;
+		String boundRegister;
+		boolean selectorRelated;
+		if (savedRegister.equals("XAR7")) {
+			boundRegister = "XAR6";
+			Instruction selectorRelation = contiguousPrevious(subtract);
+			selectorRelated = isRegisterMove(selectorRelation, "movl", "XAR7", "ACC") ||
+				isRegisterMove(selectorRelation, "movl", "ACC", "XAR7");
+		}
+		else if (savedRegister.equals("P")) {
+			boundRegister = "XAR7";
+			selectorRelated =
+				isRegisterMove(contiguousPrevious(subtract), "movl", "P", "ACC");
+		}
+		else {
 			return null;
 		}
 
 		Long lowValue = recoverAccImmediateSubtraction(subtract);
-		Instruction selectorRelation = contiguousPrevious(subtract);
-		if (lowValue == null ||
-			!(isRegisterMove(selectorRelation, "movl", "XAR7", "ACC") ||
-				isRegisterMove(selectorRelation, "movl", "ACC", "XAR7"))) {
+		if (lowValue == null || !selectorRelated ||
+			!isRegisterOperand(compare, 0, "ACC") ||
+			!isRegisterOperand(compare, 1, boundRegister)) {
 			return null;
 		}
 
-		RegisterBound bound = recoverImmediateXar6Bound(subtract);
+		RegisterBound bound = recoverImmediateRegisterBound(subtract, boundRegister);
 		if (bound == null) {
 			return null;
 		}
@@ -510,17 +539,18 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		return new Guard(guard, bound.instruction, subtract, low, (int) count, defaultPath);
 	}
 
-	private static RegisterBound recoverImmediateXar6Bound(Instruction subtract) {
+	private static RegisterBound recoverImmediateRegisterBound(Instruction subtract,
+			String registerName) {
 		Instruction next = subtract;
 		Instruction current = contiguousPrevious(next);
 		for (int count = 0; count < 10 && current != null; count++) {
 			if (!fallsThroughTo(current, next.getMinAddress())) {
 				return null;
 			}
-			if (writesRegister(current, "XAR6")) {
+			if (writesRegister(current, registerName)) {
 				Scalar scalar = scalarOperand(current, 1);
 				if (!isMnemonic(current, "movb") ||
-					!isRegisterOperand(current, 0, "XAR6") || scalar == null) {
+					!isRegisterOperand(current, 0, registerName) || scalar == null) {
 					return null;
 				}
 				return new RegisterBound(current, scalar.getUnsignedValue());
@@ -537,7 +567,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 		long expectedAdjustment;
 		if (expression.sourceRegister.equals("AH") ||
-			expression.sourceRegister.equals("XAR7")) {
+			expression.sourceRegister.equals("XAR7") ||
+			expression.sourceRegister.equals("P")) {
 			expectedAdjustment = -TABLE_ENTRY_WORDS * low;
 		}
 		else if (expression.sourceRegister.equals("AL")) {
@@ -581,7 +612,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			DispatchCandidate dispatch) {
 		Instruction entry = dispatch.entryInstruction;
 		Instruction previous = entry.getPrevious();
-		if (previous != null && fallsThroughTo(previous, entry.getMinAddress())) {
+		if (previous != null && fallsThroughTo(previous, entry.getMinAddress()) &&
+			!previous.equals(guard.instruction)) {
 			return false;
 		}
 
@@ -794,14 +826,41 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			shift.getUnsignedValue() == 1;
 	}
 
-	private static boolean isUnsignedConditionalBranch(Instruction instruction) {
+	private static boolean isUnsignedConditionalBranch(Instruction instruction,
+			String condition) {
 		if (instruction == null || !instruction.getFlowType().isJump() ||
 			!instruction.getFlowType().isConditional() ||
 			!(isMnemonic(instruction, "sb") || isMnemonic(instruction, "b") ||
 				isMnemonic(instruction, "bf"))) {
 			return false;
 		}
-		return operandText(instruction, 1).equalsIgnoreCase("LOS");
+		return operandText(instruction, 1).equalsIgnoreCase(condition);
+	}
+
+	private static Address unsignedGuardDefaultPath(Instruction guard,
+			DispatchCandidate dispatch) {
+		Address entry = dispatch.entryInstruction.getMinAddress();
+		Address defaultPath;
+		if (dispatch.variant != DispatchVariant.NATIVE_SAVED_P &&
+			isUnsignedConditionalBranch(guard, "LOS") && flowsTo(guard, entry)) {
+			defaultPath = guard.getFallThrough();
+		}
+		else if ((dispatch.variant == DispatchVariant.NATIVE_SAVED_LONG ||
+			dispatch.variant == DispatchVariant.NATIVE_SAVED_P) &&
+			isUnsignedConditionalBranch(guard, "HI") &&
+			fallsThroughTo(guard, entry)) {
+			Address[] flows = guard.getFlows();
+			if (flows.length != 1) {
+				return null;
+			}
+			defaultPath = flows[0];
+		}
+		else {
+			return null;
+		}
+		return defaultPath != null && !isWithinDispatch(defaultPath, dispatch)
+				? defaultPath
+				: null;
 	}
 
 	private static boolean isSelectorCopy(Instruction instruction) {
@@ -923,6 +982,7 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		PROGRAM_READ("program-read PREAD"),
 		NATIVE_PL("unified-memory native-load"),
 		NATIVE_SAVED_LONG("saved-selector native-load"),
+		NATIVE_SAVED_P("P-saved fall-through native-load"),
 		NATIVE_DIRECT("compact native-load");
 
 		private final String description;

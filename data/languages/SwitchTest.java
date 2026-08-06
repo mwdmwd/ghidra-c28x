@@ -28,6 +28,10 @@ public class SwitchTest extends GhidraScript {
     private static final long SAVED_FUNCTION = 0x13092;
     private static final long SAVED_BRANCH0 = 0x130aa;
     private static final long SAVED_BRANCH1 = 0x130b4;
+    private static final long SAVED_P_FUNCTION = 0x130c9;
+    private static final long SAVED_P_BRANCH = 0x130d8;
+    private static final long SAVED_HI_FUNCTION = 0x1310a;
+    private static final long SAVED_HI_BRANCH = 0x13119;
 
     private static void require(boolean condition, String message) {
         if (!condition) {
@@ -132,6 +136,8 @@ public class SwitchTest extends GhidraScript {
         expectedReferences.put(VALID_BRANCH, 4);
         expectedReferences.put(SAVED_BRANCH0, 4);
         expectedReferences.put(SAVED_BRANCH1, 3);
+        expectedReferences.put(SAVED_P_BRANCH, 25);
+        expectedReferences.put(SAVED_HI_BRANCH, 3);
         expectedReferences.put(0x1303cL, 0); // malformed one-entry bound
         expectedReferences.put(0x1304fL, 0); // inconsistent table arithmetic
         expectedReferences.put(0x13062L, 0); // raw target bit 22 set
@@ -165,6 +171,18 @@ public class SwitchTest extends GhidraScript {
         require(!isCanonical(wordAddress(0x130a4), context) &&
                 !isCanonical(wordAddress(0x130ae), context),
             "saved-selector LSL instructions were unnecessarily canonicalized");
+        require(isCanonical(wordAddress(0x130cb), context) &&
+                isCanonical(wordAddress(0x130d3), context) &&
+                isCanonical(wordAddress(SAVED_P_BRANCH), context),
+            "P-saved fall-through switch was not fully canonicalized");
+        require(!isCanonical(wordAddress(0x130d2), context),
+            "P-saved fall-through LSL was unnecessarily canonicalized");
+        require(isCanonical(wordAddress(0x1310c), context) &&
+                isCanonical(wordAddress(0x13114), context) &&
+                isCanonical(wordAddress(SAVED_HI_BRANCH), context),
+            "XAR7-saved HI/fall-through switch was not fully canonicalized");
+        require(!isCanonical(wordAddress(0x13113), context),
+            "XAR7-saved HI/fall-through LSL was unnecessarily canonicalized");
         Instruction unconditionalDefault = getInstructionAt(wordAddress(0x130a0));
         require(unconditionalDefault != null &&
                 unconditionalDefault.getMnemonicString().equalsIgnoreCase("SB") &&
@@ -190,7 +208,10 @@ public class SwitchTest extends GhidraScript {
             "inconsistent-arithmetic fixture no longer has the mismatched adjustment");
 
         Memory memory = currentProgram.getMemory();
-        long highWord = memory.getShort(wordAddress(0x130df), false) & 0xffffL;
+        long highTable = scalarAt(0x13059, 1);
+        Address highTableAddress = wordAddress(highTable);
+        int wordSize = highTableAddress.getAddressSpace().getAddressableUnitSize();
+        long highWord = memory.getShort(highTableAddress.add(wordSize), false) & 0xffffL;
         require((highWord & 0x40) != 0,
             "high-target-bits fixture did not retain raw address bit 22");
         MemoryBlock writable = memory.getBlock(wordAddress(0x2000));
@@ -231,10 +252,39 @@ public class SwitchTest extends GhidraScript {
                 savedC.contains("case 0x192:"),
             "saved-selector switch lost its original nonzero labels\n" + savedC);
 
-        println("SWITCH_VALIDATION_POSITIVE_REFS=4,4,3");
+        Function savedPFunction = getFunctionAt(wordAddress(SAVED_P_FUNCTION));
+        require(savedPFunction != null, "missing P-saved fall-through switch function");
+        long[] savedPTargets = { 0x130da, 0x130fc, 0x130fe, 0x13108 };
+        for (long target : savedPTargets) {
+            require(savedPFunction.getBody().contains(wordAddress(target)),
+                "P-saved switch target not in function body: " + wordAddress(target));
+        }
+        String savedPC = decompile(savedPFunction);
+        require(!savedPC.contains("Could not recover jumptable") &&
+                !savedPC.contains("Treating indirect jump as call"),
+            "P-saved fall-through switch remains unrecovered\n" + savedPC);
+        require(savedPC.contains("case 0x200:") && savedPC.contains("case 0x211:") &&
+                savedPC.contains("case 0x216:") && savedPC.contains("case 0x21b:"),
+            "P-saved switch lost its original nonzero labels\n" + savedPC);
+
+        Function savedHiFunction = getFunctionContaining(wordAddress(SAVED_HI_FUNCTION));
+        require(savedHiFunction != null,
+            "missing XAR7-saved HI/fall-through switch function");
+        long[] savedHiTargets = { 0x1311b, 0x1311d, 0x1311f };
+        for (long target : savedHiTargets) {
+            require(savedHiFunction.getBody().contains(wordAddress(target)),
+                "XAR7-saved HI switch target not in function body: " + wordAddress(target));
+        }
+        String savedHiC = decompile(savedHiFunction);
+        require(!savedHiC.contains("Could not recover jumptable") &&
+                savedHiC.contains("case 0x220:") && savedHiC.contains("case 0x222:"),
+            "XAR7-saved HI/fall-through switch remains unrecovered\n" + savedHiC);
+
+        println("SWITCH_VALIDATION_POSITIVE_REFS=4,4,3,25,3");
         println("SWITCH_VALIDATION_REJECTED=6");
-        println("SWITCH_VALIDATION_CASE_RANGES=0x120-0x123,0x180-0x183,0x190-0x192");
-        println("SWITCH_VALIDATION_BODY_TARGETS=4,7");
+        println("SWITCH_VALIDATION_CASE_RANGES=" +
+            "0x120-0x123,0x180-0x183,0x190-0x192,0x200-0x21b,0x220-0x222");
+        println("SWITCH_VALIDATION_BODY_TARGETS=4,7,24,3");
     }
 
     private String decompile(Function function) {
