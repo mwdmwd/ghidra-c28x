@@ -2133,7 +2133,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	goto off16;
 }
 
-:b off16, cond is op4_12=0b111111111110 & cond0_4!=0b1111 & cond; off16 {
+:b off16, cond is op4_12=0b111111111110 & cond; off16 {
 	if (cond) goto off16;
 }
 
@@ -2159,7 +2159,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	goto off16;
 }
 
-:bf off16, cond is ctx_objmode=1 & op4_12=0b010101101100 & cond0_4!=0b1111 & cond; off16 {
+:bf off16, cond is ctx_objmode=1 & op4_12=0b010101101100 & cond; off16 {
 	if (cond) goto off16;
 }
 
@@ -3158,7 +3158,7 @@ with : ctx_objmode=1 {
 }
 
 # p.279
-:mova T, loc16 is op8_8=0b00010000 & op0_8!=0b10101100 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+:mova T, loc16 is op8_8=0b00010000 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
 	T = loc16;
 	acc_add_pm_p();
 }
@@ -3203,7 +3203,10 @@ with : ctx_objmode=1 {
 # p.288
 # Indexed MOVB stores use byte_index_info so byte offsets select a byte within
 # the correct word.  Address-register side effects are built before the
-# condition, as required even when the conditional store is not taken.
+# condition, as required even when the conditional store is not taken.  Keep
+# these modes out of the ordinary loc16 constructors: once their operand
+# tables expand, the two patterns are equally specific despite needing
+# different effective-address semantics.
 :movb byte_index_info, #imm8_8, cond is ctx_objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & byte_index_info {
 	local addr:4 = byte_index_info:4;
 	local high:1 = byte_index_info[32,8];
@@ -3347,7 +3350,7 @@ with : ctx_objmode=1 {
 }
 
 # p.298
-:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 & op0_8!=0b10111110 {
+:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 {
 	ACC = loc32;
 	flagnz(ACC);
 }
@@ -3365,7 +3368,7 @@ movl_acc_dest: loc32 is loc32 {
 movl_acc_dest: "ACC" is loc32 & reg32=9 {
 	flagnz(ACC);
 }
-:movl movl_acc_dest, ACC is op8_8=0b00011110 & op0_8!=0b10111110 & movl_acc_dest & ACC {
+:movl movl_acc_dest, ACC is op8_8=0b00011110 & movl_acc_dest & ACC {
 	build movl_acc_dest;
 }
 
@@ -3387,41 +3390,41 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.304
-:movl loc32, XAR0 is ctx_objmode=1 & op8_8=0b00111010 & op0_8!=0b10111101 & loc32 & XAR0 & movl_store_flags {
+:movl loc32, XAR0 is ctx_objmode=1 & op8_8=0b00111010 & loc32 & XAR0 & movl_store_flags {
 	loc32 = XAR0;
 	build movl_store_flags;
 }
-:movl loc32, XAR1 is ctx_objmode=1 & op8_8=0b10110010 & op0_8!=0b10111101 & loc32 & XAR1 & movl_store_flags {
+:movl loc32, XAR1 is ctx_objmode=1 & op8_8=0b10110010 & loc32 & XAR1 & movl_store_flags {
 	loc32 = XAR1;
 	build movl_store_flags;
 }
-:movl loc32, XAR2 is ctx_objmode=1 & op8_8=0b10101010 & op0_8!=0b10111101 & loc32 & XAR2 & movl_store_flags {
+:movl loc32, XAR2 is ctx_objmode=1 & op8_8=0b10101010 & loc32 & XAR2 & movl_store_flags {
 	loc32 = XAR2;
 	build movl_store_flags;
 }
-:movl loc32, XAR3 is ctx_objmode=1 & op8_8=0b10100010 & op0_8!=0b10111101 & loc32 & XAR3 & movl_store_flags {
+:movl loc32, XAR3 is ctx_objmode=1 & op8_8=0b10100010 & loc32 & XAR3 & movl_store_flags {
 	loc32 = XAR3;
 	build movl_store_flags;
 }
-:movl loc32, XAR4 is ctx_objmode=1 & op8_8=0b10101000 & op0_8!=0b10111101 & loc32 & XAR4 & movl_store_flags {
+:movl loc32, XAR4 is ctx_objmode=1 & op8_8=0b10101000 & loc32 & XAR4 & movl_store_flags {
 	loc32 = XAR4;
 	build movl_store_flags;
 }
-:movl loc32, XAR5 is ctx_objmode=1 & op8_8=0b10100000 & op0_8!=0b10111101 & loc32 & XAR5 & movl_store_flags {
+:movl loc32, XAR5 is ctx_objmode=1 & op8_8=0b10100000 & loc32 & XAR5 & movl_store_flags {
 	loc32 = XAR5;
 	build movl_store_flags;
 }
-:movl loc32, XAR6 is op8_8=0b11000010 & op0_8!=0b10111101 & loc32 & XAR6 & movl_store_flags {
+:movl loc32, XAR6 is op8_8=0b11000010 & loc32 & XAR6 & movl_store_flags {
 	loc32 = XAR6;
 	build movl_store_flags;
 }
-:movl loc32, XAR7 is op8_8=0b11000011 & op0_8!=0b10111101 & loc32 & XAR7 & movl_store_flags {
+:movl loc32, XAR7 is op8_8=0b11000011 & loc32 & XAR7 & movl_store_flags {
 	loc32 = XAR7;
 	build movl_store_flags;
 }
 
 # p.305
-:movl loc32, XT is ctx_objmode=1 & op8_8=0b10101011 & op0_8!=0b10111101 & loc32 & XT & movl_store_flags {
+:movl loc32, XT is ctx_objmode=1 & op8_8=0b10101011 & loc32 & XT & movl_store_flags {
 	loc32 = XT;
 	build movl_store_flags;
 }
@@ -3437,28 +3440,28 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.308
-:movl XAR0, loc32 is ctx_objmode=1 & op8_8=0b10001110 & op0_8!=0b10111110 & XAR0 & loc32 {
+:movl XAR0, loc32 is ctx_objmode=1 & op8_8=0b10001110 & XAR0 & loc32 {
 	XAR0 = loc32;
 }
-:movl XAR1, loc32 is ctx_objmode=1 & op8_8=0b10001011 & op0_8!=0b10111110 & XAR1 & loc32 {
+:movl XAR1, loc32 is ctx_objmode=1 & op8_8=0b10001011 & XAR1 & loc32 {
 	XAR1 = loc32;
 }
-:movl XAR2, loc32 is ctx_objmode=1 & op8_8=0b10000110 & op0_8!=0b10111110 & XAR2 & loc32 {
+:movl XAR2, loc32 is ctx_objmode=1 & op8_8=0b10000110 & XAR2 & loc32 {
 	XAR2 = loc32;
 }
-:movl XAR3, loc32 is ctx_objmode=1 & op8_8=0b10000010 & op0_8!=0b10111110 & XAR3 & loc32 {
+:movl XAR3, loc32 is ctx_objmode=1 & op8_8=0b10000010 & XAR3 & loc32 {
 	XAR3 = loc32;
 }
-:movl XAR4, loc32 is ctx_objmode=1 & op8_8=0b10001010 & op0_8!=0b10111110 & XAR4 & loc32 {
+:movl XAR4, loc32 is ctx_objmode=1 & op8_8=0b10001010 & XAR4 & loc32 {
 	XAR4 = loc32;
 }
-:movl XAR5, loc32 is ctx_objmode=1 & op8_8=0b10000011 & op0_8!=0b10111110 & XAR5 & loc32 {
+:movl XAR5, loc32 is ctx_objmode=1 & op8_8=0b10000011 & XAR5 & loc32 {
 	XAR5 = loc32;
 }
-:movl XAR6, loc32 is op8_8=0b11000100 & op0_8!=0b10111110 & XAR6 & loc32 {
+:movl XAR6, loc32 is op8_8=0b11000100 & XAR6 & loc32 {
 	XAR6 = loc32;
 }
-:movl XAR7, loc32 is op8_8=0b11000101 & op0_8!=0b10111110 & XAR7 & loc32 {
+:movl XAR7, loc32 is op8_8=0b11000101 & XAR7 & loc32 {
 	XAR7 = loc32;
 }
 
@@ -3489,19 +3492,19 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.310
-:movl XT, loc32 is ctx_objmode=1 & op8_8=0b10000111 & op0_8!=0b10111110 & XT & loc32 {
+:movl XT, loc32 is ctx_objmode=1 & op8_8=0b10000111 & XT & loc32 {
 	XT = loc32;
 }
 
 # p.311
-:movp T, loc16 is op8_8=0b00010110 & op0_8!=0b10101100 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+:movp T, loc16 is op8_8=0b00010110 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
 	T = loc16;
 	pmshift(ACC, P);
 	flagnz(ACC);
 }
 
 # p.312
-:movs T, loc16 is op8_8=0b00010001 & op0_8!=0b10101100 & T & loc16 {
+:movs T, loc16 is op8_8=0b00010001 & T & loc16 {
 	T = loc16;
 	acc_sub_pm_p();
 }
@@ -3982,7 +3985,10 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.367
-:pop XT is op0_16=0b1000011110111110 & XT {
+:pop XT is ctx_objmode=0 & op0_16=0b1000011110111110 & XT {
+	pop32(XT);
+}
+:pop XT is ctx_objmode=1 & op0_16=0b1000011110111110 & XT {
 	pop32(XT);
 }
 
@@ -4237,7 +4243,7 @@ movl_store_flags: is op0_8=0b10101001 {
 	goto off8;
 }
 
-:sb off8, cond8 is op12_4=0b0110 & cond8_4!=0b1111 & off8 & cond8 {
+:sb off8, cond8 is op12_4=0b0110 & off8 & cond8 {
 	if (cond8) goto off8;
 }
 
