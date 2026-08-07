@@ -44,6 +44,7 @@ import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
+import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
@@ -141,7 +142,7 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 				redisassemble.add(branch.getMinAddress());
 				switchBranches.add(branch.getMinAddress());
 				long highestCase = descriptor.lowestCase + descriptor.count - 1;
-				log.appendMsg(NAME,
+				Msg.info(this,
 					"recognized " + descriptor.variant.description + " switch at " +
 						descriptor.branchAddress + " table=" + descriptor.tableBase + " cases=" +
 						descriptor.lowestCase + "-" + highestCase + " default=" +
