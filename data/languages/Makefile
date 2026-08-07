@@ -17,6 +17,8 @@ JAVAC ?= javac
 JAR ?= jar
 GHIDRA_DECOMP_DIR := ghidra-decomp
 GHIDRA_SWITCH_DIR := ghidra-switch-test
+GHIDRA_ZOO_DIR := ghidra-zoo-test
+ZOO_BUILD_DIR := compiler-zoo-build
 MODULE_DIR ?= ../..
 ANALYZER_SOURCE ?= $(MODULE_DIR)/src/main/java/ghidra/app/plugin/core/analysis/TMS320C28SwitchAnalyzer.java
 ANALYZER_BUILD_DIR := analyzer-build
@@ -224,9 +226,47 @@ switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 		-scriptlog $$PWD/$(GHIDRA_SWITCH_DIR)/script.log \
 		-analysisTimeoutPerFile 60 -overwrite -deleteProject
 
+# Build a deterministic, bounded matrix of TI compiler output.  Distinct
+# object names are mandatory: cl2000/make must never satisfy one option set
+# with an object produced for another.
+.PHONY: zoo-build
+zoo-build: $(ZOO_BUILD_DIR)/matrix.json
+
+$(ZOO_BUILD_DIR)/matrix.json: compiler_zoo/manifest.json compiler_zoo/run_zoo.py \
+		compiler_zoo/generate_switches.py $(wildcard compiler_zoo/*.c) \
+		compiler_zoo/zoo_link.cmd
+	$(Q)$(PYTHON) compiler_zoo/run_zoo.py --root $$PWD \
+		--manifest $$PWD/compiler_zoo/manifest.json --out $(ZOO_BUILD_DIR) \
+		--cl2000 $(AS) --dis2000 $(DIS) --strip2000 $(STRIP)
+
+# Import the review-sized subset from the matrix into a fresh headless Ghidra
+# project and assert structural switch, CFG, data-flow, ABI, and FPU properties.
+.PHONY: zoo-test
+zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
+	@rm -rf $(GHIDRA_ZOO_DIR)
+	@mkdir -p $(GHIDRA_ZOO_DIR)/home $(GHIDRA_ZOO_DIR)/config \
+		$(GHIDRA_ZOO_DIR)/project $(GHIDRA_ZOO_DIR)/tmp $(GHIDRA_ZOO_DIR)/cache
+	$(Q)mapfile -t zoo_inputs < $(ZOO_BUILD_DIR)/ghidra-inputs.txt; \
+		expected=$${#zoo_inputs[@]}; \
+		HOME=$$PWD/$(GHIDRA_ZOO_DIR)/home \
+		XDG_CONFIG_HOME=$$PWD/$(GHIDRA_ZOO_DIR)/config \
+		GHIDRA_HEADLESS_JAVA_OPTIONS="-Dapplication.tempdir=$$PWD/$(GHIDRA_ZOO_DIR)/tmp -Dapplication.cachedir=$$PWD/$(GHIDRA_ZOO_DIR)/cache -Djava.io.tmpdir=$$PWD/$(GHIDRA_ZOO_DIR)/tmp" \
+		$(GHIDRA_HEADLESS) $$PWD/$(GHIDRA_ZOO_DIR)/project compiler-zoo \
+		-import "$${zoo_inputs[@]}" \
+		-processor tms320c28:LE:32:default -cspec default \
+		-scriptPath $$PWD -postScript ZooTest.java \
+		-log $$PWD/$(GHIDRA_ZOO_DIR)/ghidra.log \
+		-scriptlog $$PWD/$(GHIDRA_ZOO_DIR)/script.log \
+		-analysisTimeoutPerFile 60 -overwrite -deleteProject; \
+		actual=$$(grep -c 'ZOO_PROGRAM_PASS=' $(GHIDRA_ZOO_DIR)/script.log || true); \
+		test "$$actual" -eq "$$expected" || { \
+			echo "expected $$expected zoo pass markers, found $$actual" >&2; exit 1; }; \
+		echo "ZOO_GHIDRA_PROGRAMS=$$actual"
+
 .PHONY: clean
 clean:
-	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR)
+	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR) $(GHIDRA_ZOO_DIR)
+	@rm -rf $(ZOO_BUILD_DIR)
 	@rm -rf $(ANALYZER_BUILD_DIR)
 	@rm -f $(ANALYZER_JAR)
 	@rm -f tms320c28.sla test.obj test.bin abi_test.obj quick.asm quick.obj

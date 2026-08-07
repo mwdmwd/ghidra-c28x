@@ -1,0 +1,194 @@
+{
+  "schema": 1,
+  "compiler": "TI cl2000 22.6.1.LTS",
+  "common_flags": [
+    "--float_support=fpu32",
+    "--abi=eabi",
+    "--c11",
+    "--symdebug:none"
+  ],
+  "groups": [
+    {
+      "family": "switch_saved32",
+      "source": "switch_saved32.c",
+      "entry": "switch_pread32_probe",
+      "kind": "switch",
+      "models": ["default", "unified"],
+      "optimizations": [0, 1, 2, 3, 4],
+      "opt_for_speed": [null],
+      "defines": {"ZOO_SWITCH_CASES": 12},
+      "expect": {
+        "default": {"PREAD": 2, "LB": 1, "native_table_load": 0},
+        "unified": {"PREAD": 0, "LB": 1, "native_table_load": 1}
+      }
+    },
+    {
+      "family": "switch_saved32_speed",
+      "source": "switch_saved32.c",
+      "entry": "switch_pread32_probe",
+      "kind": "switch",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [0, 3, 5],
+      "defines": {"ZOO_SWITCH_CASES": 12},
+      "expect": {
+        "default": {"PREAD": 2, "LB": 1, "native_table_load": 0},
+        "unified": {"PREAD": 0, "LB": 1, "native_table_load": 1}
+      }
+    },
+    {
+      "family": "switch_saved32_density_boundary",
+      "source": "switch_saved32.c",
+      "entry": "switch_pread32_probe",
+      "kind": "switch-no-table",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [null],
+      "defines": {"ZOO_SWITCH_CASES": 11},
+      "expect": {
+        "default": {"PREAD": 0, "LB": 0, "native_table_load": 0, "CMPL_min": 1},
+        "unified": {"PREAD": 0, "LB": 0, "native_table_load": 0, "CMPL_min": 1}
+      }
+    },
+    {
+      "family": "switch_u16_dense_zero",
+      "generated": true,
+      "kind": "switch",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"PREAD": 2, "LB": 1, "native_table_load": 0},
+        "unified": {"PREAD": 0, "LB": 1, "native_table_load": 1}
+      }
+    },
+    {
+      "family": "switch_s16_boundary",
+      "generated": true,
+      "kind": "switch",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"PREAD": 2, "LB": 1, "native_table_load": 0},
+        "unified": {"PREAD": 0, "LB": 1, "native_table_load": 1}
+      }
+    },
+    {
+      "family": "switch_u32_holes_shared",
+      "generated": true,
+      "kind": "switch",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"PREAD": 2, "LB": 1, "native_table_load": 0},
+        "unified": {"PREAD": 0, "LB": 1, "native_table_load": 1}
+      }
+    },
+    {
+      "family": "switch_s32_cross_zero",
+      "generated": true,
+      "kind": "switch",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"PREAD": 2, "LB": 1, "native_table_load": 0},
+        "unified": {"PREAD": 0, "LB": 1, "native_table_load": 1}
+      }
+    },
+    {
+      "family": "switch_u16_fallthrough",
+      "generated": true,
+      "kind": "switch-no-table",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"PREAD": 0, "LB": 0, "native_table_load": 0, "CMPB_min": 4},
+        "unified": {"PREAD": 0, "LB": 0, "native_table_load": 0, "CMPB_min": 4}
+      }
+    },
+    {
+      "family": "switch_sequential_nested",
+      "generated": true,
+      "kind": "switch",
+      "models": ["default", "unified"],
+      "optimizations": [2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"PREAD": 4, "LB": 2, "native_table_load": 0},
+        "unified": {"PREAD": 0, "LB": 2, "native_table_load": 2}
+      }
+    },
+    {
+      "family": "control_flow",
+      "source": "control_flow.c",
+      "entry": "zoo_control_flow",
+      "kind": "control-flow",
+      "models": ["default"],
+      "optimizations": [0, 2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"CMPL_min": 1, "TBIT_min": 1, "LB": 0}
+      }
+    },
+    {
+      "family": "data_flow",
+      "source": "data_flow.c",
+      "entry": "zoo_data_flow",
+      "kind": "data-flow",
+      "models": ["default"],
+      "optimizations": [0, 2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"MOVB_min": 2, "ADDUL_min": 1, "ADDCL_min": 1, "SUBUL_min": 1, "SUBBL_min": 1}
+      }
+    },
+    {
+      "family": "abi_calls",
+      "source": "abi_calls.c",
+      "entry": "zoo_abi_calls",
+      "kind": "abi",
+      "models": ["default"],
+      "optimizations": [0, 2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"LCR_min": 1, "LRETR_min": 2}
+      }
+    },
+    {
+      "family": "fpu32",
+      "source": "fpu32.c",
+      "entry": "zoo_fpu32",
+      "kind": "fpu32",
+      "models": ["default"],
+      "optimizations": [0, 2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"MPYF32_min": 1, "ADDF32_min": 1, "CMPF32_min": 1, "MOVST0_min": 1, "F32TOUI16_min": 1}
+      }
+    }
+  ],
+  "ghidra_selection": [
+    "switch_saved32_default_o0",
+    "switch_saved32_default_o4",
+    "switch_saved32_unified_o2",
+    "switch_saved32_density_boundary_default_o2",
+    "switch_u16_dense_zero_default_o2",
+    "switch_s16_boundary_default_o2",
+    "switch_u32_holes_shared_default_o2",
+    "switch_s32_cross_zero_default_o2",
+    "switch_u16_fallthrough_default_o2",
+    "switch_sequential_nested_default_o2",
+    "control_flow_default_o0",
+    "control_flow_default_o2",
+    "data_flow_default_o0",
+    "data_flow_default_o2",
+    "abi_calls_default_o0",
+    "abi_calls_default_o2",
+    "fpu32_default_o0",
+    "fpu32_default_o2"
+  ]
+}

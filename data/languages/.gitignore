@@ -6,4 +6,7 @@ quick.asm
 ghidra-decomp/
 analyzer-build/
 ghidra-switch-test/
+ghidra-zoo-test/
+compiler-zoo-build/
+__pycache__/
 old/
