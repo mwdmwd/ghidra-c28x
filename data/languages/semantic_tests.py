@@ -1484,6 +1484,87 @@ def check_lc_xar7_target(ops: list) -> None:
     _check_xar7_code_target(ops, OpCode.CALLIND)
 
 
+def check_movl_register_to_acc_flags(ops: list) -> None:
+    copy = _find(
+        ops,
+        lambda op: op.opcode == OpCode.COPY and _reg(op.output) == "ACC",
+        "MOVL destination write to ACC",
+    )
+    assert len(copy.inputs) == 1, "MOVL ACC source must be a single value"
+    source = _reg(copy.inputs[0])
+    assert source in {
+        "ACC",
+        "P",
+        "XT",
+        "XAR0",
+        "XAR1",
+        "XAR2",
+        "XAR3",
+        "XAR4",
+        "XAR5",
+        "XAR6",
+        "XAR7",
+    }, f"unexpected MOVL ACC source {source}"
+
+    n_write = _find(
+        ops, lambda op: _reg(op.output) == "N", "MOVL ACC negative-flag write"
+    )
+    z_write = _find(
+        ops, lambda op: _reg(op.output) == "Z", "MOVL ACC zero-flag write"
+    )
+    assert ops.index(copy) < ops.index(n_write) < ops.index(z_write)
+    assert any(
+        _depends_on_register(ops, value, "ACC") for value in n_write.inputs
+    ), "MOVL ACC N flag must depend on the copied ACC value"
+    assert any(
+        _depends_on_register(ops, value, "ACC") for value in z_write.inputs
+    ), "MOVL ACC Z flag must depend on the copied ACC value"
+
+    for value, expected_n, expected_z in (
+        (0x00000000, 0, 1),
+        (0x00000001, 0, 0),
+        (0x80000000, 1, 0),
+    ):
+        _assert_execution(
+            ops,
+            {source: value, "N": 1 - expected_n, "Z": 1 - expected_z},
+            {"ACC": value, "N": expected_n, "Z": expected_z},
+            f"MOVL ACC,{source} flags for 0x{value:08x}",
+        )
+
+
+def check_movl_acc_self_flags(ops: list) -> None:
+    assert not any(
+        op.opcode == OpCode.COPY and _reg(op.output) == "ACC" for op in ops
+    ), "MOVL ACC,ACC should not emit a redundant self-copy"
+
+    n_write = _find(
+        ops, lambda op: _reg(op.output) == "N", "MOVL ACC,ACC negative-flag write"
+    )
+    z_write = _find(
+        ops, lambda op: _reg(op.output) == "Z", "MOVL ACC,ACC zero-flag write"
+    )
+    assert ops.index(n_write) < ops.index(z_write)
+    assert any(
+        _depends_on_register(ops, value, "ACC") for value in n_write.inputs
+    ), "MOVL ACC,ACC N flag must depend on ACC"
+    assert any(
+        _depends_on_register(ops, value, "ACC") for value in z_write.inputs
+    ), "MOVL ACC,ACC Z flag must depend on ACC"
+
+    for value, expected_n, expected_z in (
+        (0x00000000, 0, 1),
+        (0x00000001, 0, 0),
+        (0x80000000, 1, 0),
+    ):
+        _assert_execution(
+            ops,
+            {"ACC": value, "N": 1 - expected_n, "Z": 1 - expected_z},
+            {"ACC": value, "N": expected_n, "Z": expected_z},
+            f"MOVL ACC,ACC flags for 0x{value:08x}",
+        )
+
+
 CASES = (
     Case("BANZ decrements before branching", (0x000A, 0x0001), check_banz),
     Case("MOV32 UNCF flags are branch-free", (0xE2AF, 0x0021), check_mov32_uncf),
@@ -1671,6 +1752,17 @@ CASES = (
     Case("XRETC OV snapshots then clears V", (0x56FB,), check_branch_v_clear),
     Case("LB *XAR7 masks its target to 22 code-address bits", (0x7620,), check_lb_xar7_target),
     Case("LC *XAR7 masks its target to 22 code-address bits", (0x7604,), check_lc_xar7_target),
+    Case("MOVL ACC,ACC refreshes N and Z", (0x1EA9,), check_movl_acc_self_flags),
+    Case("MOVL ACC,P refreshes N and Z", (0xA9A9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XT refreshes N and Z", (0xABA9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR0 refreshes N and Z", (0x3AA9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR1 refreshes N and Z", (0xB2A9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR2 refreshes N and Z", (0xAAA9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR3 refreshes N and Z", (0xA2A9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR4 refreshes N and Z", (0xA8A9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR5 refreshes N and Z", (0xA0A9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR6 refreshes N and Z", (0xC2A9,), check_movl_register_to_acc_flags),
+    Case("MOVL ACC,XAR7 refreshes N and Z", (0xC3A9,), check_movl_register_to_acc_flags),
 )
 
 

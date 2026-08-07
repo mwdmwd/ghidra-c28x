@@ -3359,9 +3359,14 @@ with : ctx_objmode=1 {
 }
 
 # p. 300
-:movl loc32, ACC is op8_8=0b00011110 & op0_8!=0b10111110 & loc32 & ACC {
-	# TODO flags in case someone had the bright idea to actually use this with loc32=ACC
+movl_acc_dest: loc32 is loc32 {
 	loc32 = ACC;
+}
+movl_acc_dest: "ACC" is loc32 & reg32=9 {
+	flagnz(ACC);
+}
+:movl movl_acc_dest, ACC is op8_8=0b00011110 & op0_8!=0b10111110 & movl_acc_dest & ACC {
+	build movl_acc_dest;
 }
 
 # p.301
@@ -3370,39 +3375,55 @@ with : ctx_objmode=1 {
 }
 
 # p.303
-:movl loc32, P is ctx_objmode=1 & op8_8=0b10101001 & loc32 & P {
+movl_store_flags: is imm8 {
+}
+movl_store_flags: is op0_8=0b10101001 {
+	flagnz(ACC);
+}
+
+:movl loc32, P is ctx_objmode=1 & op8_8=0b10101001 & loc32 & P & movl_store_flags {
 	loc32 = P;
+	build movl_store_flags;
 }
 
 # p.304
-:movl loc32, XAR0 is ctx_objmode=1 & op8_8=0b00111010 & op0_8!=0b10111101 & loc32 & XAR0 {
+:movl loc32, XAR0 is ctx_objmode=1 & op8_8=0b00111010 & op0_8!=0b10111101 & loc32 & XAR0 & movl_store_flags {
 	loc32 = XAR0;
+	build movl_store_flags;
 }
-:movl loc32, XAR1 is ctx_objmode=1 & op8_8=0b10110010 & op0_8!=0b10111101 & loc32 & XAR1 {
+:movl loc32, XAR1 is ctx_objmode=1 & op8_8=0b10110010 & op0_8!=0b10111101 & loc32 & XAR1 & movl_store_flags {
 	loc32 = XAR1;
+	build movl_store_flags;
 }
-:movl loc32, XAR2 is ctx_objmode=1 & op8_8=0b10101010 & op0_8!=0b10111101 & loc32 & XAR2 {
+:movl loc32, XAR2 is ctx_objmode=1 & op8_8=0b10101010 & op0_8!=0b10111101 & loc32 & XAR2 & movl_store_flags {
 	loc32 = XAR2;
+	build movl_store_flags;
 }
-:movl loc32, XAR3 is ctx_objmode=1 & op8_8=0b10100010 & op0_8!=0b10111101 & loc32 & XAR3 {
+:movl loc32, XAR3 is ctx_objmode=1 & op8_8=0b10100010 & op0_8!=0b10111101 & loc32 & XAR3 & movl_store_flags {
 	loc32 = XAR3;
+	build movl_store_flags;
 }
-:movl loc32, XAR4 is ctx_objmode=1 & op8_8=0b10101000 & op0_8!=0b10111101 & loc32 & XAR4 {
+:movl loc32, XAR4 is ctx_objmode=1 & op8_8=0b10101000 & op0_8!=0b10111101 & loc32 & XAR4 & movl_store_flags {
 	loc32 = XAR4;
+	build movl_store_flags;
 }
-:movl loc32, XAR5 is ctx_objmode=1 & op8_8=0b10100000 & op0_8!=0b10111101 & loc32 & XAR5 {
+:movl loc32, XAR5 is ctx_objmode=1 & op8_8=0b10100000 & op0_8!=0b10111101 & loc32 & XAR5 & movl_store_flags {
 	loc32 = XAR5;
+	build movl_store_flags;
 }
-:movl loc32, XAR6 is op8_8=0b11000010 & op0_8!=0b10111101 & loc32 & XAR6 {
+:movl loc32, XAR6 is op8_8=0b11000010 & op0_8!=0b10111101 & loc32 & XAR6 & movl_store_flags {
 	loc32 = XAR6;
+	build movl_store_flags;
 }
-:movl loc32, XAR7 is op8_8=0b11000011 & op0_8!=0b10111101 & loc32 & XAR7 {
+:movl loc32, XAR7 is op8_8=0b11000011 & op0_8!=0b10111101 & loc32 & XAR7 & movl_store_flags {
 	loc32 = XAR7;
+	build movl_store_flags;
 }
 
 # p.305
-:movl loc32, XT is ctx_objmode=1 & op8_8=0b10101011 & op0_8!=0b10111101 & loc32 & XT {
+:movl loc32, XT is ctx_objmode=1 & op8_8=0b10101011 & op0_8!=0b10111101 & loc32 & XT & movl_store_flags {
 	loc32 = XT;
+	build movl_store_flags;
 }
 
 # p.306
