@@ -187,7 +187,11 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 	}
 
 	private static DispatchCandidate recoverDispatch(Instruction branch) {
-		DispatchCandidate candidate = recoverProgramReadDispatch(branch);
+		DispatchCandidate candidate = recoverProgramReadSavedLongDispatch(branch);
+		if (candidate != null) {
+			return candidate;
+		}
+		candidate = recoverProgramReadDispatch(branch);
 		if (candidate != null) {
 			return candidate;
 		}
@@ -200,6 +204,43 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			return candidate;
 		}
 		return recoverNativeDirectDispatch(branch);
+	}
+
+	/**
+	 * Recover the default-memory sibling of the saved-selector native form.
+	 * TI cl2000 22.6.1.LTS emits this exact finite schedule for a 32-bit
+	 * selector from -O0 through -O4: the selector is kept in XAR7 across an
+	 * inverted HI guard, then a two-word program-space target is assembled
+	 * with PREAD AL/AH before LB *XAR7.
+	 */
+	private static DispatchCandidate recoverProgramReadSavedLongDispatch(Instruction branch) {
+		Instruction finalCopy = contiguousPrevious(branch);
+		Instruction highRead = contiguousPrevious(finalCopy);
+		Instruction increment = contiguousPrevious(highRead);
+		Instruction lowRead = contiguousPrevious(increment);
+		Instruction add = contiguousPrevious(lowRead);
+		Instruction adjustmentInstruction = contiguousPrevious(add);
+		Instruction scaleInstruction = contiguousPrevious(adjustmentInstruction);
+		Instruction tableInstruction = contiguousPrevious(scaleInstruction);
+		Instruction selectorCopy = contiguousPrevious(tableInstruction);
+		Scalar tableScalar = immediateTableBase(tableInstruction);
+		Long subtraction = recoverAccImmediateSubtraction(adjustmentInstruction);
+		if (!isRegisterMove(finalCopy, "movl", "XAR7", "ACC") ||
+			!isRegisterMove(highRead, "pread", "AH", "XAR7") ||
+			!isImmediateAdd(increment, "addb", "XAR7", 1) ||
+			!isRegisterMove(lowRead, "pread", "AL", "XAR7") ||
+			!isRegisterMove(add, "addl", "XAR7", "ACC") ||
+			!isLslAccByOne(scaleInstruction) || tableScalar == null || subtraction == null ||
+			!isRegisterMove(selectorCopy, "movl", "ACC", "XAR7")) {
+			return null;
+		}
+
+		Address table = tableAddress(tableInstruction, tableScalar);
+		IndexExpression expression =
+			new IndexExpression(adjustmentInstruction, "XAR7", TABLE_ENTRY_WORDS,
+				-subtraction.longValue());
+		return new DispatchCandidate(selectorCopy, branch, table, expression,
+			DispatchVariant.PROGRAM_READ_SAVED_LONG);
 	}
 
 	private static DispatchCandidate recoverProgramReadDispatch(Instruction branch) {
@@ -845,7 +886,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			isUnsignedConditionalBranch(guard, "LOS") && flowsTo(guard, entry)) {
 			defaultPath = guard.getFallThrough();
 		}
-		else if ((dispatch.variant == DispatchVariant.NATIVE_SAVED_LONG ||
+		else if ((dispatch.variant == DispatchVariant.PROGRAM_READ_SAVED_LONG ||
+			dispatch.variant == DispatchVariant.NATIVE_SAVED_LONG ||
 			dispatch.variant == DispatchVariant.NATIVE_SAVED_P) &&
 			isUnsignedConditionalBranch(guard, "HI") &&
 			fallsThroughTo(guard, entry)) {
@@ -980,6 +1022,7 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 
 	private enum DispatchVariant {
 		PROGRAM_READ("program-read PREAD"),
+		PROGRAM_READ_SAVED_LONG("saved-selector program-read PREAD"),
 		NATIVE_PL("unified-memory native-load"),
 		NATIVE_SAVED_LONG("saved-selector native-load"),
 		NATIVE_SAVED_P("P-saved fall-through native-load"),

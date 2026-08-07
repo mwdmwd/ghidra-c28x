@@ -41,12 +41,187 @@ public class SwitchTest extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        if (currentProgram.getName().contains("validation")) {
+        String name = currentProgram.getName().toLowerCase();
+        if (name.contains("pread_validation")) {
+            testPreadNegativeFixture();
+        }
+        else if (name.contains("validation")) {
             testCompactValidationFixture();
+        }
+        else if (name.contains("pread32")) {
+            testPread32CompilerFixture();
         }
         else {
             testCompilerFixture();
         }
+    }
+
+    private void testPread32CompilerFixture() throws Exception {
+        AddressIterator entryPoints =
+            currentProgram.getSymbolTable().getExternalEntryPointIterator();
+        require(entryPoints.hasNext(), "expected an ELF entry point");
+        Address entryPoint = entryPoints.next();
+        Function function = getFunctionAt(entryPoint);
+        require(function != null, "expected a function at ELF entry point " + entryPoint);
+
+        Register context = currentProgram.getProgramContext().getRegister("switch_canonical");
+        require(context != null, "missing switch_canonical context");
+
+        int preadCount = 0;
+        int computedBranches = 0;
+        int canonicalSubs = 0;
+        int canonicalBranches = 0;
+        int canonicalLsls = 0;
+        Instruction guard = null;
+        Instruction branch = null;
+        List<Address> destinations = new ArrayList<>();
+
+        InstructionIterator instructions =
+            currentProgram.getListing().getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            String mnemonic = instruction.getMnemonicString();
+            boolean canonical = isCanonical(instruction.getAddress(), context);
+            if (mnemonic.equalsIgnoreCase("PREAD")) {
+                preadCount++;
+            }
+            if (mnemonic.equalsIgnoreCase("SUB") && canonical) {
+                canonicalSubs++;
+            }
+            if (mnemonic.equalsIgnoreCase("LSL") && canonical) {
+                canonicalLsls++;
+            }
+            if (isUnsignedHiGuard(instruction)) {
+                require(guard == null, "expected exactly one HI guard");
+                guard = instruction;
+            }
+            if (mnemonic.equalsIgnoreCase("LB") && instruction.getFlowType().isJump() &&
+                    instruction.getFlowType().isComputed()) {
+                computedBranches++;
+                require(branch == null, "expected exactly one computed LB");
+                branch = instruction;
+                if (canonical) {
+                    canonicalBranches++;
+                }
+                destinations.addAll(computedJumpDestinations(instruction.getAddress()));
+            }
+        }
+
+        require(preadCount == 2, "expected exactly two PREAD instructions, got " + preadCount);
+        require(computedBranches == 1, "expected one computed LB, got " + computedBranches);
+        require(destinations.size() == 12,
+            "expected 12 switch destinations, got " + destinations.size());
+        require(destinations.stream().distinct().count() == 12,
+            "expected 12 distinct switch destinations, got " + destinations);
+        Memory memory = currentProgram.getMemory();
+        for (Address destination : destinations) {
+            require(function.getBody().contains(destination),
+                "switch destination is outside the recovered function body: " + destination);
+            MemoryBlock block = memory.getBlock(destination);
+            require(block != null && block.isExecute(),
+                "switch destination is not in executable memory: " + destination);
+        }
+
+        require(guard != null, "missing saved-selector HI guard");
+        require(guard.getFallThrough() != null &&
+                function.getBody().contains(guard.getFallThrough()),
+            "HI guard fallthrough is not in the switch function body");
+        Address[] guardFlows = guard.getFlows();
+        require(guardFlows.length == 1 && function.getBody().contains(guardFlows[0]),
+            "HI guard default flow is not in the switch function body");
+        require(branch != null && function.getBody().contains(branch.getAddress()),
+            "computed branch is outside the function body");
+
+        require(canonicalSubs == 2,
+            "expected guard and dispatch SUB canonicalization, got " + canonicalSubs);
+        require(canonicalBranches == 1,
+            "expected the computed LB to be canonicalized once, got " + canonicalBranches);
+        require(canonicalLsls == 0,
+            "saved-selector LSL should retain its ordinary semantics");
+
+        String c = decompile(function);
+        require(!c.contains("Could not recover jumptable") &&
+                !c.contains("Treating indirect jump as call"),
+            "saved-selector PREAD switch remains unrecovered\n" + c);
+        require(c.contains("case 0x220:") && c.contains("case 0x22b:"),
+            "saved-selector PREAD switch lost its original case range\n" + c);
+
+        println("SWITCH_PREAD32_DESTINATIONS=12");
+        println("SWITCH_PREAD32_CASE_RANGE=0x220-0x22b");
+        println("SWITCH_PREAD32_CANONICAL_SUBS=2");
+    }
+
+    private void testPreadNegativeFixture() {
+        Register context = currentProgram.getProgramContext().getRegister("switch_canonical");
+        require(context != null, "missing switch_canonical context");
+
+        int preadCount = 0;
+        int canonicalCount = 0;
+        int stockInvalidReferences = 0;
+        int incrementByTwo = 0;
+        int swappedHalves = 0;
+        List<Instruction> branches = new ArrayList<>();
+
+        InstructionIterator instructions = currentProgram.getListing().getInstructions(true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            if (instruction.getMnemonicString().equalsIgnoreCase("PREAD")) {
+                preadCount++;
+            }
+            if (isCanonical(instruction.getAddress(), context)) {
+                canonicalCount++;
+            }
+            if (instruction.getMnemonicString().equalsIgnoreCase("LB") &&
+                    instruction.getFlowType().isJump() &&
+                    instruction.getFlowType().isComputed()) {
+                branches.add(instruction);
+            }
+        }
+
+        require(preadCount == 4, "negative fixture must contain four PREADs, got " + preadCount);
+        require(branches.size() == 2,
+            "negative fixture must contain two computed LBs, got " + branches.size());
+        require(canonicalCount == 0,
+            "near-miss PREAD schedules must not be canonicalized, got " + canonicalCount);
+
+        Memory memory = currentProgram.getMemory();
+        for (Instruction branch : branches) {
+            Instruction finalCopy = contiguousPrevious(branch);
+            Instruction secondRead = contiguousPrevious(finalCopy);
+            Instruction increment = contiguousPrevious(secondRead);
+            Instruction firstRead = contiguousPrevious(increment);
+            require(finalCopy != null && secondRead != null && increment != null &&
+                    firstRead != null,
+                "truncated negative PREAD dispatch before " + branch.getAddress());
+
+            long incrementValue = scalarUnsigned(increment, 1);
+            if (isRegisterMove(firstRead, "PREAD", "AL", "XAR7") &&
+                    incrementValue == 2 &&
+                    isRegisterMove(secondRead, "PREAD", "AH", "XAR7")) {
+                incrementByTwo++;
+            }
+            if (isRegisterMove(firstRead, "PREAD", "AH", "XAR7") &&
+                    incrementValue == 1 &&
+                    isRegisterMove(secondRead, "PREAD", "AL", "XAR7")) {
+                swappedHalves++;
+            }
+
+            for (Address destination : computedJumpDestinations(branch.getAddress())) {
+                MemoryBlock block = memory.getBlock(destination);
+                require(block == null || !block.isExecute(),
+                    "stock analysis fabricated an executable target for a rejected schedule: " +
+                        destination);
+                stockInvalidReferences++;
+            }
+        }
+
+        require(incrementByTwo == 1,
+            "negative fixture lost its increment-by-two PREAD near miss");
+        require(swappedHalves == 1,
+            "negative fixture lost its swapped-half PREAD near miss");
+
+        println("SWITCH_PREAD_NEGATIVE_REJECTED=2");
+        println("SWITCH_PREAD_NEGATIVE_STOCK_INVALID_REFS=" + stockInvalidReferences);
     }
 
     private void testCompilerFixture() throws Exception {
@@ -307,14 +482,18 @@ public class SwitchTest extends GhidraScript {
     }
 
     private int computedJumpCount(Address address) {
-        int count = 0;
+        return computedJumpDestinations(address).size();
+    }
+
+    private List<Address> computedJumpDestinations(Address address) {
+        List<Address> destinations = new ArrayList<>();
         ReferenceManager references = currentProgram.getReferenceManager();
         for (Reference reference : references.getReferencesFrom(address, Reference.MNEMONIC)) {
             if (reference.getReferenceType() == RefType.COMPUTED_JUMP) {
-                count++;
+                destinations.add(reference.getToAddress());
             }
         }
-        return count;
+        return destinations;
     }
 
     private boolean isCanonical(Address address, Register context) {
@@ -339,5 +518,50 @@ public class SwitchTest extends GhidraScript {
         Scalar scalar = instruction.getScalar(operand);
         require(scalar != null, "missing fixture scalar at " + wordAddress(wordOffset));
         return scalar.getUnsignedValue();
+    }
+
+    private boolean isUnsignedHiGuard(Instruction instruction) {
+        return instruction != null && instruction.getFlowType().isJump() &&
+            instruction.getFlowType().isConditional() &&
+            (instruction.getMnemonicString().equalsIgnoreCase("SB") ||
+                instruction.getMnemonicString().equalsIgnoreCase("B") ||
+                instruction.getMnemonicString().equalsIgnoreCase("BF")) &&
+            instruction.getNumOperands() > 1 &&
+            instruction.getDefaultOperandRepresentation(1).equalsIgnoreCase("HI");
+    }
+
+    private boolean isRegisterMove(Instruction instruction, String mnemonic,
+            String destination, String source) {
+        return instruction != null &&
+            instruction.getMnemonicString().equalsIgnoreCase(mnemonic) &&
+            isRegisterOperand(instruction, 0, destination) &&
+            isRegisterOperand(instruction, 1, source);
+    }
+
+    private boolean isRegisterOperand(Instruction instruction, int operand, String name) {
+        if (instruction == null || operand >= instruction.getNumOperands()) {
+            return false;
+        }
+        Register register = instruction.getRegister(operand);
+        return register != null && register.getName().equalsIgnoreCase(name);
+    }
+
+    private long scalarUnsigned(Instruction instruction, int operand) {
+        require(instruction != null && operand < instruction.getNumOperands(),
+            "missing scalar operand " + operand);
+        Scalar scalar = instruction.getScalar(operand);
+        require(scalar != null, "missing scalar operand at " + instruction.getAddress());
+        return scalar.getUnsignedValue();
+    }
+
+    private Instruction contiguousPrevious(Instruction instruction) {
+        if (instruction == null) {
+            return null;
+        }
+        Instruction previous = instruction.getPrevious();
+        return previous != null &&
+            previous.getMaxAddress().next().equals(instruction.getMinAddress())
+                ? previous
+                : null;
     }
 }
