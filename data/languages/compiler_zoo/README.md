@@ -16,14 +16,17 @@ make zoo-test
 - `compiler-zoo-build/ghidra-inputs.txt` — the bounded subset imported by the integration test;
 - generated source, objects, linked and stripped images, and `dis2000` listings in corresponding subdirectories.
 
-`make zoo-test` imports the selected stripped images into a fresh headless Ghidra project and runs `ZooTest.java`. The assertions cover computed references, distinct switch destinations, function-body reachability, original case values and defaults, conservative rejection of unsupported switch forms, loop/control-flow structure, byte and 64-bit data flow, direct-call/stack ABI patterns, and common FPU32 instructions.
+`make zoo-test` imports the selected stripped images into a fresh headless Ghidra project and runs `ZooTest.java`. The assertions cover computed references, distinct switch destinations, function-body reachability, original case values and defaults, conservative rejection of unsupported switch forms, loop/control-flow structure, byte and 64-bit data flow, direct-call/stack ABI patterns, common FPU32 instructions, repeated integer division, and the forward-compatible TMU decode gap.
 
 ## Corpus organization
 
 - `manifest.json` is the option matrix and structural contract.
 - `generate_switches.py` contains named, deterministic switch families.
 - `switch_saved32.c` is the minimized source for the saved-XAR7 32-bit selector form.
-- `control_flow.c`, `data_flow.c`, `abi_calls.c`, and `fpu32.c` are compact hand-written source families with defined C behavior.
+- `control_flow.c`, `data_flow.c`, `abi_calls.c`, `fpu32.c`,
+  `integer_division.c`, and `tmu_division.c` are compact hand-written source
+  families with defined C behavior. The TMU family deliberately remains a
+  known-gap subject until `DIVF32` is implemented by the language module.
 - `run_zoo.py` is the bounded driver. It validates the compiler revision, emitted instruction properties, and duplicate schedules.
 - `zoo_link.cmd` supplies the fixed link layout used for every subject.
 

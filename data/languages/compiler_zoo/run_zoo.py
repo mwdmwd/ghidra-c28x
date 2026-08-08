@@ -25,7 +25,7 @@ from generate_switches import GeneratedSwitch, generated_switches
 
 INSTRUCTION_RE = re.compile(
     r"^\s*[0-9a-fA-F]{8}\s+[0-9a-fA-F]{4}\s+"
-    r"([A-Za-z][A-Za-z0-9.]*)\s*(.*?)\s*$"
+    r"(?:\|\|)?([A-Za-z][A-Za-z0-9.]*)\s*(.*?)\s*$"
 )
 SPACE_RE = re.compile(r"\s+")
 
@@ -42,6 +42,7 @@ class BuildSpec:
     optimization: int
     opt_for_speed: int | None
     defines: dict[str, int]
+    extra_flags: tuple[str, ...]
     expected: dict[str, int]
     ghidra_selected: bool
 
@@ -153,8 +154,11 @@ def expand_specs(
         defines = {
             str(key): int(value) for key, value in group.get("defines", {}).items()
         }
+        extra_flags = tuple(str(flag) for flag in group.get("extra_flags", []))
         if defines:
             source_variant["defines"] = defines
+        if extra_flags:
+            source_variant["extra_flags"] = list(extra_flags)
 
         for model in group["models"]:
             expected = {
@@ -178,6 +182,7 @@ def expand_specs(
                             optimization=int(optimization),
                             opt_for_speed=speed,
                             defines=defines,
+                            extra_flags=extra_flags,
                             expected=expected,
                             ghidra_selected=build_id in selected,
                         )
@@ -192,6 +197,7 @@ def expand_specs(
 
 def compiler_flags(common: list[str], spec: BuildSpec) -> list[str]:
     flags = list(common)
+    flags.extend(spec.extra_flags)
     flags.append(f"-O{spec.optimization}")
     if spec.model == "unified":
         flags.append("--unified_memory")

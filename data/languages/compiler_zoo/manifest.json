@@ -169,6 +169,31 @@
       "expect": {
         "default": {"MPYF32_min": 1, "ADDF32_min": 1, "CMPF32_min": 1, "MOVST0_min": 1, "F32TOUI16_min": 1}
       }
+    },
+    {
+      "family": "integer_division",
+      "source": "integer_division.c",
+      "entry": "zoo_integer_division",
+      "kind": "integer-division",
+      "models": ["default"],
+      "optimizations": [0, 2],
+      "opt_for_speed": [null],
+      "expect": {
+        "default": {"RPT": 3, "SUBCUL": 2, "SUBCU": 1, "LRETR": 1}
+      }
+    },
+    {
+      "family": "tmu_division",
+      "source": "tmu_division.c",
+      "entry": "zoo_tmu_division",
+      "kind": "tmu-known-gap",
+      "models": ["default"],
+      "optimizations": [0, 2],
+      "opt_for_speed": [null],
+      "extra_flags": ["--tmu_support=tmu0", "--fp_mode=relaxed"],
+      "expect": {
+        "default": {"DIVF32": 1, "NOP_min": 3, "LRETR": 1}
+      }
     }
   ],
   "ghidra_selection": [
@@ -189,6 +214,10 @@
     "abi_calls_default_o0",
     "abi_calls_default_o2",
     "fpu32_default_o0",
-    "fpu32_default_o2"
+    "fpu32_default_o2",
+    "integer_division_default_o0",
+    "integer_division_default_o2",
+    "tmu_division_default_o0",
+    "tmu_division_default_o2"
   ]
 }

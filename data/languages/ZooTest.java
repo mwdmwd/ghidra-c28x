@@ -82,6 +82,14 @@ public class ZooTest extends GhidraScript {
             testFpu32();
             category = "fpu32";
         }
+        else if (name.startsWith("integer_division_")) {
+            testIntegerDivision();
+            category = "integer-division";
+        }
+        else if (name.startsWith("tmu_division_")) {
+            testTmuDivisionKnownGap();
+            category = "tmu-known-gap";
+        }
         else {
             throw new AssertionError("unrecognized compiler-zoo program " + name);
         }
@@ -529,5 +537,50 @@ public class ZooTest extends GhidraScript {
         requireNoIndirectJumpWarning(c);
         require(c.contains("65535.0") && c.contains("0xffff") && c.contains("0.5"),
             "FPU range, conversion, or fused source expression was lost\n" + c);
+    }
+
+    private void testIntegerDivision() {
+        Function function = entryFunction();
+        require(countMnemonic(function, "RPT") == 3,
+            "integer-division probe lost its three repeat schedules");
+        require(countMnemonic(function, "SUBCUL") == 2,
+            "integer-division probe lost 32-bit quotient/remainder schedules");
+        require(countMnemonic(function, "SUBCU") == 1,
+            "integer-division probe lost its 16-bit quotient schedule");
+
+        String c = decompile(function);
+        requireNoIndirectJumpWarning(c);
+        boolean currentWideTemporary =
+            c.contains("uint5") && c.contains("0x100000000");
+        boolean futureDivisionRecovery = c.contains(" / ") && c.contains(" % ");
+        require(currentWideTemporary || futureDivisionRecovery,
+            "SUBCU(L) neither exposes the tracked wide-temporary symptom nor " +
+                "recovers division/remainder operations\n" + c);
+    }
+
+    /**
+     * Keep the TMU compiler schedule in the corpus before the language can
+     * decode it.  A future implementation is accepted without first weakening
+     * this test: it must produce a real DIVF32 instruction and usable flow.
+     */
+    private void testTmuDivisionKnownGap() {
+        Function function = entryFunction();
+        Address divAddress = function.getEntryPoint().add(7);
+        require(currentProgram.getMemory().contains(divAddress),
+            "TMU DIVF32 address is outside initialized memory");
+
+        Instruction division = currentProgram.getListing().getInstructionAt(divAddress);
+        if (division == null) {
+            return;
+        }
+
+        require(division.getMnemonicString().equalsIgnoreCase("DIVF32"),
+            "TMU gap closed with the wrong instruction: " + division);
+        require(function.getBody().contains(divAddress),
+            "decoded DIVF32 is missing from the entry function body");
+        String c = decompile(function);
+        require(!c.contains("bad instruction data") &&
+                !c.contains("UNIMPLEMENTED"),
+            "decoded DIVF32 still breaks decompilation\n" + c);
     }
 }
