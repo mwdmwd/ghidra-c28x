@@ -186,7 +186,7 @@
       "family": "tmu_division",
       "source": "tmu_division.c",
       "entry": "zoo_tmu_division",
-      "kind": "tmu-known-gap",
+      "kind": "tmu-division",
       "models": ["default"],
       "optimizations": [0, 2],
       "opt_for_speed": [null],

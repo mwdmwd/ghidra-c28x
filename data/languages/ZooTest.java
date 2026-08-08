@@ -87,8 +87,8 @@ public class ZooTest extends GhidraScript {
             category = "integer-division";
         }
         else if (name.startsWith("tmu_division_")) {
-            testTmuDivisionKnownGap();
-            category = "tmu-known-gap";
+            testTmuDivision();
+            category = "tmu-division";
         }
         else {
             throw new AssertionError("unrecognized compiler-zoo program " + name);
@@ -558,26 +558,34 @@ public class ZooTest extends GhidraScript {
                 "recovers division/remainder operations\n" + c);
     }
 
-    /**
-     * Keep the TMU compiler schedule in the corpus before the language can
-     * decode it.  A future implementation is accepted without first weakening
-     * this test: it must produce a real DIVF32 instruction and usable flow.
-     */
-    private void testTmuDivisionKnownGap() {
+    /** Compiler integration regression for the ordinary TMU0 division schedule. */
+    private void testTmuDivision() {
         Function function = entryFunction();
-        Address divAddress = function.getEntryPoint().add(7);
-        require(currentProgram.getMemory().contains(divAddress),
-            "TMU DIVF32 address is outside initialized memory");
+        List<Instruction> divisions = new ArrayList<>();
+        for (Instruction instruction : instructions(function)) {
+            if (instruction.getMnemonicString().equalsIgnoreCase("DIVF32")) {
+                divisions.add(instruction);
+            }
+        }
+        require(divisions.size() == 1,
+            "TMU division probe must contain exactly one DIVF32");
+        Instruction division = divisions.get(0);
+        require(function.getBody().contains(division.getAddress()),
+            "decoded DIVF32 is missing from the entry function body");
 
-        Instruction division = currentProgram.getListing().getInstructionAt(divAddress);
-        if (division == null) {
-            return;
+        // DIVF32 publishes its result and LVF/LUF updates on cycle five.  The
+        // instruction-level P-Code collapse is observationally safe for these
+        // compiler fixtures only because the four intervening instructions do
+        // not read the result or the TMU flags.
+        Instruction slot = division;
+        for (int index = 0; index < 4; index++) {
+            slot = currentProgram.getListing().getInstructionAfter(slot.getAddress());
+            require(slot != null, "TMU division probe lost delay slot " + (index + 1));
+            String mnemonic = slot.getMnemonicString().toUpperCase();
+            require(mnemonic.equals("NOP") || mnemonic.equals("MOVB"),
+                "TMU division probe gained an observable delay-slot operation: " + slot);
         }
 
-        require(division.getMnemonicString().equalsIgnoreCase("DIVF32"),
-            "TMU gap closed with the wrong instruction: " + division);
-        require(function.getBody().contains(divAddress),
-            "decoded DIVF32 is missing from the entry function body");
         String c = decompile(function);
         require(!c.contains("bad instruction data") &&
                 !c.contains("UNIMPLEMENTED"),

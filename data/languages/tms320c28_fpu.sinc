@@ -101,6 +101,20 @@ macro update_stf_cmp(lhs, rhs) {
 	STF_NF = (lhs_cmp f< rhs_cmp);
 }
 
+# TMU common input conditioning (SPRUHS1C section 7.5.2): negative zero
+# and either-sign denormals become positive zero; NaNs become signed infinity.
+macro tmu_condition_operand(out, in) {
+	local exp:4 = in & 0x7F800000;
+	if (exp != 0) goto <not_zeroish>;
+	out = 0;
+	goto <done>;
+	<not_zeroish>
+	out = in;
+	if (exp != 0x7F800000) goto <done>;
+	out = (in & 0x80000000) | 0x7F800000;
+	<done>
+}
+
 macro fpu_minmax_output(out) {
 	local exp:4 = out & 0x7F800000;
 	if (exp != 0) goto <not_denorm>;
@@ -306,6 +320,87 @@ macro update_stf_mov(res) {
 :eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {
 	local one:4 = 0x3F800000;
 	rah3 = one f/ sqrt(rbh3);
+}
+
+# SPRUHS1C pp. 785-786 — TMU Type-0 32-bit floating-point division.
+# Hardware publishes the result and sticky LVF/LUF updates on cycle five.
+# This instruction-level P-Code records the eventual architectural state
+# atomically.  The retained compiler and firmware schedules have no result or
+# LU/LV observer in the four intervening slots, so the collapse is equivalent
+# there.  Cycle-accurate early TESTTF LU/LV observations remain deliberately
+# outside this tranche; destructive STF operations in those slots are undefined.
+:divf32 rah3, rbh3, rch3 is op0_16=0b1110001001110100; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	local numerator:4;
+	local denominator:4;
+	local numerator_exp:4;
+	local denominator_exp:4;
+	local result_sign:4;
+	local infinity:4;
+	local quotient:4;
+	local quotient_exp:4;
+
+	# Snapshot and condition both sources before writing a possibly aliased RaH.
+	tmu_condition_operand(numerator, rbh3);
+	tmu_condition_operand(denominator, rch3);
+	numerator_exp = numerator & 0x7F800000;
+	denominator_exp = denominator & 0x7F800000;
+	result_sign = (numerator ^ denominator) & 0x80000000;
+	infinity = result_sign | 0x7F800000;
+
+	if (numerator_exp != 0) goto <numerator_nonzero>;
+	# 0 / 0 returns +0 and sets LVF; 0 / Inf returns +0 and sets LUF.
+	if (denominator_exp != 0) goto <zero_denominator_nonzero>;
+	rah3 = 0;
+	STF_LV = 1;
+	goto <done>;
+	<zero_denominator_nonzero>
+	if (denominator_exp != 0x7F800000) goto <zero_normal>;
+	rah3 = 0;
+	STF_LU = 1;
+	goto <done>;
+	<zero_normal>
+	rah3 = 0;
+	goto <done>;
+
+	<numerator_nonzero>
+	if (numerator_exp != 0x7F800000) goto <normal_numerator>;
+	# Inf / Inf sets LUF; Inf / normal or zero sets LVF.
+	rah3 = infinity;
+	if (denominator_exp != 0x7F800000) goto <infinity_finite_denominator>;
+	STF_LU = 1;
+	goto <done>;
+	<infinity_finite_denominator>
+	STF_LV = 1;
+	goto <done>;
+
+	<normal_numerator>
+	if (denominator_exp != 0) goto <denominator_nonzero>;
+	rah3 = infinity;
+	STF_LV = 1;
+	goto <done>;
+	<denominator_nonzero>
+	if (denominator_exp != 0x7F800000) goto <normal_division>;
+	rah3 = 0;
+	STF_LU = 1;
+	goto <done>;
+
+	<normal_division>
+	quotient = numerator f/ denominator;
+	quotient_exp = quotient & 0x7F800000;
+	if (quotient_exp != 0) goto <not_underflow>;
+	# A zero/subnormal result is architectural underflow: flush to positive zero.
+	rah3 = 0;
+	STF_LU = 1;
+	goto <done>;
+	<not_underflow>
+	if (quotient_exp != 0x7F800000) goto <finite_result>;
+	# A generic FLOAT_DIV overflow may produce Inf (or NaN); TMU returns signed Inf.
+	rah3 = infinity;
+	STF_LV = 1;
+	goto <done>;
+	<finite_result>
+	rah3 = quotient;
+	<done>
 }
 
 # p.76

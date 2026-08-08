@@ -9,6 +9,7 @@ register-form arithmetic constructors.  It is not a hardware emulator.
 
 from __future__ import annotations
 
+import math
 import struct
 import sys
 from collections.abc import Callable, Iterable
@@ -325,6 +326,320 @@ def _execute_integer_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]
         write(op.output, result)
 
     return {name: read(node) for name, node in registers.items()}
+
+
+def _float32_from_bits(bits: int) -> float:
+    return struct.unpack("<f", struct.pack("<I", bits & 0xFFFFFFFF))[0]
+
+
+def _float32_to_bits(value: float) -> int:
+    try:
+        return struct.unpack("<I", struct.pack("<f", value))[0]
+    except OverflowError:
+        return 0xFF800000 if math.copysign(1.0, value) < 0 else 0x7F800000
+
+
+def _execute_divf32_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
+    """Execute the finite P-Code subset used by the DIVF32 constructor.
+
+    Unlike the integer-only harness, this supports forward intra-instruction
+    branches and IEEE single-precision FLOAT_DIV.  It remains a local
+    regression harness, not a cycle-accurate C28x or TMU emulator.
+    """
+
+    cells: dict[tuple[str, int], int] = {}
+    registers: dict[str, object] = {}
+
+    for op in ops:
+        for node in (*op.inputs, op.output):
+            name = _reg(node)
+            if name is not None:
+                registers.setdefault(name, node)
+
+    def mask(size: int) -> int:
+        return (1 << (size * 8)) - 1
+
+    def signed(value: int, size: int) -> int:
+        sign = 1 << (size * 8 - 1)
+        value &= mask(size)
+        return value - (1 << (size * 8)) if value & sign else value
+
+    def read(node) -> int:
+        if node.space.name == "const":
+            return node.offset & mask(node.size)
+        value = 0
+        for index in range(node.size):
+            value |= cells.get((node.space.name, node.offset + index), 0) << (index * 8)
+        return value
+
+    def write(node, value: int) -> None:
+        value &= mask(node.size)
+        for index in range(node.size):
+            cells[(node.space.name, node.offset + index)] = (value >> (index * 8)) & 0xFF
+
+    for name, value in initial.items():
+        node = registers.get(name)
+        if node is None:
+            raise AssertionError(f"register {name} is absent from DIVF32 P-Code")
+        write(node, value)
+
+    pc = 0
+    steps = 0
+    while pc < len(ops):
+        steps += 1
+        if steps > 1000:
+            raise AssertionError("DIVF32 P-Code exceeded execution step limit")
+        op = ops[pc]
+        opcode = op.opcode
+        if opcode == OpCode.BRANCH:
+            pc += signed(read(op.inputs[0]), op.inputs[0].size)
+            continue
+        if opcode == OpCode.CBRANCH:
+            if read(op.inputs[1]):
+                pc += signed(read(op.inputs[0]), op.inputs[0].size)
+            else:
+                pc += 1
+            continue
+        if op.output is None:
+            raise AssertionError(f"unsupported side-effect DIVF32 P-Code op {opcode.name}")
+
+        args = [read(node) for node in op.inputs]
+        result: int
+        if opcode in (OpCode.COPY, OpCode.INT_ZEXT):
+            result = args[0]
+        elif opcode == OpCode.INT_SEXT:
+            result = signed(args[0], op.inputs[0].size)
+        elif opcode == OpCode.INT_ADD:
+            result = args[0] + args[1]
+        elif opcode == OpCode.INT_SUB:
+            result = args[0] - args[1]
+        elif opcode == OpCode.INT_MULT:
+            result = args[0] * args[1]
+        elif opcode == OpCode.INT_AND:
+            result = args[0] & args[1]
+        elif opcode == OpCode.INT_OR:
+            result = args[0] | args[1]
+        elif opcode == OpCode.INT_XOR:
+            result = args[0] ^ args[1]
+        elif opcode == OpCode.INT_NEGATE:
+            result = ~args[0]
+        elif opcode == OpCode.INT_2COMP:
+            result = -args[0]
+        elif opcode == OpCode.INT_LEFT:
+            result = args[0] << args[1]
+        elif opcode == OpCode.INT_RIGHT:
+            result = args[0] >> args[1]
+        elif opcode == OpCode.INT_SRIGHT:
+            result = signed(args[0], op.inputs[0].size) >> args[1]
+        elif opcode == OpCode.INT_EQUAL:
+            result = int(args[0] == args[1])
+        elif opcode == OpCode.INT_NOTEQUAL:
+            result = int(args[0] != args[1])
+        elif opcode == OpCode.INT_LESS:
+            result = int(args[0] < args[1])
+        elif opcode == OpCode.INT_LESSEQUAL:
+            result = int(args[0] <= args[1])
+        elif opcode == OpCode.INT_SLESS:
+            result = int(
+                signed(args[0], op.inputs[0].size) < signed(args[1], op.inputs[1].size)
+            )
+        elif opcode == OpCode.INT_SLESSEQUAL:
+            result = int(
+                signed(args[0], op.inputs[0].size) <= signed(args[1], op.inputs[1].size)
+            )
+        elif opcode == OpCode.BOOL_AND:
+            result = int(bool(args[0]) and bool(args[1]))
+        elif opcode == OpCode.BOOL_OR:
+            result = int(bool(args[0]) or bool(args[1]))
+        elif opcode == OpCode.BOOL_XOR:
+            result = int(bool(args[0]) ^ bool(args[1]))
+        elif opcode == OpCode.BOOL_NEGATE:
+            result = int(not bool(args[0]))
+        elif opcode == OpCode.SUBPIECE:
+            result = args[0] >> (args[1] * 8)
+        elif opcode == OpCode.PIECE:
+            result = (args[0] << (op.inputs[1].size * 8)) | args[1]
+        elif opcode == OpCode.FLOAT_DIV:
+            numerator = _float32_from_bits(args[0])
+            denominator = _float32_from_bits(args[1])
+            if denominator == 0.0:
+                if numerator == 0.0:
+                    quotient = math.nan
+                else:
+                    quotient = math.copysign(math.inf, numerator * denominator)
+            else:
+                quotient = numerator / denominator
+            result = _float32_to_bits(quotient)
+        else:
+            raise AssertionError(f"unsupported DIVF32 P-Code op {opcode.name}")
+        write(op.output, result)
+        pc += 1
+
+    return {name: read(node) for name, node in registers.items()}
+
+
+def _f32(value: float) -> int:
+    return _float32_to_bits(value)
+
+
+def check_divf32(ops: list) -> None:
+    divides = [op for op in ops if op.opcode == OpCode.FLOAT_DIV]
+    assert len(divides) == 1, f"DIVF32 must emit one FLOAT_DIV, got {len(divides)}"
+    divide = divides[0]
+    assert any(
+        op.output is not None
+        and _overlaps(op.output, divide.inputs[0])
+        and any(_reg(value) == "R3H" for value in op.inputs)
+        for op in ops
+    ), "DIVF32 conditioned numerator must snapshot R3H"
+    assert any(
+        op.output is not None
+        and _overlaps(op.output, divide.inputs[1])
+        and any(_reg(value) == "R1H" for value in op.inputs)
+        for op in ops
+    ), "DIVF32 conditioned denominator must snapshot R1H"
+    assert any(_reg(op.output) == "R0H" for op in ops), "DIVF32 must write R0H"
+
+    stf_flags = {"STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"}
+    flag_reads = {
+        _reg(value)
+        for op in ops
+        for value in op.inputs
+        if _reg(value) in stf_flags
+    }
+    assert not flag_reads, f"DIVF32 must not depend on STF flags or rounding state: {flag_reads}"
+    flag_writes = [op for op in ops if _reg(op.output) in stf_flags]
+    written = {_reg(op.output) for op in flag_writes}
+    assert written == {"STF_LU", "STF_LV"}, f"unexpected DIVF32 STF writes: {written}"
+    for op in flag_writes:
+        assert (
+            op.opcode == OpCode.COPY
+            and len(op.inputs) == 1
+            and _is_const(op.inputs[0], 1)
+        ), f"DIVF32 flags must be sticky-set only: {op}"
+
+    def run(
+        numerator: int,
+        denominator: int,
+        expected_result: int,
+        expected_lu: int,
+        expected_lv: int,
+        description: str,
+        *,
+        initial_lu: int = 0,
+        initial_lv: int = 0,
+    ) -> None:
+        actual = _execute_divf32_pcode(
+            ops,
+            {
+                "R0H": 0xDEADBEEF,
+                "R3H": numerator,
+                "R1H": denominator,
+                "STF_LU": initial_lu,
+                "STF_LV": initial_lv,
+            },
+        )
+        expected = {
+            "R0H": expected_result,
+            "STF_LU": expected_lu,
+            "STF_LV": expected_lv,
+        }
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+    run(_f32(6.0), _f32(2.0), _f32(3.0), 0, 0, "ordinary division")
+    run(
+        _f32(-6.0),
+        _f32(2.0),
+        _f32(-3.0),
+        1,
+        1,
+        "ordinary division preserves flags",
+        initial_lu=1,
+        initial_lv=1,
+    )
+    run(
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        1,
+        1,
+        "zero divided by zero",
+        initial_lu=1,
+    )
+    run(
+        0x00000000,
+        0x7F800000,
+        0x00000000,
+        1,
+        1,
+        "zero divided by infinity",
+        initial_lv=1,
+    )
+    run(0x7F800000, _f32(-2.0), 0xFF800000, 0, 1, "infinity divided by normal")
+    run(
+        0xFF800000,
+        0x00000000,
+        0xFF800000,
+        0,
+        1,
+        "negative infinity divided by zero",
+    )
+    run(0x7F800000, 0xFF800000, 0xFF800000, 1, 0, "infinity divided by infinity")
+    run(_f32(-4.0), 0x00000000, 0xFF800000, 0, 1, "normal divided by zero")
+    run(_f32(-4.0), 0xFF800000, 0x00000000, 1, 0, "normal divided by infinity")
+    run(0x80000000, _f32(-2.0), 0x00000000, 0, 0, "negative zero is positive zero")
+    run(0x00000001, _f32(2.0), 0x00000000, 0, 0, "denormal numerator is positive zero")
+    run(
+        _f32(-4.0),
+        0x80000000,
+        0xFF800000,
+        0,
+        1,
+        "negative zero denominator is positive zero",
+    )
+    run(0x7FC00001, _f32(2.0), 0x7F800000, 0, 1, "positive NaN is positive infinity")
+    run(0xFFC00001, _f32(2.0), 0xFF800000, 0, 1, "negative NaN is negative infinity")
+    run(_f32(2.0), 0xFFC00001, 0x00000000, 1, 0, "NaN denominator is signed infinity")
+    run(0x00800000, _f32(2.0), 0x00000000, 1, 0, "subnormal result flushes to zero")
+    run(0x7F7FFFFF, 0x00800000, 0x7F800000, 0, 1, "overflow returns infinity")
+
+
+def check_divf32_aliased_numerator(ops: list) -> None:
+    divides = [op for op in ops if op.opcode == OpCode.FLOAT_DIV]
+    assert len(divides) == 1, f"aliased DIVF32 must emit one FLOAT_DIV, got {len(divides)}"
+    divide = divides[0]
+    assert any(
+        op.output is not None
+        and _overlaps(op.output, divide.inputs[0])
+        and any(_reg(value) == "R1H" for value in op.inputs)
+        for op in ops
+    ), "aliased DIVF32 numerator must snapshot the incoming R1H value"
+    assert any(
+        op.output is not None
+        and _overlaps(op.output, divide.inputs[1])
+        and any(_reg(value) == "R0H" for value in op.inputs)
+        for op in ops
+    ), "aliased DIVF32 denominator must snapshot the incoming R0H value"
+    actual = _execute_divf32_pcode(
+        ops,
+        {
+            "R1H": _f32(6.0),
+            "R0H": _f32(2.0),
+            "STF_LU": 0,
+            "STF_LV": 0,
+        },
+    )
+    assert actual["R1H"] == _f32(3.0), (
+        f"aliased DIVF32 lost its source before writeback: 0x{actual['R1H']:08x}"
+    )
+    assert actual["STF_LU"] == 0 and actual["STF_LV"] == 0, (
+        "ordinary aliased DIVF32 unexpectedly changed LUF/LVF"
+    )
 
 
 def _assert_execution(
@@ -1738,6 +2053,12 @@ CASES = (
         "compiler unsigned CMPL/SB HI sequence branches from C and Z",
         (0x0FA6, 0x6603),
         check_cmpl_unsigned_branch,
+    ),
+    Case("DIVF32 conditions inputs and models result/LUF/LVF", (0xE274, 0x0058), check_divf32),
+    Case(
+        "DIVF32 snapshots an aliased numerator before writeback",
+        (0xE274, 0x0009),
+        check_divf32_aliased_numerator,
     ),
     Case("MAXF32||MOV32 snapshots aliased source", (0xE69C, 0x0088), check_max_snapshot),
     Case("PUSH ST0 encodes decoded PM and six-bit OVC", (0x7618,), check_push_st0_encoding),

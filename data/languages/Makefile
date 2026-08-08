@@ -6,6 +6,7 @@ SLEIGH ?= /opt/ghidra/support/sleigh
 PYTHON ?= python3
 AS := $(TIBIN)cl2000
 ASFLAGS := --float_support=fpu32
+TEST_ASFLAGS := $(ASFLAGS) --tmu_support=tmu0
 DIS := $(TIBIN)dis2000
 DISFLAGS ?=
 HEX := $(TIBIN)hex2000
@@ -65,7 +66,7 @@ $(ANALYZER_JAR): $(ANALYZER_SOURCE)
 	$(Q)$(JAR) --create --file $@ -C $(ANALYZER_CLASSES) .
 
 test.obj: test.asm
-	$(Q)$(AS) $(ASFLAGS) $<
+	$(Q)$(AS) $(TEST_ASFLAGS) $<
 
 $(DECOMPILE_OBJECT): $(DECOMPILE_SOURCE) Makefile
 	$(Q)$(AS) $(CFLAGS) --compile_only --output_file=$@ $<

@@ -543,6 +543,27 @@
 	NOP
 	EISQRTF32	R2H, R3H
 	NOP
+	; TMU Type-0 division (5p: four non-conflicting delay slots)
+	DIVF32		R0H, R3H, R1H
+	NOP
+	NOP
+	NOP
+	NOP
+	DIVF32		R0H, R1H, R3H
+	NOP
+	NOP
+	NOP
+	NOP
+	DIVF32		R1H, R1H, R0H
+	NOP
+	NOP
+	NOP
+	NOP
+	DIVF32		R7H, R6H, R5H
+	NOP
+	NOP
+	NOP
+	NOP
 	F32TOI16	R4H, R5H
 	NOP
 	F32TOI16R	R6H, R7H
