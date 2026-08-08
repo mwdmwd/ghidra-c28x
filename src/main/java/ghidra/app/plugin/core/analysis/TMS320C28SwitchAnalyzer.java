@@ -928,7 +928,14 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			return false;
 		}
 		Register register = instruction.getRegister(operand);
-		return register != null && register.getName().equalsIgnoreCase(registerName);
+		if (register != null) {
+			return register.getName().equalsIgnoreCase(registerName);
+		}
+		// Register-valued loc32 subtables may expose the operand as dynamic even
+		// though the rendered operand and its sole object are the register itself.
+		Object[] objects = instruction.getOpObjects(operand);
+		return objects.length == 1 && objects[0] instanceof Register objectRegister &&
+			objectRegister.getName().equalsIgnoreCase(registerName);
 	}
 
 	private static Scalar scalarOperand(Instruction instruction, int operand) {
