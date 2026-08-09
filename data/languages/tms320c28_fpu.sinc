@@ -473,7 +473,7 @@ macro update_stf_mov(res) {
 }
 
 # SPRUHS1C pp. 790-791 — TMU Type-0 cosine with a per-unit input.
-# The range gates and truncation-toward-zero fraction are explicit P-Code.
+# The range conditions and truncation-toward-zero fraction are explicit P-Code.
 # cospu_f32 is an opaque, side-effect-free floating core for cos(fraction*2*pi),
 # because standard P-Code has no trigonometric operator.  Result publication is
 # 4p and remains represented as an atomic eventual write.
@@ -488,7 +488,7 @@ macro update_stf_mov(res) {
 	tmu_condition_operand(operand, rbh3);
 	magnitude = operand & 0x7FFFFFFF;
 
-	# The documented gates are inclusive: |x| <= 2^-33 or |x| >= 2^22.
+	# The documented range conditions are inclusive: |x| <= 2^-33 or |x| >= 2^22.
 	if (magnitude > 0x2F000000) goto <not_too_small>;
 	rah3 = 0x3F800000;
 	goto <done>;

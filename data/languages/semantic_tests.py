@@ -765,7 +765,7 @@ def check_cospuf32(ops: list) -> None:
         and len(op.inputs) == 1
         and _is_const(op.inputs[0], 0x3F800000)
         for op in ops
-    ), "COSPUF32 range gates must return 1.0"
+    ), "COSPUF32 range conditions must return 1.0"
 
     stf_flags = {"STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"}
     flag_accesses = [
@@ -2471,7 +2471,7 @@ CASES = (
     Case("DIVF32 conditions inputs and models result/LUF/LVF", (0xE274, 0x0058), check_divf32),
     Case("SQRTF32 conditions input and models result/LVF", (0xE277, 0x0000), check_sqrtf32),
     Case("DIV2PIF32 uses exact scale and models result/LUF", (0xE271, 0x0000), check_div2pif32),
-    Case("COSPUF32 gates range and computes periodic cosine", (0xE279, 0x0000), check_cospuf32),
+    Case("COSPUF32 applies range conditions and computes periodic cosine", (0xE279, 0x0000), check_cospuf32),
     Case(
         "DIVF32 snapshots an aliased numerator before writeback",
         (0xE274, 0x0009),

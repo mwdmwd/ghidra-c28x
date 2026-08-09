@@ -223,12 +223,14 @@ qasm:
 # Set an isolated environment to avoid using any user Ghidra settings.
 .PHONY: decompile
 decompile: tms320c28.sla $(DECOMPILE_OBJECT) Decompile.java
-	@mkdir -p $(GHIDRA_DECOMP_DIR)/home $(GHIDRA_DECOMP_DIR)/config $(GHIDRA_DECOMP_DIR)/project $(GHIDRA_DECOMP_DIR)/tmp $(GHIDRA_DECOMP_DIR)/cache
+	@mkdir -p $(GHIDRA_DECOMP_DIR)/home $(GHIDRA_DECOMP_DIR)/config $(GHIDRA_DECOMP_DIR)/project $(GHIDRA_DECOMP_DIR)/tmp $(GHIDRA_DECOMP_DIR)/cache $(GHIDRA_DECOMP_DIR)/scripts
+	@cp Decompile.java $(GHIDRA_DECOMP_DIR)/scripts/
 	$(Q)HOME=$$PWD/$(GHIDRA_DECOMP_DIR)/home XDG_CONFIG_HOME=$$PWD/$(GHIDRA_DECOMP_DIR)/config \
 		GHIDRA_HEADLESS_JAVA_OPTIONS="-Dapplication.tempdir=$$PWD/$(GHIDRA_DECOMP_DIR)/tmp -Dapplication.cachedir=$$PWD/$(GHIDRA_DECOMP_DIR)/cache -Djava.io.tmpdir=$$PWD/$(GHIDRA_DECOMP_DIR)/tmp" \
 		$(GHIDRA_HEADLESS) $$PWD/$(GHIDRA_DECOMP_DIR)/project $(DECOMPILE_NAME) \
 		-import $(DECOMPILE_OBJECT) -processor tms320c28:LE:32:default -cspec default \
-		-scriptPath $$PWD -postScript Decompile.java $(DECOMPILE_FUNCTIONS) \
+		-scriptPath $$PWD/$(GHIDRA_DECOMP_DIR)/scripts \
+		-postScript $$PWD/$(GHIDRA_DECOMP_DIR)/scripts/Decompile.java $(DECOMPILE_FUNCTIONS) \
 		-log $$PWD/$(GHIDRA_DECOMP_DIR)/ghidra.log \
 		-scriptlog $$PWD/$(GHIDRA_DECOMP_DIR)/script.log \
 		-analysisTimeoutPerFile 60 -overwrite -deleteProject
@@ -243,7 +245,8 @@ switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 		switch_validation.out switch_pread32_test.out switch_pread_validation.out \
 		switch_ar6_validation.out ffc_validation.out SwitchTest.java
 	@rm -rf $(GHIDRA_SWITCH_DIR)
-	@mkdir -p $(GHIDRA_SWITCH_DIR)/runs
+	@mkdir -p $(GHIDRA_SWITCH_DIR)/runs $(GHIDRA_SWITCH_DIR)/scripts
+	@cp SwitchTest.java $(GHIDRA_SWITCH_DIR)/scripts/
 	$(Q)switch_inputs=(switch_test.out switch_native_test.out switch_validation.out \
 		switch_pread32_test.out switch_pread_validation.out \
 		switch_ar6_validation.out ffc_validation.out); \
@@ -263,7 +266,8 @@ switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 				$(GHIDRA_HEADLESS) "$$run_dir"/project switch-test \
 				-import "$$input" \
 				-processor tms320c28:LE:32:default -cspec default \
-				-scriptPath $$PWD -postScript SwitchTest.java \
+				-scriptPath $$PWD/$(GHIDRA_SWITCH_DIR)/scripts \
+				-postScript $$PWD/$(GHIDRA_SWITCH_DIR)/scripts/SwitchTest.java \
 				-log "$$ghidra_log" -scriptlog "$$script_log" \
 				-analysisTimeoutPerFile 60 -overwrite -deleteProject \
 				>"$$console_log" 2>&1; then \
@@ -300,7 +304,8 @@ $(ZOO_BUILD_DIR)/matrix.json: compiler_zoo/manifest.json compiler_zoo/run_zoo.py
 .PHONY: zoo-test
 zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 	@rm -rf $(GHIDRA_ZOO_DIR)
-	@mkdir -p $(GHIDRA_ZOO_DIR)/runs
+	@mkdir -p $(GHIDRA_ZOO_DIR)/runs $(GHIDRA_ZOO_DIR)/scripts
+	@cp ZooTest.java $(GHIDRA_ZOO_DIR)/scripts/
 	$(Q)mapfile -t zoo_inputs < $(ZOO_BUILD_DIR)/ghidra-inputs.txt; \
 		expected=$${#zoo_inputs[@]}; \
 		actual=0; index=0; \
@@ -319,7 +324,8 @@ zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 				$(GHIDRA_HEADLESS) "$$run_dir"/project compiler-zoo \
 				-import "$$input" \
 				-processor tms320c28:LE:32:default -cspec default \
-				-scriptPath $$PWD -postScript ZooTest.java \
+				-scriptPath $$PWD/$(GHIDRA_ZOO_DIR)/scripts \
+				-postScript $$PWD/$(GHIDRA_ZOO_DIR)/scripts/ZooTest.java \
 				-log "$$ghidra_log" -scriptlog "$$script_log" \
 				-analysisTimeoutPerFile 60 -overwrite -deleteProject \
 				>"$$console_log" 2>&1; then \
