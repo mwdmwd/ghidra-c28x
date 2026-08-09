@@ -9,6 +9,7 @@ import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
@@ -42,7 +43,15 @@ public class SwitchTest extends GhidraScript {
     @Override
     public void run() throws Exception {
         String name = currentProgram.getName().toLowerCase();
-        if (name.contains("pread_validation")) {
+        if (name.contains("ffc_validation")) {
+            testFfcValidationFixture();
+            println("SWITCH_PROGRAM_PASS=" + currentProgram.getName());
+            return;
+        }
+        if (name.contains("ar6_validation")) {
+            testAr6ValidationFixture();
+        }
+        else if (name.contains("pread_validation")) {
             testPreadNegativeFixture();
         }
         else if (name.contains("validation")) {
@@ -54,6 +63,198 @@ public class SwitchTest extends GhidraScript {
         else {
             testCompilerFixture();
         }
+        requireNoFfcReturnContext();
+        println("SWITCH_PROGRAM_PASS=" + currentProgram.getName());
+    }
+
+    private void testFfcValidationFixture() throws Exception {
+        Register ffcContext = currentProgram.getProgramContext().getRegister("ffc_return");
+        Register switchContext =
+            currentProgram.getProgramContext().getRegister("switch_canonical");
+        require(ffcContext != null, "missing ffc_return context");
+        require(switchContext != null, "missing switch_canonical context");
+
+        Address validReturn = wordAddress(0x16025);
+        Instruction valid = getInstructionAt(validReturn);
+        require(valid != null && valid.getMnemonicString().equalsIgnoreCase("LB"),
+            "missing positive FFC-return LB");
+        require(isCanonical(validReturn, ffcContext),
+            "positive FFC helper return was not tagged");
+        require(!isCanonical(validReturn, switchContext),
+            "FFC helper return was incorrectly tagged as a switch");
+        require(valid.getFlowType().isTerminal() && !valid.getFlowType().isCall(),
+            "positive FFC LB is not a return terminator: " + valid.getFlowType());
+        require(hasPcodeOp(valid, PcodeOp.RETURN) &&
+                !hasPcodeOp(valid, PcodeOp.BRANCHIND) &&
+                !hasPcodeOp(valid, PcodeOp.CALLIND),
+            "positive FFC LB did not select RETURNIND P-Code");
+
+        int tagged = 0;
+        InstructionIterator instructions = currentProgram.getListing().getInstructions(true);
+        while (instructions.hasNext()) {
+            if (isCanonical(instructions.next().getAddress(), ffcContext)) {
+                tagged++;
+            }
+        }
+        require(tagged == 1, "only the proven FFC terminal may be tagged, got " + tagged);
+
+        long[] rejectedReturns = {
+            0x16028, // XAR7 clobber
+            0x1602a, // mixed FFC/LCR ingress
+            0x1602d, // external ingress into helper interior
+            0x16030, // explicit control flow in helper
+            0x16033, // fall-through into nominal helper entry
+            0x16036  // ordinary indirect branch with no FFC provenance
+        };
+        for (long word : rejectedReturns) {
+            Address address = wordAddress(word);
+            Instruction instruction = getInstructionAt(address);
+            require(instruction != null && instruction.getMnemonicString().equalsIgnoreCase("LB"),
+                "missing FFC near-miss LB at " + address);
+            require(!isCanonical(address, ffcContext),
+                "FFC near miss was tagged at " + address);
+            require(hasPcodeOp(instruction, PcodeOp.BRANCHIND) &&
+                    !hasPcodeOp(instruction, PcodeOp.RETURN),
+                "untagged LB lost ordinary BRANCHIND P-Code at " + address);
+        }
+
+        Instruction clobber = getInstructionAt(wordAddress(0x16026));
+        require(clobber != null && isRegisterOperand(clobber, 0, "XAR7"),
+            "XAR7-clobber near miss no longer writes XAR7");
+        require(hasCallReferenceFromMnemonic(0x16029, "FFC") &&
+                hasCallReferenceFromMnemonic(0x16029, "LCR"),
+            "mixed-ingress near miss no longer has both FFC and LCR callers");
+        require(hasFlowReferenceFromTo(0x1602e, 0x1602c),
+            "external-ingress near miss lost its interior branch");
+        Instruction explicitFlow = getInstructionAt(wordAddress(0x1602f));
+        require(explicitFlow != null && explicitFlow.getMnemonicString().equalsIgnoreCase("SB") &&
+                explicitFlow.getFlowType().isJump(),
+            "control-flow near miss no longer branches before its LB");
+        Instruction fallthrough = getInstructionAt(wordAddress(0x16031));
+        require(fallthrough != null && wordAddress(0x16032).equals(fallthrough.getFallThrough()),
+            "fall-through near miss no longer enters the nominal helper");
+        require(hasCallReferenceFromMnemonic(0x16034, "LCR") &&
+                !hasCallReferenceFromMnemonic(0x16034, "FFC"),
+            "ordinary indirect branch no longer has only non-FFC provenance");
+
+        require(hasFlowReferenceFromTo(0x16000, 0x16017) &&
+                hasFlowReferenceFromTo(0x16002, 0x16017),
+            "positive helper lost one of its two FFC callers");
+        Function helper = getFunctionAt(wordAddress(0x16017));
+        require(helper != null, "missing positive FFC helper function");
+        require(helper.getBody().contains(wordAddress(0x16017)) &&
+                helper.getBody().contains(validReturn),
+            "positive FFC helper body does not include its terminal return");
+        int helperInstructions = 0;
+        InstructionIterator helperBody =
+            currentProgram.getListing().getInstructions(helper.getBody(), true);
+        while (helperBody.hasNext()) {
+            helperBody.next();
+            helperInstructions++;
+        }
+        require(helperInstructions == 14,
+            "positive FFC helper instruction count changed: " + helperInstructions);
+
+        String c = decompile(helper);
+        require(!c.contains("Could not recover jumptable") &&
+                !c.contains("Treating indirect jump as call") &&
+                c.contains("return "),
+            "FFC helper did not decompile as a returning function\n" + c);
+
+        println("FFC_RETURN_CALLERS=2");
+        println("FFC_RETURN_HELPER_INSTRUCTIONS=14");
+        println("FFC_RETURN_NEAR_MISS_REJECTED=6");
+    }
+
+    private void testAr6ValidationFixture() throws Exception {
+        Register context = currentProgram.getProgramContext().getRegister("switch_canonical");
+        require(context != null, "missing switch_canonical context");
+
+        Address validAdd = wordAddress(0x15027);
+        Address validBranch = wordAddress(0x1502b);
+        require(isCanonical(validAdd, context),
+            "AR6 positive fixture index ADD was not canonicalized");
+        require(isCanonical(validBranch, context),
+            "AR6 positive fixture computed LB was not canonicalized");
+        require(computedJumpCount(validBranch) == 3,
+            "AR6 positive fixture must recover three destinations");
+
+        int canonicalCount = 0;
+        InstructionIterator all = currentProgram.getListing().getInstructions(true);
+        while (all.hasNext()) {
+            Instruction instruction = all.next();
+            if (isCanonical(instruction.getAddress(), context)) {
+                canonicalCount++;
+            }
+        }
+        require(canonicalCount == 2,
+            "only the positive AR6 ADD/LB may be canonical, got " + canonicalCount);
+
+        long[] rejectedBranches = {
+            0x15040, 0x15055, 0x1506a, 0x1507f, 0x15090, 0x150a4, 0x150b9,
+            0x150ce, 0x150e3, 0x150f8, 0x1510e, 0x15123, 0x15138
+        };
+        for (long branch : rejectedBranches) {
+            require(!isCanonical(wordAddress(branch), context),
+                "AR6 near miss was canonicalized at " + wordAddress(branch));
+        }
+
+        // One minimized negative isolates each newly admitted matcher fact.
+        require(getInstructionAt(wordAddress(0x15034)).getMnemonicString()
+                .equalsIgnoreCase("MOV"),
+            "producer near miss no longer uses MOV instead of MOVZ");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x1504a)), 1, "AR5"),
+            "selector-copy near miss no longer reads AR5");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x15060)), 0, "AH"),
+            "compare-register near miss no longer compares AH");
+        require(scalarAt(0x15075, 1) == 0,
+            "count-bound near miss no longer describes one entry");
+        require(getInstructionAt(wordAddress(0x15087))
+                .getDefaultOperandRepresentation(1).equalsIgnoreCase("GEQ"),
+            "guard-condition near miss no longer uses GEQ");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x1509d)), 1, "XAR4"),
+            "table-base near miss no longer uses a register pointer");
+        require(getInstructionAt(wordAddress(0x150b3)).getMnemonicString()
+                .equalsIgnoreCase("CLRC"),
+            "SXM near miss no longer clears SXM");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x150c9)), 1, "XAR6"),
+            "base-copy near miss no longer reads XAR6");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x150df)), 1, "AR5"),
+            "index-source near miss no longer reads AR5");
+        require(scalarAt(0x150f4, 2) == 2,
+            "index-scale near miss no longer shifts by two");
+        Instruction copyBack = getInstructionAt(wordAddress(0x1510b));
+        Instruction copyRoute = getInstructionAt(wordAddress(0x1510c));
+        require(isRegisterMove(copyBack, "MOVL", "XAR6", "ACC") &&
+                copyRoute != null &&
+                copyRoute.getMnemonicString().equalsIgnoreCase("MOVL") &&
+                !isRegisterMove(copyBack, "MOVL", "XAR7", "ACC"),
+            "copy-back near miss no longer routes through XAR6");
+        Instruction offsetLoad = getInstructionAt(wordAddress(0x15122));
+        Object[] offsetObjects = offsetLoad == null ? new Object[0] : offsetLoad.getOpObjects(1);
+        require(offsetObjects.length == 2 && offsetObjects[1] instanceof Scalar offset &&
+                offset.getUnsignedValue() == 2,
+            "native-load near miss no longer uses offset two");
+        require(hasFlowReferenceFromTo(0x15141, 0x15134),
+            "exclusive-ingress near miss lost its branch into the dispatch");
+
+        Function function = getFunctionAt(wordAddress(0x1501f));
+        require(function != null, "missing AR6 positive fixture function");
+        long[] targets = { 0x1502e, 0x15030, 0x15032 };
+        for (long target : targets) {
+            require(function.getBody().contains(wordAddress(target)),
+                "AR6 switch target not in recovered function body: " + wordAddress(target));
+        }
+        String c = decompile(function);
+        require(!c.contains("Could not recover jumptable") &&
+                !c.contains("Treating indirect jump as call"),
+            "AR6 switch remains unrecovered\n" + c);
+        require(c.contains("case 0:") && c.contains("case 2:"),
+            "AR6 switch lost its zero-based case range\n" + c);
+
+        println("SWITCH_AR6_DESTINATIONS=3");
+        println("SWITCH_AR6_CASE_RANGE=0-2");
+        println("SWITCH_AR6_NEAR_MISS_REJECTED=13");
     }
 
     private void testPread32CompilerFixture() throws Exception {
@@ -501,11 +702,62 @@ public class SwitchTest extends GhidraScript {
             currentProgram.getProgramContext().getValue(context, address, false));
     }
 
+    private void requireNoFfcReturnContext() {
+        Register context = currentProgram.getProgramContext().getRegister("ffc_return");
+        require(context != null, "missing ffc_return context");
+        InstructionIterator instructions = currentProgram.getListing().getInstructions(true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            require(!isCanonical(instruction.getAddress(), context),
+                "switch fixture unexpectedly selected FFC return semantics at " +
+                    instruction.getAddress());
+        }
+    }
+
+    private boolean hasPcodeOp(Instruction instruction, int opcode) {
+        if (instruction == null) {
+            return false;
+        }
+        for (PcodeOp operation : instruction.getPcode()) {
+            if (operation.getOpcode() == opcode) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasFlowReferenceFromTo(long fromWord, long toWord) {
+        for (Reference reference : currentProgram.getReferenceManager()
+                .getReferencesFrom(wordAddress(fromWord))) {
+            if (reference.getReferenceType().isFlow() &&
+                    reference.getToAddress().equals(wordAddress(toWord))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean hasCallReference(long wordOffset) {
         ReferenceIterator references =
             currentProgram.getReferenceManager().getReferencesTo(wordAddress(wordOffset));
         while (references.hasNext()) {
             if (references.next().getReferenceType().isCall()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasCallReferenceFromMnemonic(long targetWord, String mnemonic) {
+        ReferenceIterator references =
+            currentProgram.getReferenceManager().getReferencesTo(wordAddress(targetWord));
+        while (references.hasNext()) {
+            Reference reference = references.next();
+            if (!reference.getReferenceType().isCall()) {
+                continue;
+            }
+            Instruction source = getInstructionAt(reference.getFromAddress());
+            if (source != null && source.getMnemonicString().equalsIgnoreCase(mnemonic)) {
                 return true;
             }
         }
@@ -543,7 +795,12 @@ public class SwitchTest extends GhidraScript {
             return false;
         }
         Register register = instruction.getRegister(operand);
-        return register != null && register.getName().equalsIgnoreCase(name);
+        if (register != null) {
+            return register.getName().equalsIgnoreCase(name);
+        }
+        Object[] objects = instruction.getOpObjects(operand);
+        return objects.length == 1 && objects[0] instanceof Register objectRegister &&
+            objectRegister.getName().equalsIgnoreCase(name);
     }
 
     private long scalarUnsigned(Instruction instruction, int operand) {
