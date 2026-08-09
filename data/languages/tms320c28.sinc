@@ -1878,7 +1878,22 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.130
-:add ACC, loc16 << #shift8_4 is ctx_objmode=1 & op0_16=0b0101011000000100; op12_4=0b0000 & ACC & loc16 & shift8_4 {
+# A processor analyzer selects this variant only for the exact AR6-indexed,
+# zero-based switch schedule.  MOVZ plus the unsigned guard proves AR6 <= the
+# validated table bound, and SETC SXM makes the architectural extension
+# explicit.  The loaded table base and bounded two-word index cannot carry or
+# overflow, and the intervening flags are dead before the computed branch.
+# Keeping the proven address expression simple lets stock switch analysis
+# recover the table; ordinary ADD sites retain full SXM/OVM-sensitive P-Code.
+:add ACC, loc16 << #shift8_4 is switch_canonical=1 & ctx_objmode=1 & op0_16=0b0101011000000100; op12_4=0b0000 & ACC & loc16 & shift8_4 {
+	local value:4 = zext(loc16) << shift8_4;
+	ACC = ACC + value;
+	C = 0;
+	flagnz(ACC);
+}
+
+# p.130
+:add ACC, loc16 << #shift8_4 is switch_canonical=0 & ctx_objmode=1 & op0_16=0b0101011000000100; op12_4=0b0000 & ACC & loc16 & shift8_4 {
 	local tmp:4;
 	mext(tmp, loc16);
 	local value:4 = tmp << shift8_4;

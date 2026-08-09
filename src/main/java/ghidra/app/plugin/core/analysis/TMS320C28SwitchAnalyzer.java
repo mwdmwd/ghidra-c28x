@@ -204,6 +204,10 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		if (candidate != null) {
 			return candidate;
 		}
+		candidate = recoverNativeAr6Dispatch(branch);
+		if (candidate != null) {
+			return candidate;
+		}
 		return recoverNativeDirectDispatch(branch);
 	}
 
@@ -349,6 +353,52 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			new IndexExpression(pair.indexInstruction, pair.indexSource, TABLE_ENTRY_WORDS,
 				adjustment.longValue());
 		return new DispatchCandidate(pair.entryInstruction, branch, table, expression, variant);
+	}
+
+	/**
+	 * Recover the finite zero-based AR6 schedule observed at firmware
+	 * 0x90615-0x90621:
+	 *
+	 * <pre>
+	 * MOVZ AR6,mem16
+	 * MOV  AL,AR6
+	 * CMPB AL,#high
+	 * SB   default,HI
+	 * MOVL XAR7,#table
+	 * SETC SXM
+	 * MOVL ACC,XAR7
+	 * ADD  ACC,AR6 << #1
+	 * MOVL XAR7,ACC
+	 * MOVL XAR7,*+XAR7[0]
+	 * LB   *XAR7
+	 * </pre>
+	 *
+	 * Every instruction and operand is matched exactly.  MOVZ and the unsigned
+	 * guard prove a nonnegative bounded selector, while SETC SXM makes the ADD's
+	 * extension mode explicit.  The analyzer canonicalizes only that ADD and the
+	 * validated computed branch.
+	 */
+	private static DispatchCandidate recoverNativeAr6Dispatch(Instruction branch) {
+		Instruction load = contiguousPrevious(branch);
+		Instruction finalCopy = contiguousPrevious(load);
+		Instruction indexAdd = contiguousPrevious(finalCopy);
+		Instruction baseCopy = contiguousPrevious(indexAdd);
+		Instruction setSxm = contiguousPrevious(baseCopy);
+		Instruction tableInstruction = contiguousPrevious(setSxm);
+		Scalar tableScalar = immediateTableBase(tableInstruction);
+		if (!isNativeLongwordLoad(load) ||
+			!isRegisterMove(finalCopy, "movl", "XAR7", "ACC") ||
+			!isAr6ScaledAdd(indexAdd) ||
+			!isRegisterMove(baseCopy, "movl", "ACC", "XAR7") ||
+			!isSetSxmOnly(setSxm) || tableScalar == null) {
+			return null;
+		}
+
+		Address table = tableAddress(tableInstruction, tableScalar);
+		IndexExpression expression =
+			new IndexExpression(indexAdd, "AR6", TABLE_ENTRY_WORDS, 0);
+		return new DispatchCandidate(tableInstruction, branch, table, expression,
+			DispatchVariant.NATIVE_AR6_ZERO);
 	}
 
 	private static DispatchCandidate recoverNativeDirectDispatch(Instruction branch) {
@@ -500,6 +550,9 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		if (defaultPath == null) {
 			return null;
 		}
+		if (dispatch.variant == DispatchVariant.NATIVE_AR6_ZERO) {
+			return recoverAr6ZeroBasedRange(guard, defaultPath);
+		}
 
 		Instruction compare = contiguousPrevious(guard);
 		Instruction subtract = contiguousPrevious(compare);
@@ -538,6 +591,27 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			return null;
 		}
 		return new Guard(guard, guardStart, null, low, (int) count, defaultPath);
+	}
+
+	private static Guard recoverAr6ZeroBasedRange(Instruction guard, Address defaultPath) {
+		Instruction compare = contiguousPrevious(guard);
+		Instruction copy = contiguousPrevious(compare);
+		Instruction producer = contiguousPrevious(copy);
+		if (!isMnemonic(compare, "cmpb") || !isRegisterOperand(compare, 0, "AL") ||
+			!isRegisterMove(copy, "mov", "AL", "AR6") ||
+			!isMovzMemoryToAr6(producer)) {
+			return null;
+		}
+		Scalar highScalar = scalarOperand(compare, 1);
+		if (highScalar == null) {
+			return null;
+		}
+		long count = highScalar.getUnsignedValue() + 1;
+		if (count < 2 || count > MAX_ENTRIES || highScalar.getUnsignedValue() > 0x7fff ||
+			!hasExclusiveStraightLineGuard(producer, copy, compare, guard)) {
+			return null;
+		}
+		return new Guard(guard, producer, null, 0, (int) count, defaultPath);
 	}
 
 	private static Guard recoverUnsignedLongRange(Instruction guard, DispatchCandidate dispatch,
@@ -613,7 +687,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			expression.sourceRegister.equals("P")) {
 			expectedAdjustment = -TABLE_ENTRY_WORDS * low;
 		}
-		else if (expression.sourceRegister.equals("AL")) {
+		else if (expression.sourceRegister.equals("AL") ||
+			expression.sourceRegister.equals("AR6")) {
 			expectedAdjustment = 0;
 		}
 		else {
@@ -853,6 +928,32 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		return null;
 	}
 
+	private static boolean isMovzMemoryToAr6(Instruction instruction) {
+		if (!isMnemonic(instruction, "movz") ||
+			!isRegisterOperand(instruction, 0, "AR6") ||
+			instruction.getNumOperands() != 2) {
+			return false;
+		}
+		int type = instruction.getOperandType(1);
+		return !OperandType.isRegister(type) &&
+			(OperandType.isAddress(type) || OperandType.isIndirect(type) ||
+				OperandType.isDynamic(type));
+	}
+
+	private static boolean isSetSxmOnly(Instruction instruction) {
+		Scalar mask = scalarOperand(instruction, 0);
+		return isMnemonic(instruction, "setc") && instruction.getNumOperands() == 1 &&
+			mask != null && mask.getUnsignedValue() == 1;
+	}
+
+	private static boolean isAr6ScaledAdd(Instruction instruction) {
+		Scalar shift = scalarOperand(instruction, 2);
+		return isMnemonic(instruction, "add") &&
+			isRegisterOperand(instruction, 0, "ACC") &&
+			isRegisterOperand(instruction, 1, "AR6") && shift != null &&
+			shift.getUnsignedValue() == 1;
+	}
+
 	private static boolean isImmediateAdd(Instruction instruction, String mnemonic,
 			String destination, long value) {
 		Scalar scalar = scalarOperand(instruction, 1);
@@ -889,7 +990,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 		else if ((dispatch.variant == DispatchVariant.PROGRAM_READ_SAVED_LONG ||
 			dispatch.variant == DispatchVariant.NATIVE_SAVED_LONG ||
-			dispatch.variant == DispatchVariant.NATIVE_SAVED_P) &&
+			dispatch.variant == DispatchVariant.NATIVE_SAVED_P ||
+			dispatch.variant == DispatchVariant.NATIVE_AR6_ZERO) &&
 			isUnsignedConditionalBranch(guard, "HI") &&
 			fallsThroughTo(guard, entry)) {
 			Address[] flows = guard.getFlows();
@@ -1034,6 +1136,7 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		NATIVE_PL("unified-memory native-load"),
 		NATIVE_SAVED_LONG("saved-selector native-load"),
 		NATIVE_SAVED_P("P-saved fall-through native-load"),
+		NATIVE_AR6_ZERO("zero-based AR6-indexed native-load"),
 		NATIVE_DIRECT("compact native-load");
 
 		private final String description;
