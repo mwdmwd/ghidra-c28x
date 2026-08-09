@@ -2549,7 +2549,7 @@ with : ctx_objmode=1 {
 }
 
 # p.216
-:lb *XAR7 is switch_canonical=1 & op0_16=0b0111011000100000 & XAR7 {
+:lb *XAR7 is ffc_return=0 & switch_canonical=1 & op0_16=0b0111011000100000 & XAR7 {
 	# The switch analyzer has validated that every loaded table entry is a
 	# 22-bit code address.  Keeping the loaded value directly on BRANCHIND lets
 	# Ghidra's generic native jump-table model recognize the data dependency.
@@ -2557,7 +2557,16 @@ with : ctx_objmode=1 {
 }
 
 # p.216
-:lb *XAR7 is switch_canonical=0 & op0_16=0b0111011000100000 & XAR7 {
+:lb *XAR7 is ffc_return=1 & switch_canonical=0 & op0_16=0b0111011000100000 & XAR7 {
+	# FFC writes its fall-through address to XAR7.  The processor analyzer only
+	# selects this constructor for a bounded, exclusive FFC destination whose
+	# straight-line helper body leaves XAR7 untouched through this terminal LB.
+	local target:4 = XAR7 & 0x003fffff;
+	return [target];
+}
+
+# p.216
+:lb *XAR7 is ffc_return=0 & switch_canonical=0 & op0_16=0b0111011000100000 & XAR7 {
 	# Only XAR7(21:0) is loaded into the architectural PC.
 	local target:4 = XAR7 & 0x003fffff;
 	goto [target];

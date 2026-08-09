@@ -49,6 +49,7 @@ define context contextreg
 	rpt_active = (2,2) noflow	# set by RPT for the one following instruction
 	ctx_page0      = (4,4)			# ST1 PAGE0 address-decode context
 	switch_canonical = (5,5) noflow	# analyzer-proven canonical switch P-Code
+	ffc_return     = (6,6) noflow	# analyzer-proven FFC helper return through XAR7
 	rptb_flag  = (3,3) noflow	# set by RPTB on the last instruction of its block
 	rpt_phase  = (31,31)		# internal: prevents recursive ^instruction matching
 ;

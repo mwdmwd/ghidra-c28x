@@ -21,7 +21,7 @@ GHIDRA_SWITCH_DIR := ghidra-switch-test
 GHIDRA_ZOO_DIR := ghidra-zoo-test
 ZOO_BUILD_DIR := compiler-zoo-build
 MODULE_DIR ?= ../..
-ANALYZER_SOURCE ?= $(MODULE_DIR)/src/main/java/ghidra/app/plugin/core/analysis/TMS320C28SwitchAnalyzer.java
+ANALYZER_SOURCES ?= $(wildcard $(MODULE_DIR)/src/main/java/ghidra/app/plugin/core/analysis/TMS320C28*Analyzer.java)
 ANALYZER_BUILD_DIR := analyzer-build
 ANALYZER_CLASSES := $(ANALYZER_BUILD_DIR)/classes
 ANALYZER_JAR := $(MODULE_DIR)/lib/TMS320C28.jar
@@ -60,9 +60,11 @@ tms320c28.sla: tms320c28.cspec tms320c28.ldefs tms320c28.opinion tms320c28.pspec
 .PHONY: analyzer
 analyzer: $(ANALYZER_JAR)
 
-$(ANALYZER_JAR): $(ANALYZER_SOURCE)
+$(ANALYZER_JAR): $(ANALYZER_SOURCES)
 	@mkdir -p $(ANALYZER_CLASSES) $(dir $(ANALYZER_JAR))
-	$(Q)$(JAVAC) -proc:none -cp '$(GHIDRA_CLASSPATH)' -d $(ANALYZER_CLASSES) $<
+	$(Q)rm -rf $(ANALYZER_CLASSES)
+	@mkdir -p $(ANALYZER_CLASSES)
+	$(Q)$(JAVAC) -proc:none -cp '$(GHIDRA_CLASSPATH)' -d $(ANALYZER_CLASSES) $^
 	$(Q)$(JAR) --create --file $@ -C $(ANALYZER_CLASSES) .
 
 test.obj: test.asm
