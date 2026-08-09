@@ -322,6 +322,41 @@ macro update_stf_mov(res) {
 	rah3 = one f/ sqrt(rbh3);
 }
 
+# SPRUHS1C p. 784 — TMU Type-0 multiply by the exact 1/(2*pi)
+# single-precision constant.  Publication is 2p when consumed by SINPUF32,
+# COSPUF32, or a memory store and 3p for other consumers.  The P-Code records
+# the eventual result/LUF atomically; the verified schedules do not observe the
+# destination or LUF before the documented publication point.
+:div2pif32 rah3, rbh3 is op0_16=0b1110001001110001; op6_10=0b0000000000 & rbh3 & rah3 {
+	local operand:4;
+	local operand_exp:4;
+	local scale:4 = 0x3E22F983;
+	local product:4;
+	local product_exp:4;
+
+	# Snapshot and condition the source before writing a possibly aliased RaH.
+	tmu_condition_operand(operand, rbh3);
+	operand_exp = operand & 0x7F800000;
+	product = operand f* scale;
+	product_exp = product & 0x7F800000;
+
+	if (product_exp != 0) goto <representable>;
+	# A conditioned zero input is an exact zero and does not underflow.  Any
+	# nonzero input whose product is zero/subnormal is flushed to positive zero.
+	if (operand_exp == 0) goto <exact_zero>;
+	rah3 = 0;
+	STF_LU = 1;
+	goto <done>;
+
+	<exact_zero>
+	rah3 = 0;
+	goto <done>;
+
+	<representable>
+	rah3 = product;
+	<done>
+}
+
 # SPRUHS1C pp. 785-786 — TMU Type-0 32-bit floating-point division.
 # Hardware publishes the result and sticky LVF/LUF updates on cycle five.
 # This instruction-level P-Code records the eventual architectural state
@@ -400,6 +435,74 @@ macro update_stf_mov(res) {
 	goto <done>;
 	<finite_result>
 	rah3 = quotient;
+	<done>
+}
+
+# SPRUHS1C p. 787 — TMU Type-0 32-bit floating-point square root.
+# Hardware publishes the result and sticky LVF update on cycle five.  As with
+# DIVF32, this instruction-level P-Code records the eventual state atomically;
+# early flag/result observation and overlapping pending operations remain
+# outside the accepted scope.
+:sqrtf32 rah3, rbh3 is op0_16=0b1110001001110111; op6_10=0b0000000000 & rbh3 & rah3 {
+	local operand:4;
+	local operand_exp:4;
+	local operand_sign:4;
+
+	# Snapshot and condition the source before writing a possibly aliased RaH.
+	tmu_condition_operand(operand, rbh3);
+	operand_exp = operand & 0x7F800000;
+	operand_sign = operand & 0x80000000;
+
+	# Conditioned negative zero/denormals are +0.  All remaining negative
+	# finite values and -Inf return +0 and sticky-set LVF.
+	if (operand_sign == 0) goto <nonnegative>;
+	rah3 = 0;
+	STF_LV = 1;
+	goto <done>;
+
+	<nonnegative>
+	if (operand_exp != 0x7F800000) goto <finite>;
+	# +Inf (including a conditioned positive NaN) returns +Inf and sets LVF.
+	rah3 = 0x7F800000;
+	STF_LV = 1;
+	goto <done>;
+
+	<finite>
+	rah3 = sqrt(operand);
+	<done>
+}
+
+# SPRUHS1C pp. 790-791 — TMU Type-0 cosine with a per-unit input.
+# The range gates and truncation-toward-zero fraction are explicit P-Code.
+# cospu_f32 is an opaque, side-effect-free floating core for cos(fraction*2*pi),
+# because standard P-Code has no trigonometric operator.  Result publication is
+# 4p and remains represented as an atomic eventual write.
+:cospuf32 rah3, rbh3 is op0_16=0b1110001001111001; op6_10=0b0000000000 & rbh3 & rah3 {
+	local operand:4;
+	local magnitude:4;
+	local integer_part:4;
+	local integer_float:4;
+	local fraction:4;
+
+	# Snapshot and condition the source before writing a possibly aliased RaH.
+	tmu_condition_operand(operand, rbh3);
+	magnitude = operand & 0x7FFFFFFF;
+
+	# The documented gates are inclusive: |x| <= 2^-33 or |x| >= 2^22.
+	if (magnitude > 0x2F000000) goto <not_too_small>;
+	rah3 = 0x3F800000;
+	goto <done>;
+
+	<not_too_small>
+	if (magnitude < 0x4A800000) goto <core>;
+	rah3 = 0x3F800000;
+	goto <done>;
+
+	<core>
+	integer_part = trunc(operand);
+	integer_float = int2float(integer_part);
+	fraction = operand f- integer_float;
+	rah3 = cospu_f32(fraction);
 	<done>
 }
 

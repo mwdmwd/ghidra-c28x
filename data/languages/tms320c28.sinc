@@ -103,6 +103,7 @@ attach variables ar67_8 [ AR6 AR7 ];
 define pcodeop breakpoint;
 define pcodeop iack;
 define pcodeop intr_emu;
+define pcodeop cospu_f32;
 
 macro mext(out, in) {
 	local sxm_mask:4 = 0 - zext(SXM);

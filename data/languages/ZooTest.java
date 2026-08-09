@@ -90,6 +90,10 @@ public class ZooTest extends GhidraScript {
             testTmuDivision();
             category = "tmu-division";
         }
+        else if (name.startsWith("tmu_math_")) {
+            testTmuMath();
+            category = "tmu-math";
+        }
         else {
             throw new AssertionError("unrecognized compiler-zoo program " + name);
         }
@@ -550,12 +554,130 @@ public class ZooTest extends GhidraScript {
 
         String c = decompile(function);
         requireNoIndirectJumpWarning(c);
-        boolean currentWideTemporary =
-            c.contains("uint5") && c.contains("0x100000000");
-        boolean futureDivisionRecovery = c.contains(" / ") && c.contains(" % ");
-        require(currentWideTemporary || futureDivisionRecovery,
-            "SUBCU(L) neither exposes the tracked wide-temporary symptom nor " +
-                "recovers division/remainder operations\n" + c);
+        require(!c.contains("uint5") && !c.contains("0x100000000"),
+            "SUBCU(L) leaked the eliminated five-byte temporary into C\n" + c);
+    }
+
+    private Instruction singleMnemonic(Function function, String mnemonic) {
+        Instruction result = null;
+        for (Instruction instruction : instructions(function)) {
+            if (!instruction.getMnemonicString().equalsIgnoreCase(mnemonic)) {
+                continue;
+            }
+            require(result == null, "expected exactly one " + mnemonic);
+            result = instruction;
+        }
+        require(result != null, "missing " + mnemonic);
+        return result;
+    }
+
+    private boolean pcodeReadsRegister(Instruction instruction, String expected) {
+        PcodeOp[] pcode = instruction.getPcode();
+        for (PcodeOp op : pcode) {
+            for (Varnode input : op.getInputs()) {
+                if (dependsOnRegister(pcode, input, expected)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean pcodeWritesRegister(Instruction instruction, String expected) {
+        for (PcodeOp op : instruction.getPcode()) {
+            String output = registerName(op.getOutput());
+            if (output != null && output.equalsIgnoreCase(expected)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void requireTmuDelaySlotSafe(Instruction producer, int count,
+            String destination) {
+        Instruction slot = producer;
+        String[] destructiveFlags = {
+            "STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"
+        };
+        for (int index = 0; index < count; index++) {
+            slot = currentProgram.getListing().getInstructionAfter(slot.getAddress());
+            require(slot != null,
+                producer.getMnemonicString() + " lost delay slot " + (index + 1));
+            require(!slot.getFlowType().isJump() && !slot.getFlowType().isCall() &&
+                    !slot.getFlowType().isTerminal(),
+                producer.getMnemonicString() + " gained control flow in delay slot: " + slot);
+            require(!pcodeReadsRegister(slot, destination) &&
+                    !pcodeWritesRegister(slot, destination),
+                producer.getMnemonicString() + " destination is observed/clobbered early by " +
+                    slot);
+            for (String flag : destructiveFlags) {
+                // Sticky TMU producers may write LUF/LVF in an overlapping safe
+                // schedule, but no delay-slot instruction may observe any STF
+                // flag.  The eventual-state model deliberately does not claim
+                // cycle-accurate publication for such overlap.
+                require(!pcodeReadsRegister(slot, flag),
+                    producer.getMnemonicString() + " flag is observed in delay slot by " + slot);
+            }
+        }
+    }
+
+    /** Compiler integration regression for SQRTF32/DIV2PIF32/COSPUF32. */
+    private void testTmuMath() {
+        Function function = entryFunction();
+        Instruction root = singleMnemonic(function, "SQRTF32");
+        Instruction scale = singleMnemonic(function, "DIV2PIF32");
+        Instruction cosine = singleMnemonic(function, "COSPUF32");
+        require(function.getBody().contains(root.getAddress()) &&
+                function.getBody().contains(scale.getAddress()) &&
+                function.getBody().contains(cosine.getAddress()),
+            "TMU math instructions escaped the entry function body");
+
+        Register rootDestination = root.getRegister(0);
+        Register scaleDestination = scale.getRegister(0);
+        Register cosineDestination = cosine.getRegister(0);
+        require(rootDestination != null && scaleDestination != null &&
+                cosineDestination != null,
+            "TMU math operands did not decode as registers");
+
+        // SQRTF32 is 5p and COSPUF32 is 4p.  These checks prove that the
+        // compiler's intervening instructions neither observe nor overwrite
+        // the pending destination and do not branch/call/return or read STF.
+        requireTmuDelaySlotSafe(root, 4, rootDestination.getName());
+        requireTmuDelaySlotSafe(cosine, 3, cosineDestination.getName());
+
+        // DIV2PIF32 is 2p when feeding SINPUF32/COSPUF32 and otherwise 3p.
+        // Locate the consuming cosine and prove every intervening operation is
+        // non-observing.  O0 uses one NOP; O2 safely interleaves SQRTF32 plus a
+        // NOP and therefore uses the ordinary 3p path.
+        Instruction cursor = scale;
+        int intervening = 0;
+        while (true) {
+            cursor = currentProgram.getListing().getInstructionAfter(cursor.getAddress());
+            require(cursor != null && intervening <= 2,
+                "DIV2PIF32 did not feed the bounded COSPUF32 schedule");
+            if (cursor.equals(cosine)) {
+                break;
+            }
+            require(!pcodeReadsRegister(cursor, scaleDestination.getName()) &&
+                    !pcodeWritesRegister(cursor, scaleDestination.getName()),
+                "DIV2PIF32 result is observed/clobbered before COSPUF32: " + cursor);
+            require(!cursor.getFlowType().isJump() && !cursor.getFlowType().isCall() &&
+                    !cursor.getFlowType().isTerminal(),
+                "DIV2PIF32 gained control flow before COSPUF32: " + cursor);
+            intervening++;
+        }
+        require(intervening == 1 || intervening == 2,
+            "unexpected DIV2PIF32/COSPUF32 distance: " + intervening);
+        Register cosineSource = cosine.getRegister(1);
+        require(cosineSource != null &&
+                cosineSource.getName().equalsIgnoreCase(scaleDestination.getName()),
+            "COSPUF32 no longer consumes the DIV2PIF32 result");
+
+        String c = decompile(function);
+        requireNoIndirectJumpWarning(c);
+        require(!c.contains("bad instruction data") &&
+                !c.contains("UNIMPLEMENTED"),
+            "TMU math schedule still breaks decompilation\n" + c);
     }
 
     /** Compiler integration regression for the ordinary TMU0 division schedule. */

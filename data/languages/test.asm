@@ -543,6 +543,45 @@
 	NOP
 	EISQRTF32	R2H, R3H
 	NOP
+	; TMU Type-0 divide by 2*pi (3p here: two delay slots)
+	DIV2PIF32	R0H, R0H
+	NOP
+	NOP
+	DIV2PIF32	R3H, R5H
+	NOP
+	NOP
+	DIV2PIF32	R7H, R1H
+	NOP
+	NOP
+	; TMU Type-0 per-unit cosine (4p: three non-conflicting delay slots)
+	COSPUF32	R0H, R0H
+	NOP
+	NOP
+	NOP
+	COSPUF32	R4H, R2H
+	NOP
+	NOP
+	NOP
+	COSPUF32	R7H, R6H
+	NOP
+	NOP
+	NOP
+	; TMU Type-0 square root (5p: four non-conflicting delay slots)
+	SQRTF32	R0H, R0H
+	NOP
+	NOP
+	NOP
+	NOP
+	SQRTF32	R1H, R2H
+	NOP
+	NOP
+	NOP
+	NOP
+	SQRTF32	R7H, R6H
+	NOP
+	NOP
+	NOP
+	NOP
 	; TMU Type-0 division (5p: four non-conflicting delay slots)
 	DIVF32		R0H, R3H, R1H
 	NOP

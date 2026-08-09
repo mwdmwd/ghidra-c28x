@@ -473,8 +473,41 @@ def _execute_tmu_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
             else:
                 quotient = numerator / denominator
             result = _float32_to_bits(quotient)
+        elif opcode == OpCode.FLOAT_MULT:
+            result = _float32_to_bits(
+                _float32_from_bits(args[0]) * _float32_from_bits(args[1])
+            )
+        elif opcode == OpCode.FLOAT_ADD:
+            result = _float32_to_bits(
+                _float32_from_bits(args[0]) + _float32_from_bits(args[1])
+            )
+        elif opcode == OpCode.FLOAT_SUB:
+            result = _float32_to_bits(
+                _float32_from_bits(args[0]) - _float32_from_bits(args[1])
+            )
+        elif opcode == OpCode.FLOAT_SQRT:
+            operand = _float32_from_bits(args[0])
+            result = _float32_to_bits(math.sqrt(operand))
+        elif opcode == OpCode.FLOAT_TRUNC:
+            result = math.trunc(_float32_from_bits(args[0]))
+        elif opcode == OpCode.FLOAT_INT2FLOAT:
+            result = _float32_to_bits(float(signed(args[0], op.inputs[0].size)))
+        elif opcode == OpCode.CALLOTHER:
+            assert len(args) == 2, f"unexpected TMU CALLOTHER arity: {len(args)}"
+            fraction_bits = args[1] & 0xFFFFFFFF
+            magnitude = fraction_bits & 0x7FFFFFFF
+            if magnitude == 0:
+                result = 0x3F800000
+            elif magnitude in (0x3E800000, 0x3F400000):
+                # The manual's cardinal-value table specifies positive zero.
+                result = 0x00000000
+            elif magnitude == 0x3F000000:
+                result = 0xBF800000
+            else:
+                fraction = _float32_from_bits(fraction_bits)
+                result = _float32_to_bits(math.cos(fraction * (2.0 * math.pi)))
         else:
-            raise AssertionError(f"unsupported DIVF32 P-Code op {opcode.name}")
+            raise AssertionError(f"unsupported TMU P-Code op {opcode.name}")
         write(op.output, result)
         pc += 1
 
@@ -610,6 +643,235 @@ def check_divf32(ops: list) -> None:
     run(_f32(2.0), 0xFFC00001, 0x00000000, 1, 0, "NaN denominator is signed infinity")
     run(0x00800000, _f32(2.0), 0x00000000, 1, 0, "subnormal result flushes to zero")
     run(0x7F7FFFFF, 0x00800000, 0x7F800000, 0, 1, "overflow returns infinity")
+
+
+def check_div2pif32(ops: list) -> None:
+    multiplies = [op for op in ops if op.opcode == OpCode.FLOAT_MULT]
+    assert len(multiplies) == 1, (
+        f"DIV2PIF32 must emit one FLOAT_MULT, got {len(multiplies)}"
+    )
+    multiply = multiplies[0]
+    source_inputs = [
+        value for value in multiply.inputs if _depends_on_register(ops, value, "R0H")
+    ]
+    assert len(source_inputs) == 1 and source_inputs[0].space.name == "unique", (
+        "DIV2PIF32 must snapshot its aliased R0H source"
+    )
+    constant_inputs = [
+        value for value in multiply.inputs if _resolves_to_constant(ops, value, 0x3E22F983)
+    ]
+    assert len(constant_inputs) == 1, "DIV2PIF32 must use exact 0x3E22F983"
+    assert any(_reg(op.output) == "R0H" for op in ops), "DIV2PIF32 must write R0H"
+
+    stf_flags = {"STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"}
+    flag_reads = {
+        _reg(value)
+        for op in ops
+        for value in op.inputs
+        if _reg(value) in stf_flags
+    }
+    assert not flag_reads, f"DIV2PIF32 must not depend on STF/RND state: {flag_reads}"
+    flag_writes = [op for op in ops if _reg(op.output) in stf_flags]
+    assert {_reg(op.output) for op in flag_writes} == {"STF_LU"}, (
+        f"unexpected DIV2PIF32 STF writes: {flag_writes}"
+    )
+    for op in flag_writes:
+        assert (
+            op.opcode == OpCode.COPY
+            and len(op.inputs) == 1
+            and _is_const(op.inputs[0], 1)
+        ), f"DIV2PIF32 LUF must be sticky-set only: {op}"
+
+    scale = _float32_from_bits(0x3E22F983)
+
+    def product_bits(operand: int) -> int:
+        return _f32(_float32_from_bits(operand) * scale)
+
+    def run(
+        operand: int,
+        expected_result: int,
+        expected_lu: int,
+        description: str,
+        *,
+        initial_lu: int = 0,
+    ) -> None:
+        actual = _execute_tmu_pcode(
+            ops,
+            {
+                "R0H": operand,
+                "STF_LU": initial_lu,
+            },
+        )
+        expected = {"R0H": expected_result, "STF_LU": expected_lu}
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+    run(_f32(1.0), product_bits(_f32(1.0)), 0, "ordinary positive conversion")
+    run(_f32(-2.0), product_bits(_f32(-2.0)), 0, "ordinary negative conversion")
+    run(
+        _f32(6.0),
+        product_bits(_f32(6.0)),
+        1,
+        "ordinary conversion preserves sticky LUF",
+        initial_lu=1,
+    )
+    run(0x00000000, 0x00000000, 0, "positive zero")
+    run(0x80000000, 0x00000000, 0, "negative zero is positive zero")
+    run(0x00000001, 0x00000000, 0, "positive denormal is positive zero")
+    run(0x80000001, 0x00000000, 0, "negative denormal is positive zero")
+    run(0x7F800000, 0x7F800000, 0, "positive infinity")
+    run(0xFF800000, 0xFF800000, 0, "negative infinity")
+    run(0x7FC00001, 0x7F800000, 0, "positive NaN is positive infinity")
+    run(0xFFC00001, 0xFF800000, 0, "negative NaN is negative infinity")
+    run(0x00800000, 0x00000000, 1, "positive underflow flushes to zero")
+    run(0x80800000, 0x00000000, 1, "negative underflow flushes to positive zero")
+
+
+def check_cospuf32(ops: list) -> None:
+    userops = [op for op in ops if op.opcode == OpCode.CALLOTHER]
+    assert len(userops) == 1, f"COSPUF32 must emit one cosine userop, got {len(userops)}"
+    cosine = userops[0]
+    assert cosine.output is not None and _reg(cosine.output) == "R0H"
+    assert len(cosine.inputs) == 2 and _is_const(cosine.inputs[0], 3), (
+        "COSPUF32 must call the declared cospu_f32 userop"
+    )
+    assert cosine.inputs[1].space.name == "unique"
+    assert _depends_on_register(ops, cosine.inputs[1], "R0H"), (
+        "COSPUF32 core must depend on the incoming aliased source"
+    )
+
+    truncates = [op for op in ops if op.opcode == OpCode.FLOAT_TRUNC]
+    conversions = [op for op in ops if op.opcode == OpCode.FLOAT_INT2FLOAT]
+    fractions = [op for op in ops if op.opcode == OpCode.FLOAT_SUB]
+    assert len(truncates) == len(conversions) == len(fractions) == 1, (
+        "COSPUF32 must form fraction(x) with trunc/int2float/sub"
+    )
+    assert _key(fractions[0].output) == _key(cosine.inputs[1])
+    assert any(
+        op.opcode == OpCode.INT_LESS and any(_is_const(v, 0x2F000000) for v in op.inputs)
+        for op in ops
+    ), "COSPUF32 must implement the inclusive 2^-33 lower check"
+    assert any(
+        op.opcode == OpCode.INT_LESS and any(_is_const(v, 0x4A800000) for v in op.inputs)
+        for op in ops
+    ), "COSPUF32 must implement the inclusive 2^22 upper check"
+    assert any(
+        _reg(op.output) == "R0H"
+        and op.opcode == OpCode.COPY
+        and len(op.inputs) == 1
+        and _is_const(op.inputs[0], 0x3F800000)
+        for op in ops
+    ), "COSPUF32 range gates must return 1.0"
+
+    stf_flags = {"STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"}
+    flag_accesses = [
+        (_reg(op.output), {_reg(value) for value in op.inputs})
+        for op in ops
+        if _reg(op.output) in stf_flags
+        or any(_reg(value) in stf_flags for value in op.inputs)
+    ]
+    assert not flag_accesses, f"COSPUF32 must not access STF flags: {flag_accesses}"
+
+    def run(operand: int, expected_result: int, description: str) -> None:
+        actual = _execute_tmu_pcode(ops, {"R0H": operand})
+        assert actual["R0H"] == expected_result, (
+            f"{description}: actual=0x{actual['R0H']:08x} "
+            f"expected=0x{expected_result:08x}"
+        )
+
+    run(0x00000000, 0x3F800000, "positive zero")
+    run(0x80000000, 0x3F800000, "negative zero is positive zero")
+    run(0x00000001, 0x3F800000, "positive denormal is positive zero")
+    run(0x80000001, 0x3F800000, "negative denormal is positive zero")
+    run(0x7F800000, 0x3F800000, "positive infinity is too big")
+    run(0xFF800000, 0x3F800000, "negative infinity is too big")
+    run(0x7FC00001, 0x3F800000, "positive NaN is positive infinity")
+    run(0xFFC00001, 0x3F800000, "negative NaN is negative infinity")
+    run(0x2F000000, 0x3F800000, "positive 2^-33 lower boundary")
+    run(0xAF000000, 0x3F800000, "negative 2^-33 lower boundary")
+    run(0x4A800000, 0x3F800000, "positive 2^22 upper boundary")
+    run(0xCA800000, 0x3F800000, "negative 2^22 upper boundary")
+    run(0x4A7FFFFF, 0x00000000, "largest in-range value uses fraction 0.75")
+    run(_f32(0.25), 0x00000000, "quarter turn")
+    run(_f32(-0.25), 0x00000000, "negative quarter turn")
+    run(_f32(0.5), 0xBF800000, "half turn")
+    run(_f32(-1.5), 0xBF800000, "negative periodic half turn")
+    run(_f32(0.125), _f32(math.sqrt(0.5)), "ordinary eighth turn")
+
+
+def check_sqrtf32(ops: list) -> None:
+    roots = [op for op in ops if op.opcode == OpCode.FLOAT_SQRT]
+    assert len(roots) == 1, f"SQRTF32 must emit one FLOAT_SQRT, got {len(roots)}"
+    root = roots[0]
+    assert root.inputs[0].space.name == "unique", "SQRTF32 must snapshot its aliased source"
+    assert _depends_on_register(ops, root.inputs[0], "R0H"), (
+        "SQRTF32 root operand must depend on the incoming R0H"
+    )
+    assert any(_reg(op.output) == "R0H" for op in ops), "SQRTF32 must write R0H"
+
+    stf_flags = {"STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"}
+    flag_reads = {
+        _reg(value)
+        for op in ops
+        for value in op.inputs
+        if _reg(value) in stf_flags
+    }
+    assert not flag_reads, f"SQRTF32 must not depend on STF flags or rounding state: {flag_reads}"
+    flag_writes = [op for op in ops if _reg(op.output) in stf_flags]
+    assert {_reg(op.output) for op in flag_writes} == {"STF_LV"}, (
+        f"unexpected SQRTF32 STF writes: {flag_writes}"
+    )
+    for op in flag_writes:
+        assert (
+            op.opcode == OpCode.COPY
+            and len(op.inputs) == 1
+            and _is_const(op.inputs[0], 1)
+        ), f"SQRTF32 LVF must be sticky-set only: {op}"
+
+    def run(
+        operand: int,
+        expected_result: int,
+        expected_lv: int,
+        description: str,
+        *,
+        initial_lv: int = 0,
+    ) -> None:
+        actual = _execute_tmu_pcode(
+            ops,
+            {
+                "R0H": operand,
+                "STF_LV": initial_lv,
+            },
+        )
+        expected = {"R0H": expected_result, "STF_LV": expected_lv}
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+    run(_f32(9.0), _f32(3.0), 0, "ordinary square root")
+    run(
+        _f32(2.0),
+        _f32(math.sqrt(2.0)),
+        1,
+        "ordinary square root preserves sticky LVF",
+        initial_lv=1,
+    )
+    run(0x00000000, 0x00000000, 0, "positive zero")
+    run(0x80000000, 0x00000000, 0, "negative zero is positive zero")
+    run(0x00000001, 0x00000000, 0, "positive denormal is positive zero")
+    run(0x80000001, 0x00000000, 0, "negative denormal is positive zero")
+    run(_f32(-4.0), 0x00000000, 1, "negative finite input returns zero")
+    run(0xFF800000, 0x00000000, 1, "negative infinity returns zero")
+    run(0x7F800000, 0x7F800000, 1, "positive infinity returns infinity")
+    run(0x7FC00001, 0x7F800000, 1, "positive NaN is positive infinity")
+    run(0xFFC00001, 0x00000000, 1, "negative NaN is negative infinity")
 
 
 def check_divf32_aliased_numerator(ops: list) -> None:
@@ -2207,6 +2469,9 @@ CASES = (
         check_cmpl_unsigned_branch,
     ),
     Case("DIVF32 conditions inputs and models result/LUF/LVF", (0xE274, 0x0058), check_divf32),
+    Case("SQRTF32 conditions input and models result/LVF", (0xE277, 0x0000), check_sqrtf32),
+    Case("DIV2PIF32 uses exact scale and models result/LUF", (0xE271, 0x0000), check_div2pif32),
+    Case("COSPUF32 gates range and computes periodic cosine", (0xE279, 0x0000), check_cospuf32),
     Case(
         "DIVF32 snapshots an aliased numerator before writeback",
         (0xE274, 0x0009),

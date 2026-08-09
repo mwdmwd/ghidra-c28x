@@ -194,6 +194,19 @@
       "expect": {
         "default": {"DIVF32": 1, "NOP_min": 3, "LRETR": 1}
       }
+    },
+    {
+      "family": "tmu_math",
+      "source": "tmu_math.c",
+      "entry": "zoo_tmu_math",
+      "kind": "tmu-math",
+      "models": ["default"],
+      "optimizations": [0, 2],
+      "opt_for_speed": [null],
+      "extra_flags": ["--tmu_support=tmu0", "--fp_mode=relaxed"],
+      "expect": {
+        "default": {"SQRTF32": 1, "DIV2PIF32": 1, "COSPUF32": 1, "NOP_min": 3, "LRETR": 1}
+      }
     }
   ],
   "ghidra_selection": [
@@ -218,6 +231,8 @@
     "integer_division_default_o0",
     "integer_division_default_o2",
     "tmu_division_default_o0",
-    "tmu_division_default_o2"
+    "tmu_division_default_o2",
+    "tmu_math_default_o0",
+    "tmu_math_default_o2"
   ]
 }
