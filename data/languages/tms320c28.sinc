@@ -4461,36 +4461,44 @@ movl_store_flags: is op0_8=0b10101001 {
 	acc_sub_borrow32(value);
 }
 
-# p.424
+# p.424 and Appendix E.3.3.  The instruction page prints `temp > 0`,
+# while the migration appendix specifies the unsigned 33-bit no-borrow test
+# (`temp >= 0`) required by the documented quotient/remainder algorithm.  Split
+# the exact 33-bit comparison into the 32-bit shift carry and low-word compare;
+# the mask-based commit keeps the constructor branch-free and avoids uint5.
 :subcu ACC, loc16 is op8_8=0b00011111 & ACC & loc16 {
 	local old:4 = ACC;
-	local subtrahend:5 = zext(loc16) << 16;
-	local temp:5 = (zext(old) << 1) - subtrahend;
-	C = (temp[32,1] == 0);
-	if (temp[32,1] != 0) goto <no_sub>;
-	if (temp[0,32] == 0) goto <no_sub>;
-	ACC = temp[0,32] + 1;
-	goto <done>;
-<no_sub>
-	ACC = old << 1;
-<done>
+	local divisor:2 = loc16;
+	local shifted:4 = old << 1;
+	local subtrahend:4 = zext(divisor) << 16;
+	local shift_carry:1 = carry(old, old);
+	local low_no_borrow:1 = (shifted >= subtrahend);
+	local no_borrow:1 = shift_carry | low_no_borrow;
+	local selected:4 = (shifted - subtrahend) + 1;
+	local mask:4 = 0 - zext(no_borrow);
+	C = no_borrow;
+	ACC = (selected & mask) | (shifted & ~mask);
 	flagnz(ACC);
 }
 
-# p.426
+# p.426.  The exact 33-bit dividend fragment is {ACC(31:0), P(31)}.
+# ACC's shift carry makes the subtraction unconditionally no-borrow; otherwise
+# an unsigned low-word compare decides it.  The quotient bit is the same
+# no-borrow predicate, so no intra-instruction branch or nonstandard width is
+# required.
 :subcul ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {
 	local old_acc:4 = ACC;
 	local old_p:4 = P;
-	local temp:5 = (zext(old_acc) << 1) + zext(old_p[31,1]) - zext(loc32);
-	C = (temp[32,1] == 0);
-	if (temp[32,1] != 0) goto <no_sub>;
-	ACC = temp[0,32];
-	P = (old_p << 1) + 1;
-	goto <done>;
-<no_sub>
-	ACC = (old_acc << 1) | zext(old_p[31,1]);
-	P = old_p << 1;
-<done>
+	local divisor:4 = loc32;
+	local shifted:4 = (old_acc << 1) | zext(old_p[31,1]);
+	local shift_carry:1 = carry(old_acc, old_acc);
+	local low_no_borrow:1 = (shifted >= divisor);
+	local no_borrow:1 = shift_carry | low_no_borrow;
+	local difference:4 = shifted - divisor;
+	local mask:4 = 0 - zext(no_borrow);
+	C = no_borrow;
+	ACC = (difference & mask) | (shifted & ~mask);
+	P = (old_p << 1) | zext(no_borrow);
 	flagnz(ACC);
 }
 

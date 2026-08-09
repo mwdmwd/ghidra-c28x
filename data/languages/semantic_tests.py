@@ -339,12 +339,13 @@ def _float32_to_bits(value: float) -> int:
         return 0xFF800000 if math.copysign(1.0, value) < 0 else 0x7F800000
 
 
-def _execute_divf32_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
-    """Execute the finite P-Code subset used by the DIVF32 constructor.
+def _execute_tmu_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
+    """Execute the finite P-Code subset used by focused TMU constructors.
 
     Unlike the integer-only harness, this supports forward intra-instruction
-    branches and IEEE single-precision FLOAT_DIV.  It remains a local
-    regression harness, not a cycle-accurate C28x or TMU emulator.
+    branches and the floating-point operations used by the retained TMU
+    regressions.  It remains a local eventual-state harness, not a cycle-
+    accurate C28x or TMU emulator.
     """
 
     cells: dict[tuple[str, int], int] = {}
@@ -380,7 +381,7 @@ def _execute_divf32_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
     for name, value in initial.items():
         node = registers.get(name)
         if node is None:
-            raise AssertionError(f"register {name} is absent from DIVF32 P-Code")
+            raise AssertionError(f"register {name} is absent from TMU P-Code")
         write(node, value)
 
     pc = 0
@@ -388,7 +389,7 @@ def _execute_divf32_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
     while pc < len(ops):
         steps += 1
         if steps > 1000:
-            raise AssertionError("DIVF32 P-Code exceeded execution step limit")
+            raise AssertionError("TMU P-Code exceeded execution step limit")
         op = ops[pc]
         opcode = op.opcode
         if opcode == OpCode.BRANCH:
@@ -401,7 +402,7 @@ def _execute_divf32_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
                 pc += 1
             continue
         if op.output is None:
-            raise AssertionError(f"unsupported side-effect DIVF32 P-Code op {opcode.name}")
+            raise AssertionError(f"unsupported side-effect TMU P-Code op {opcode.name}")
 
         args = [read(node) for node in op.inputs]
         result: int
@@ -459,6 +460,8 @@ def _execute_divf32_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
             result = args[0] >> (args[1] * 8)
         elif opcode == OpCode.PIECE:
             result = (args[0] << (op.inputs[1].size * 8)) | args[1]
+        elif opcode == OpCode.INT_CARRY:
+            result = int(args[0] + args[1] > mask(op.inputs[0].size))
         elif opcode == OpCode.FLOAT_DIV:
             numerator = _float32_from_bits(args[0])
             denominator = _float32_from_bits(args[1])
@@ -529,7 +532,7 @@ def check_divf32(ops: list) -> None:
         initial_lu: int = 0,
         initial_lv: int = 0,
     ) -> None:
-        actual = _execute_divf32_pcode(
+        actual = _execute_tmu_pcode(
             ops,
             {
                 "R0H": 0xDEADBEEF,
@@ -625,7 +628,7 @@ def check_divf32_aliased_numerator(ops: list) -> None:
         and any(_reg(value) == "R0H" for value in op.inputs)
         for op in ops
     ), "aliased DIVF32 denominator must snapshot the incoming R0H value"
-    actual = _execute_divf32_pcode(
+    actual = _execute_tmu_pcode(
         ops,
         {
             "R1H": _f32(6.0),
@@ -1567,6 +1570,153 @@ def check_subul_acc(ops: list) -> None:
     _check_subul_execution(ops, destination="ACC")
 
 
+def _check_subc_no_uint5(ops: list, divisor_register: str) -> None:
+    assert not any(
+        (op.output is not None and op.output.size == 5)
+        or any(value.size == 5 for value in op.inputs)
+        for op in ops
+    ), "SUBCU(L) must not expose a five-byte temporary"
+
+    _no_internal_cfg(ops)
+    c_write = _find(ops, lambda op: _reg(op.output) == "C", "SUBCU(L) no-borrow flag")
+    assert c_write.opcode == OpCode.COPY and len(c_write.inputs) == 1
+    no_borrow = _definition_for(_unique_definitions(ops), c_write.inputs[0])
+    assert no_borrow is not None and no_borrow.opcode == OpCode.INT_OR, (
+        "C must combine the shift carry with the unsigned low-word comparison"
+    )
+    assert any(_depends_on_register(ops, value, "ACC") for value in no_borrow.inputs), (
+        "SUBCU(L) C must depend on the incoming ACC value"
+    )
+    assert any(
+        _depends_on_register(ops, value, divisor_register) for value in no_borrow.inputs
+    ), "SUBCU(L) C must depend on the divisor comparison"
+    _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_CARRY
+        and len(op.inputs) == 2
+        and all(_depends_on_register(ops, value, "ACC") for value in op.inputs),
+        "ACC shift carry for the 33rd dividend bit",
+    )
+    assert not any(_reg(op.output) in {"V", "OVC"} for op in ops), (
+        "SUBCU(L) must not modify V or OVC"
+    )
+
+
+def check_subcu(ops: list) -> None:
+    _check_subc_no_uint5(ops, "AR6")
+    vectors = (
+        (
+            {"ACC": 0x00008000, "AR6": 1, "C": 0, "N": 1, "Z": 1},
+            {"ACC": 1, "C": 1, "N": 0, "Z": 0},
+            "SUBCU exact equality subtracts and emits quotient bit one",
+        ),
+        (
+            {"ACC": 0x00007FFF, "AR6": 1, "C": 1, "N": 1, "Z": 1},
+            {"ACC": 0x0000FFFE, "C": 0, "N": 0, "Z": 0},
+            "SUBCU borrow keeps the shifted dividend fragment",
+        ),
+        (
+            {"ACC": 0x80000000, "AR6": 0xFFFF, "C": 0, "N": 1, "Z": 1},
+            {"ACC": 0x00010001, "C": 1, "N": 0, "Z": 0},
+            "SUBCU honors the 33rd shift bit as an unconditional no-borrow",
+        ),
+        (
+            {"ACC": 0, "AR6": 1, "C": 1, "N": 1, "Z": 0},
+            {"ACC": 0, "C": 0, "N": 0, "Z": 1},
+            "SUBCU final N and Z reflect ACC while V and OVC remain untouched",
+        ),
+    )
+    for initial, expected, description in vectors:
+        actual = _execute_tmu_pcode(ops, initial)
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+    for numerator, denominator in (
+        (0, 123),
+        (1, 1),
+        (10, 5),
+        (5, 3),
+        (0xFFFF, 0xFFFF),
+        (0xFFFF, 1),
+    ):
+        state = {
+            "ACC": numerator,
+            "AR6": denominator,
+            "C": 0,
+            "N": 0,
+            "Z": 0,
+        }
+        for _ in range(16):
+            state = _execute_tmu_pcode(ops, state)
+        quotient = state["ACC"] & 0xFFFF
+        remainder = state["ACC"] >> 16
+        assert (quotient, remainder) == divmod(numerator, denominator), (
+            "SUBCU restoring division failed for "
+            f"{numerator}/{denominator}: quotient={quotient} remainder={remainder}"
+        )
+
+
+def check_subcul(ops: list) -> None:
+    _check_subc_no_uint5(ops, "XAR6")
+    vectors = (
+        (
+            {"ACC": 0, "P": 0x80000000, "XAR6": 1, "C": 0, "N": 1, "Z": 0},
+            {"ACC": 0, "P": 1, "C": 1, "N": 0, "Z": 1},
+            "SUBCUL exact equality subtracts and emits quotient bit one",
+        ),
+        (
+            {"ACC": 0, "P": 0, "XAR6": 1, "C": 1, "N": 1, "Z": 0},
+            {"ACC": 0, "P": 0, "C": 0, "N": 0, "Z": 1},
+            "SUBCUL borrow shifts ACC:P without setting the quotient bit",
+        ),
+        (
+            {"ACC": 0x80000000, "P": 0, "XAR6": 0xFFFFFFFF, "C": 0, "N": 1, "Z": 1},
+            {"ACC": 1, "P": 1, "C": 1, "N": 0, "Z": 0},
+            "SUBCUL honors the 33rd shift bit as an unconditional no-borrow",
+        ),
+        (
+            {"ACC": 1, "P": 0, "XAR6": 1, "C": 0, "N": 1, "Z": 1},
+            {"ACC": 1, "P": 1, "C": 1, "N": 0, "Z": 0},
+            "SUBCUL low-word no-borrow subtracts the divisor",
+        ),
+    )
+    for initial, expected, description in vectors:
+        actual = _execute_tmu_pcode(ops, initial)
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+    for numerator, denominator in (
+        (0, 123),
+        (1, 1),
+        (10, 5),
+        (5, 3),
+        (0xFFFFFFFF, 0xFFFFFFFF),
+        (0xFFFFFFFF, 1),
+    ):
+        state = {
+            "ACC": 0,
+            "P": numerator,
+            "XAR6": denominator,
+            "C": 0,
+            "N": 0,
+            "Z": 0,
+        }
+        for _ in range(32):
+            state = _execute_tmu_pcode(ops, state)
+        assert (state["P"], state["ACC"]) == divmod(numerator, denominator), (
+            "SUBCUL restoring division failed for "
+            f"{numerator}/{denominator}: quotient={state['P']} remainder={state['ACC']}"
+        )
+
+
 def check_subul_p(ops: list) -> None:
     _check_unsigned_ovcu(ops, destination="P")
     _check_subul_execution(ops, destination="P")
@@ -2043,6 +2193,8 @@ CASES = (
     Case("ADDUL P counts unsigned carry in OVCU", (0x5657, 0x00A6), check_addul_p),
     Case("SUBUL ACC counts unsigned borrow in OVCU", (0x5655, 0x00A6), check_subul_acc),
     Case("SUBUL P counts unsigned borrow in OVCU", (0x565D, 0x00A6), check_subul_p),
+    Case("SUBCU models the unsigned 33-bit no-borrow step without uint5", (0x1FA6,), check_subcu),
+    Case("SUBCUL models the unsigned 33-bit no-borrow step without uint5", (0x5617, 0x00A6), check_subcul),
     Case("CMPL uses infinite-precision N and unsigned C", (0x0FA6,), check_cmpl_infinite_precision),
     Case(
         "compiler signed CMPL/SB LT sequence branches from N",
