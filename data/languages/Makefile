@@ -19,6 +19,9 @@ JAR ?= jar
 GHIDRA_DECOMP_DIR := ghidra-decomp
 GHIDRA_SWITCH_DIR := ghidra-switch-test
 GHIDRA_ZOO_DIR := ghidra-zoo-test
+GHIDRA_PROFILE_DIR := ghidra-profile-test
+PROFILE_GENERATE_DIR := profile-generate-check
+C2000WARE_F2837XS_SUBSET ?=
 ZOO_BUILD_DIR := compiler-zoo-build
 MODULE_DIR ?= ../..
 ANALYZER_SOURCES ?= $(wildcard $(MODULE_DIR)/src/main/java/ghidra/app/plugin/core/analysis/TMS320C28*Analyzer.java)
@@ -284,6 +287,36 @@ switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 			echo "expected $$expected switch pass markers, found $$actual" >&2; exit 1; }; \
 		echo "SWITCH_GHIDRA_PROGRAMS=$$actual"
 
+
+# Regenerate the checked profile from the redistributable TI metadata subset and
+# require a byte-for-byte match, including input provenance hashes.
+.PHONY: profile-generate-check
+profile-generate-check: tools/generate_f2837xs_profile.py device_profiles/f2837xs-compatible.json
+	@test -n "$(C2000WARE_F2837XS_SUBSET)" || { \
+		echo "set C2000WARE_F2837XS_SUBSET=/absolute/path/c2000ware-f2837xs" >&2; exit 2; }
+	@rm -rf $(PROFILE_GENERATE_DIR)
+	@mkdir -p $(PROFILE_GENERATE_DIR)
+	$(Q)$(PYTHON) tools/generate_f2837xs_profile.py \
+		--inputs "$(C2000WARE_F2837XS_SUBSET)" \
+		--output $(PROFILE_GENERATE_DIR)/f2837xs-compatible.json
+	$(Q)cmp -s device_profiles/f2837xs-compatible.json \
+		$(PROFILE_GENERATE_DIR)/f2837xs-compatible.json || { \
+		echo "checked device profile differs from deterministic regeneration" >&2; \
+		diff -u device_profiles/f2837xs-compatible.json \
+			$(PROFILE_GENERATE_DIR)/f2837xs-compatible.json >&2 || true; exit 1; }
+	@echo "PROFILE_GENERATE_CHECK=PASS"
+
+# Deterministic synthetic coverage: address-unit sizing, permissions, volatile
+# MMIO, symbols/types, idempotence, copy-table safety, and ROM overlap checks.
+.PHONY: profile-test
+profile-test: tms320c28.sla profile_tests.py \
+		ghidra_scripts/TMS320C28DeviceProfile.java \
+		ghidra_scripts/TMS320C28ImportRomEvidence.java \
+		ghidra_scripts/TMS320C28ProfileTest.java \
+		ghidra_scripts/TMS320C28ProfileTestSetup.java
+	$(Q)$(PYTHON) profile_tests.py --root $$PWD \
+		--ghidra-headless "$(GHIDRA_HEADLESS)" --work $$PWD/$(GHIDRA_PROFILE_DIR)
+
 # Build a deterministic, bounded matrix of TI compiler output.  Distinct
 # object names are mandatory: cl2000/make must never satisfy one option set
 # with an object produced for another.
@@ -345,6 +378,7 @@ zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 .PHONY: clean
 clean:
 	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR) $(GHIDRA_ZOO_DIR)
+	@rm -rf $(GHIDRA_PROFILE_DIR) $(PROFILE_GENERATE_DIR)
 	@rm -rf $(ZOO_BUILD_DIR)
 	@rm -rf $(ANALYZER_BUILD_DIR)
 	@rm -f $(ANALYZER_JAR)

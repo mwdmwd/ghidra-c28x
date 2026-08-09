@@ -10,3 +10,5 @@ ghidra-zoo-test/
 compiler-zoo-build/
 __pycache__/
 old/
+ghidra-profile-test/
+profile-generate-check/
