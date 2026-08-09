@@ -19,6 +19,19 @@ and before analysis:
 TMS320C28ImportRomEvidence.java path=/absolute/path/rom.bin base=0x... expectedWords=0x... sha256=... provenance=... execute=true
 ```
 
-`TMS320C28ImportRomEvidence.java` verifies and materializes that dump; never use
-a reference ROM as device truth. All JSON addresses and script `base` values
-are C28x word addresses. Run auto-analysis last.
+`TMS320C28ImportRomEvidence.java` verifies and materializes that dump.
+All JSON addresses and script `base` values are C28x word addresses.
+Run auto-analysis last.
+
+## Regenerating the profile
+
+Use TI's public `c2000ware-core-sdk` at commit `e5698c666d9ff587940d249213cbbb328a3bcd66`: https://github.com/TexasInstruments/c2000ware-core-sdk
+
+```sh
+sdk_root=/path/to/c2000ware-core-sdk
+subset_dir=$(mktemp -d)
+install -d "$subset_dir/sysconfig-registers"
+cp "$sdk_root"/driverlib/.meta/device_driverlib_peripherals/f2837xs_{memmap,*_registers}.js \
+  "$subset_dir/sysconfig-registers/"
+make profile-generate-check C2000WARE_F2837XS_SUBSET="$subset_dir"
+```
