@@ -4,9 +4,6 @@
 
 <processor_spec>
   <programcounter register="PC"/>
-  <default_symbols>
-    <symbol name="RESET" address="ram:30000" entry="true"/>  <!-- 00000? -->
-  </default_symbols>
   <context_data>
     <context_set space="ram">
         <set name="ctx_objmode" val="1" description="TODO"/>
