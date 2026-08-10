@@ -1852,33 +1852,32 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.125
 :abs ACC is op0_16=0b1111111101010110 & ACC {
-	if (ACC s>= 0) goto <done>;
-	V = (ACC == 0x80000000);
-	ACC = -ACC;
-	<done>
+	local start_acc:4 = ACC;
+	local negative:1 = start_acc s< 0;
+	local minimum:1 = start_acc == 0x80000000;
+	local negative_mask:4 = 0 - zext(negative);
+	local absolute:4 = (start_acc & ~negative_mask) | ((-start_acc) & negative_mask);
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	ACC = (absolute & ~saturate_mask) | (0x7fffffff & saturate_mask);
+	C = 0;
+	V = V || minimum;
 	flagnz(ACC);
 }
 
 # p.126
 :abstc ACC is ctx_objmode=1 & op0_16=0b0101011001011111 & ACC {
 	local start_acc:4 = ACC;
+	local negative:1 = start_acc s< 0;
+	local minimum:1 = start_acc == 0x80000000;
+	local negative_mask:4 = 0 - zext(negative);
+	local absolute:4 = (start_acc & ~negative_mask) | ((-start_acc) & negative_mask);
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	ACC = (absolute & ~saturate_mask) | (0x7fffffff & saturate_mask);
 	C = 0;
-	if (start_acc == 0x80000000) goto <overflow>;
-	if (start_acc s< 0) goto <neg>;
-	goto <flags>;
-<neg>
-	ACC = -start_acc;
-	TC = TC ^ 1;
-	goto <flags>;
-<overflow>
-	V = 1;
-	TC = TC ^ 1;
-	if (OVM == 1) goto <sat>;
-	# ACC remains 0x80000000
-	goto <flags>;
-<sat>
-	ACC = 0x7FFFFFFF;
-<flags>
+	TC = TC ^ negative;
+	V = V || minimum;
 	flagnz(ACC);
 }
 
@@ -2751,21 +2750,18 @@ with : ctx_objmode=1 {
 # p.235
 :lsl64 ACC:P, T is ctx_objmode=1 & op0_16=0b0101011001010010 & ACC & P & T {
 	local shift:4 = zext(T[0,6]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
 	local lo:8 = zext(P);
 	local hi:8 = zext(ACC);
-	local val:8 = (hi << 32) | lo;
-	if (shift != 0) goto <shifted>;
-	C = 0;
-	goto <done>;
-	<shifted>
-	local tmp:8 = val << (shift - 1);
-	C = tmp[63, 1];
-	val = tmp << 1;
-	<done>
-	ACC = val[32, 32];
-	P = val[0, 32];
-	N = val[63, 1];
-	Z = val == 0;
+	local start_value:8 = (hi << 32) | lo;
+	local carry_value:8 = start_value << (safe_shift - 1);
+	local value:8 = start_value << shift;
+	C = carry_value[63, 1] && nonzero;
+	ACC = value[32, 32];
+	P = value[0, 32];
+	N = value[63, 1];
+	Z = value == 0;
 }
 
 # p.236
@@ -3692,24 +3688,23 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.334
 :neg ACC is op0_16=0b1111111101010100 & ACC {
-	if (ACC != 0x80000000) goto <normal>;
-	V = 1;
-	if (OVM == 0) goto <normal>;
-	ACC = 0x7fffffff;
-	goto <done>;
-<normal>
-	ACC = -ACC;
-<done>
+	local start_acc:4 = ACC;
+	local minimum:1 = start_acc == 0x80000000;
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	local negated:4 = -start_acc;
+	ACC = (negated & ~saturate_mask) | (0x7fffffff & saturate_mask);
+	V = V || minimum;
 	C = (ACC == 0);
 	flagnz(ACC);
 }
 
 # p.335
 :neg ax0 is op1_15=0b111111110101110 & ax0 {
-	if (ax0 != 0x8000) goto <normal>;
-	V = 1;
-<normal>
-	ax0 = -ax0;
+	local start_ax:2 = ax0;
+	local minimum:1 = start_ax == 0x8000;
+	ax0 = -start_ax;
+	V = V || minimum;
 	C = (ax0 == 0);
 	N = ax0[15,1];
 	Z = (ax0 == 0);
@@ -3717,36 +3712,33 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.336
 :neg64 ACC:P is ctx_objmode=1 & op0_16=0b0101011001011000 & ACC & P {
-	local value:8 = (zext(ACC) << 32) | zext(P);
-	if (value != 0x8000000000000000) goto <normal>;
-	V = 1;
-	if (OVM == 0) goto <normal>;
-	ACC = 0x7fffffff;
-	P = 0xffffffff;
-	goto <done>;
-<normal>
-	value = -value;
+	local start_value:8 = (zext(ACC) << 32) | zext(P);
+	local minimum:1 = start_value == 0x8000000000000000;
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:8 = 0 - zext(saturate);
+	local negated:8 = -start_value;
+	local value:8 = (negated & ~saturate_mask) | (0x7fffffffffffffff & saturate_mask);
 	ACC = value[32,32];
 	P = value[0,32];
-<done>
+	V = V || minimum;
 	C = (value == 0);
-	N = ACC[31,1];
-	Z = ((ACC | P) == 0);
+	N = value[63,1];
+	Z = (value == 0);
 }
 
 # p.337
 :negtc ACC is ctx_objmode=1 & op0_16=0b0101011000110010 & ACC {
-	if (TC == 0) goto <done>;
-	if (ACC != 0x80000000) goto <normal>;
-	V = 1;
-	if (OVM == 0) goto <normal>;
-	ACC = 0x7fffffff;
-	goto <flags>;
-<normal>
-	ACC = -ACC;
-<flags>
-	C = (ACC == 0);
-<done>
+	local start_acc:4 = ACC;
+	local old_c:1 = C;
+	local execute:1 = TC != 0;
+	local minimum:1 = start_acc == 0x80000000;
+	local saturate:1 = execute && minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	local executed:4 = ((-start_acc) & ~saturate_mask) | (0x7fffffff & saturate_mask);
+	local execute_mask:4 = 0 - zext(execute);
+	ACC = (start_acc & ~execute_mask) | (executed & execute_mask);
+	V = V || (execute && minimum);
+	C = (old_c && !execute) || (execute && (ACC == 0));
 	flagnz(ACC);
 }
 
@@ -4348,23 +4340,28 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.408
 :sfr ACC, shift0_4_1 is op4_12=0b111111110100 & ACC & shift0_4_1 {
-	if (!SXM) goto <lsr>;
-	ACC = ACC s>> shift0_4_1;
-	goto <done>;
-	<lsr>
-	ACC = ACC >> shift0_4_1;
-	<done>
+	local start_acc:4 = ACC;
+	local arithmetic:4 = start_acc s>> shift0_4_1;
+	local logical:4 = start_acc >> shift0_4_1;
+	local sxm_mask:4 = 0 - zext(SXM);
+	local carry_value:4 = start_acc >> (shift0_4_1 - 1);
+	ACC = (arithmetic & sxm_mask) | (logical & ~sxm_mask);
+	C = carry_value[0,1];
 	flagnz(ACC);
 }
 
 # p.409
 :sfr ACC, T is op0_16=0b1111111101010001 & ACC & T {
-	if (!SXM) goto <lsr>;
-	ACC = ACC s>> T[0,4];
-	goto <done>;
-	<lsr>
-	ACC = ACC >> T[0,4];
-	<done>
+	local shift:4 = zext(T[0,4]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
+	local start_acc:4 = ACC;
+	local arithmetic:4 = start_acc s>> shift;
+	local logical:4 = start_acc >> shift;
+	local sxm_mask:4 = 0 - zext(SXM);
+	local carry_value:4 = start_acc >> (safe_shift - 1);
+	ACC = (arithmetic & sxm_mask) | (logical & ~sxm_mask);
+	C = carry_value[0,1] && nonzero;
 	flagnz(ACC);
 }
 

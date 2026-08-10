@@ -475,6 +475,12 @@ def _execute_tmu_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
             result = (args[0] << (op.inputs[1].size * 8)) | args[1]
         elif opcode == OpCode.INT_CARRY:
             result = int(args[0] + args[1] > mask(op.inputs[0].size))
+        elif opcode == OpCode.FLOAT_EQUAL:
+            result = int(_float32_from_bits(args[0]) == _float32_from_bits(args[1]))
+        elif opcode == OpCode.FLOAT_LESS:
+            result = int(_float32_from_bits(args[0]) < _float32_from_bits(args[1]))
+        elif opcode == OpCode.FLOAT_LESSEQUAL:
+            result = int(_float32_from_bits(args[0]) <= _float32_from_bits(args[1]))
         elif opcode == OpCode.FLOAT_DIV:
             numerator = _float32_from_bits(args[0])
             denominator = _float32_from_bits(args[1])
@@ -532,22 +538,19 @@ def _f32(value: float) -> int:
 
 
 def check_divf32(ops: list) -> None:
+    _no_internal_cfg(ops)
     divides = [op for op in ops if op.opcode == OpCode.FLOAT_DIV]
     assert len(divides) == 1, f"DIVF32 must emit one FLOAT_DIV, got {len(divides)}"
     divide = divides[0]
+    first_write = _find_index(ops, lambda op: _reg(op.output) == "R0H", "DIVF32 result write")
     assert any(
-        op.output is not None
-        and _overlaps(op.output, divide.inputs[0])
-        and any(_reg(value) == "R3H" for value in op.inputs)
-        for op in ops
-    ), "DIVF32 conditioned numerator must snapshot R3H"
+        index < first_write and any(_reg(value) == "R3H" for value in op.inputs)
+        for index, op in enumerate(ops)
+    ), "DIVF32 must read its numerator before destination writeback"
     assert any(
-        op.output is not None
-        and _overlaps(op.output, divide.inputs[1])
-        and any(_reg(value) == "R1H" for value in op.inputs)
-        for op in ops
-    ), "DIVF32 conditioned denominator must snapshot R1H"
-    assert any(_reg(op.output) == "R0H" for op in ops), "DIVF32 must write R0H"
+        index < first_write and any(_reg(value) == "R1H" for value in op.inputs)
+        for index, op in enumerate(ops)
+    ), "DIVF32 must read its denominator before destination writeback"
 
     stf_flags = {"STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"}
     flag_reads = {
@@ -556,16 +559,12 @@ def check_divf32(ops: list) -> None:
         for value in op.inputs
         if _reg(value) in stf_flags
     }
-    assert not flag_reads, f"DIVF32 must not depend on STF flags or rounding state: {flag_reads}"
+    assert flag_reads <= {"STF_LU", "STF_LV"}, (
+        f"DIVF32 may read only its sticky destination flags: {flag_reads}"
+    )
     flag_writes = [op for op in ops if _reg(op.output) in stf_flags]
     written = {_reg(op.output) for op in flag_writes}
     assert written == {"STF_LU", "STF_LV"}, f"unexpected DIVF32 STF writes: {written}"
-    for op in flag_writes:
-        assert (
-            op.opcode == OpCode.COPY
-            and len(op.inputs) == 1
-            and _is_const(op.inputs[0], 1)
-        ), f"DIVF32 flags must be sticky-set only: {op}"
 
     def run(
         numerator: int,
@@ -659,6 +658,7 @@ def check_divf32(ops: list) -> None:
 
 
 def check_div2pif32(ops: list) -> None:
+    _no_internal_cfg(ops)
     multiplies = [op for op in ops if op.opcode == OpCode.FLOAT_MULT]
     assert len(multiplies) == 1, (
         f"DIV2PIF32 must emit one FLOAT_MULT, got {len(multiplies)}"
@@ -683,17 +683,13 @@ def check_div2pif32(ops: list) -> None:
         for value in op.inputs
         if _reg(value) in stf_flags
     }
-    assert not flag_reads, f"DIV2PIF32 must not depend on STF/RND state: {flag_reads}"
+    assert flag_reads <= {"STF_LU"}, (
+        f"DIV2PIF32 may read only its sticky destination flag: {flag_reads}"
+    )
     flag_writes = [op for op in ops if _reg(op.output) in stf_flags]
     assert {_reg(op.output) for op in flag_writes} == {"STF_LU"}, (
         f"unexpected DIV2PIF32 STF writes: {flag_writes}"
     )
-    for op in flag_writes:
-        assert (
-            op.opcode == OpCode.COPY
-            and len(op.inputs) == 1
-            and _is_const(op.inputs[0], 1)
-        ), f"DIV2PIF32 LUF must be sticky-set only: {op}"
 
     scale = _float32_from_bits(0x3E22F983)
 
@@ -745,10 +741,11 @@ def check_div2pif32(ops: list) -> None:
 
 
 def check_cospuf32(ops: list) -> None:
+    _no_internal_cfg(ops)
     userops = [op for op in ops if op.opcode == OpCode.CALLOTHER]
     assert len(userops) == 1, f"COSPUF32 must emit one cosine userop, got {len(userops)}"
     cosine = userops[0]
-    assert cosine.output is not None and _reg(cosine.output) == "R0H"
+    assert cosine.output is not None and cosine.output.space.name == "unique"
     assert len(cosine.inputs) == 2 and _is_const(cosine.inputs[0], 3), (
         "COSPUF32 must call the declared cospu_f32 userop"
     )
@@ -765,20 +762,18 @@ def check_cospuf32(ops: list) -> None:
     )
     assert _key(fractions[0].output) == _key(cosine.inputs[1])
     assert any(
-        op.opcode == OpCode.INT_LESS and any(_is_const(v, 0x2F000000) for v in op.inputs)
+        op.opcode == OpCode.INT_LESSEQUAL
+        and any(_is_const(v, 0x2F000000) for v in op.inputs)
         for op in ops
     ), "COSPUF32 must implement the inclusive 2^-33 lower check"
     assert any(
-        op.opcode == OpCode.INT_LESS and any(_is_const(v, 0x4A800000) for v in op.inputs)
+        op.opcode == OpCode.INT_LESSEQUAL
+        and any(_is_const(v, 0x4A800000) for v in op.inputs)
         for op in ops
     ), "COSPUF32 must implement the inclusive 2^22 upper check"
-    assert any(
-        _reg(op.output) == "R0H"
-        and op.opcode == OpCode.COPY
-        and len(op.inputs) == 1
-        and _is_const(op.inputs[0], 0x3F800000)
-        for op in ops
-    ), "COSPUF32 range conditions must return 1.0"
+    assert any(_reg(op.output) == "R0H" for op in ops), (
+        "COSPUF32 must commit the range-selected result"
+    )
 
     stf_flags = {"STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"}
     flag_accesses = [
@@ -817,6 +812,7 @@ def check_cospuf32(ops: list) -> None:
 
 
 def check_sqrtf32(ops: list) -> None:
+    _no_internal_cfg(ops)
     roots = [op for op in ops if op.opcode == OpCode.FLOAT_SQRT]
     assert len(roots) == 1, f"SQRTF32 must emit one FLOAT_SQRT, got {len(roots)}"
     root = roots[0]
@@ -833,17 +829,13 @@ def check_sqrtf32(ops: list) -> None:
         for value in op.inputs
         if _reg(value) in stf_flags
     }
-    assert not flag_reads, f"SQRTF32 must not depend on STF flags or rounding state: {flag_reads}"
+    assert flag_reads <= {"STF_LV"}, (
+        f"SQRTF32 may read only its sticky destination flag: {flag_reads}"
+    )
     flag_writes = [op for op in ops if _reg(op.output) in stf_flags]
     assert {_reg(op.output) for op in flag_writes} == {"STF_LV"}, (
         f"unexpected SQRTF32 STF writes: {flag_writes}"
     )
-    for op in flag_writes:
-        assert (
-            op.opcode == OpCode.COPY
-            and len(op.inputs) == 1
-            and _is_const(op.inputs[0], 1)
-        ), f"SQRTF32 LVF must be sticky-set only: {op}"
 
     def run(
         operand: int,
@@ -888,21 +880,19 @@ def check_sqrtf32(ops: list) -> None:
 
 
 def check_divf32_aliased_numerator(ops: list) -> None:
+    _no_internal_cfg(ops)
     divides = [op for op in ops if op.opcode == OpCode.FLOAT_DIV]
     assert len(divides) == 1, f"aliased DIVF32 must emit one FLOAT_DIV, got {len(divides)}"
     divide = divides[0]
+    first_write = _find_index(ops, lambda op: _reg(op.output) == "R1H", "aliased DIVF32 result write")
     assert any(
-        op.output is not None
-        and _overlaps(op.output, divide.inputs[0])
-        and any(_reg(value) == "R1H" for value in op.inputs)
-        for op in ops
-    ), "aliased DIVF32 numerator must snapshot the incoming R1H value"
+        index < first_write and any(_reg(value) == "R1H" for value in op.inputs)
+        for index, op in enumerate(ops)
+    ), "aliased DIVF32 must snapshot its numerator before writeback"
     assert any(
-        op.output is not None
-        and _overlaps(op.output, divide.inputs[1])
-        and any(_reg(value) == "R0H" for value in op.inputs)
-        for op in ops
-    ), "aliased DIVF32 denominator must snapshot the incoming R0H value"
+        index < first_write and any(_reg(value) == "R0H" for value in op.inputs)
+        for index, op in enumerate(ops)
+    ), "aliased DIVF32 must snapshot its denominator before writeback"
     actual = _execute_tmu_pcode(
         ops,
         {
@@ -930,6 +920,204 @@ def _assert_execution(
         if actual.get(name) != value
     }
     assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+
+
+def check_abs_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    assert not any(_reg(op.output) == "TC" for op in ops), "ABS must not modify TC"
+    vectors = (
+        ({"ACC": 7, "OVM": 0, "V": 1, "C": 1}, {"ACC": 7, "V": 1, "C": 0, "N": 0, "Z": 0}, "positive preserves sticky V"),
+        ({"ACC": 0, "OVM": 0, "V": 0, "C": 1}, {"ACC": 0, "V": 0, "C": 0, "N": 0, "Z": 1}, "zero"),
+        ({"ACC": 0xFFFFFFF9, "OVM": 0, "V": 0, "C": 1}, {"ACC": 7, "V": 0, "C": 0, "N": 0, "Z": 0}, "ordinary negative"),
+        ({"ACC": 0x80000000, "OVM": 0, "V": 0, "C": 1}, {"ACC": 0x80000000, "V": 1, "C": 0, "N": 1, "Z": 0}, "minimum wraps with OVM clear"),
+        ({"ACC": 0x80000000, "OVM": 1, "V": 0, "C": 1}, {"ACC": 0x7FFFFFFF, "V": 1, "C": 0, "N": 0, "Z": 0}, "minimum saturates with OVM set"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_abstc_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 5, "OVM": 0, "V": 1, "C": 1, "TC": 1}, {"ACC": 5, "V": 1, "C": 0, "TC": 1, "N": 0, "Z": 0}, "positive leaves TC"),
+        ({"ACC": 0xFFFFFFFB, "OVM": 0, "V": 0, "C": 1, "TC": 0}, {"ACC": 5, "V": 0, "C": 0, "TC": 1, "N": 0, "Z": 0}, "negative toggles TC"),
+        ({"ACC": 0x80000000, "OVM": 0, "V": 0, "C": 1, "TC": 1}, {"ACC": 0x80000000, "V": 1, "C": 0, "TC": 0, "N": 1, "Z": 0}, "minimum wraps and toggles"),
+        ({"ACC": 0x80000000, "OVM": 1, "V": 0, "C": 1, "TC": 0}, {"ACC": 0x7FFFFFFF, "V": 1, "C": 0, "TC": 1, "N": 0, "Z": 0}, "minimum saturates and toggles"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_neg_acc_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 5, "OVM": 0, "V": 1, "C": 1}, {"ACC": 0xFFFFFFFB, "V": 1, "C": 0, "N": 1, "Z": 0}, "ordinary negate"),
+        ({"ACC": 0, "OVM": 0, "V": 0, "C": 0}, {"ACC": 0, "V": 0, "C": 1, "N": 0, "Z": 1}, "zero sets carry"),
+        ({"ACC": 0x80000000, "OVM": 0, "V": 0, "C": 1}, {"ACC": 0x80000000, "V": 1, "C": 0, "N": 1, "Z": 0}, "minimum wraps"),
+        ({"ACC": 0x80000000, "OVM": 1, "V": 0, "C": 1}, {"ACC": 0x7FFFFFFF, "V": 1, "C": 0, "N": 0, "Z": 0}, "minimum saturates"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_neg_ax_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    target = next((name for name in ("AL", "AH") if any(_reg(op.output) == name for op in ops)), None)
+    assert target is not None, "NEG AX must write AL or AH"
+    vectors = (
+        ({target: 1, "V": 1, "C": 1}, {target: 0xFFFF, "V": 1, "C": 0, "N": 1, "Z": 0}, "ordinary 16-bit negate"),
+        ({target: 0, "V": 0, "C": 0}, {target: 0, "V": 0, "C": 1, "N": 0, "Z": 1}, "16-bit zero"),
+        ({target: 0x8000, "V": 0, "C": 1}, {target: 0x8000, "V": 1, "C": 0, "N": 1, "Z": 0}, "16-bit minimum"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_neg64_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 0, "P": 1, "OVM": 0, "V": 1, "C": 1}, {"ACC": 0xFFFFFFFF, "P": 0xFFFFFFFF, "V": 1, "C": 0, "N": 1, "Z": 0}, "ordinary 64-bit negate"),
+        ({"ACC": 0, "P": 0, "OVM": 0, "V": 0, "C": 0}, {"ACC": 0, "P": 0, "V": 0, "C": 1, "N": 0, "Z": 1}, "64-bit zero"),
+        ({"ACC": 0x80000000, "P": 0, "OVM": 0, "V": 0, "C": 1}, {"ACC": 0x80000000, "P": 0, "V": 1, "C": 0, "N": 1, "Z": 0}, "64-bit minimum wraps"),
+        ({"ACC": 0x80000000, "P": 0, "OVM": 1, "V": 0, "C": 1}, {"ACC": 0x7FFFFFFF, "P": 0xFFFFFFFF, "V": 1, "C": 0, "N": 0, "Z": 0}, "64-bit minimum saturates"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_negtc_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 0x80000001, "TC": 0, "OVM": 1, "V": 1, "C": 1}, {"ACC": 0x80000001, "TC": 0, "V": 1, "C": 1, "N": 1, "Z": 0}, "inactive preserves ACC C and V"),
+        ({"ACC": 5, "TC": 1, "OVM": 0, "V": 1, "C": 1}, {"ACC": 0xFFFFFFFB, "TC": 1, "V": 1, "C": 0, "N": 1, "Z": 0}, "active ordinary negate"),
+        ({"ACC": 0, "TC": 1, "OVM": 0, "V": 0, "C": 0}, {"ACC": 0, "TC": 1, "V": 0, "C": 1, "N": 0, "Z": 1}, "active zero"),
+        ({"ACC": 0x80000000, "TC": 1, "OVM": 0, "V": 0, "C": 1}, {"ACC": 0x80000000, "TC": 1, "V": 1, "C": 0, "N": 1, "Z": 0}, "active minimum wraps"),
+        ({"ACC": 0x80000000, "TC": 1, "OVM": 1, "V": 0, "C": 1}, {"ACC": 0x7FFFFFFF, "TC": 1, "V": 1, "C": 0, "N": 0, "Z": 0}, "active minimum saturates"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_lsl64_t_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 0x80000000, "P": 1, "T": 0, "C": 1}, {"ACC": 0x80000000, "P": 1, "C": 0, "N": 1, "Z": 0}, "zero shift clears carry"),
+        ({"ACC": 0x80000000, "P": 1, "T": 1, "C": 0}, {"ACC": 0, "P": 2, "C": 1, "N": 0, "Z": 0}, "one-bit shift"),
+        ({"ACC": 0, "P": 2, "T": 63, "C": 0}, {"ACC": 0, "P": 0, "C": 1, "N": 0, "Z": 1}, "maximum shift captures bit one"),
+        ({"ACC": 0, "P": 1, "T": 63, "C": 1}, {"ACC": 0x80000000, "P": 0, "C": 0, "N": 1, "Z": 0}, "maximum shift retains low bit as sign"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_sfr_immediate_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 0x80000001, "SXM": 1, "C": 1}, {"ACC": 0xFC000000, "C": 0, "N": 1, "Z": 0}, "arithmetic right shift"),
+        ({"ACC": 0x80000001, "SXM": 0, "C": 1}, {"ACC": 0x04000000, "C": 0, "N": 0, "Z": 0}, "logical right shift"),
+        ({"ACC": 0x10, "SXM": 0, "C": 0}, {"ACC": 0, "C": 1, "N": 0, "Z": 1}, "last shifted bit becomes carry"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_sfr_t_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 0x80000001, "T": 0, "SXM": 1, "C": 1}, {"ACC": 0x80000001, "C": 0, "N": 1, "Z": 0}, "zero shift clears carry and refreshes flags"),
+        ({"ACC": 0x80000001, "T": 1, "SXM": 1, "C": 0}, {"ACC": 0xC0000000, "C": 1, "N": 1, "Z": 0}, "arithmetic variable shift"),
+        ({"ACC": 0x00008000, "T": 15, "SXM": 0, "C": 0}, {"ACC": 1, "C": 0, "N": 0, "Z": 0}, "maximum logical variable shift"),
+        ({"ACC": 0x00004000, "T": 15, "SXM": 0, "C": 0}, {"ACC": 0, "C": 1, "N": 0, "Z": 1}, "maximum variable shift carry"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_cmpf32_branch_free(ops: list) -> None:
+    _no_internal_cfg(ops)
+    writes = {_reg(op.output) for op in ops if _reg(op.output) is not None}
+    assert writes & {"STF_ZF", "STF_NF"} == {"STF_ZF", "STF_NF"}
+    assert not (writes & {"STF_LV", "STF_LU", "STF_ZI", "STF_NI", "STF_TF"})
+
+    vectors = (
+        (_f32(2.0), _f32(2.0), 1, 0, "ordinary equal"),
+        (_f32(-2.0), _f32(1.0), 0, 1, "ordinary less"),
+        (_f32(3.0), _f32(-1.0), 0, 0, "ordinary greater"),
+        (0x80000000, 0x00000000, 1, 0, "negative zero equals positive zero"),
+        (0x80000001, 0x00000000, 1, 0, "negative denormal equals positive zero"),
+        (0x7FC00001, 0x7F800000, 1, 0, "positive NaN equals positive infinity"),
+        (0xFFC00001, 0x7F800000, 1, 0, "negative NaN also becomes positive infinity"),
+        (_f32(1.0), 0x7FC00001, 0, 1, "normal compares less than conditioned NaN"),
+    )
+    for lhs, rhs, zf, nf, description in vectors:
+        actual = _execute_tmu_pcode(
+            ops,
+            {"R0H": lhs, "R1H": rhs, "STF_ZF": 0, "STF_NF": 0},
+        )
+        assert actual["STF_ZF"] == zf and actual["STF_NF"] == nf, (
+            f"{description}: actual ZF/NF={actual['STF_ZF']}/{actual['STF_NF']} "
+            f"expected={zf}/{nf}"
+        )
+
+
+def check_movst0_all_eventual_state(ops: list) -> None:
+    _no_internal_cfg(ops)
+    initial = {
+        "V": 0, "N": 0, "Z": 0, "C": 0, "TC": 0,
+        "STF_LV": 1, "STF_LU": 0, "STF_NF": 1, "STF_NI": 0,
+        "STF_ZF": 0, "STF_ZI": 1, "STF_TF": 1,
+    }
+    expected = {
+        "V": 1, "N": 1, "Z": 1, "C": 1, "TC": 1,
+        "STF_LV": 0, "STF_LU": 0,
+        "STF_NF": 1, "STF_NI": 0, "STF_ZF": 0, "STF_ZI": 1, "STF_TF": 1,
+    }
+    _assert_execution(ops, initial, expected, "all MOVST0 selections")
+
+
+def check_movst0_lvf_selective(ops: list) -> None:
+    _no_internal_cfg(ops)
+    initial = {
+        "V": 1, "N": 1, "Z": 1, "C": 1, "TC": 1,
+        "STF_LV": 0, "STF_LU": 1, "STF_NF": 0, "STF_NI": 0,
+        "STF_ZF": 0, "STF_ZI": 0, "STF_TF": 0,
+    }
+    expected = {
+        "V": 0, "N": 1, "Z": 1, "C": 1, "TC": 1,
+        "STF_LV": 0, "STF_LU": 1,
+    }
+    _assert_execution(ops, initial, expected, "selected LVF clears V and only LVF")
+
+
+def check_movst0_ci_selective(ops: list) -> None:
+    _no_internal_cfg(ops)
+    for tf, expected_c in ((0, 0), (1, 1)):
+        initial = {
+            "V": 1, "N": 1, "Z": 1, "C": 1 - tf, "TC": 1,
+            "STF_LV": 1, "STF_LU": 1, "STF_NF": 1, "STF_NI": 1,
+            "STF_ZF": 1, "STF_ZI": 1, "STF_TF": tf,
+        }
+        expected = {
+            "V": 1, "N": 1, "Z": 1, "C": expected_c, "TC": 1,
+            "STF_LV": 1, "STF_LU": 1,
+        }
+        _assert_execution(ops, initial, expected, f"CI maps TF={tf} to C")
+
+
+def check_movst0_tf_selective(ops: list) -> None:
+    _no_internal_cfg(ops)
+    for tf, expected_tc in ((0, 0), (1, 1)):
+        initial = {
+            "V": 1, "N": 1, "Z": 1, "C": 1, "TC": 1 - tf,
+            "STF_LV": 1, "STF_LU": 1, "STF_NF": 1, "STF_NI": 1,
+            "STF_ZF": 1, "STF_ZI": 1, "STF_TF": tf,
+        }
+        expected = {
+            "V": 1, "N": 1, "Z": 1, "C": 1, "TC": expected_tc,
+            "STF_LV": 1, "STF_LU": 1,
+        }
+        _assert_execution(ops, initial, expected, f"TF maps TF={tf} to TC")
 
 
 def _last_load(ops: list, width: int):
@@ -2832,6 +3020,21 @@ CASES = (
         (0x0FA6, 0x6603),
         check_cmpl_unsigned_branch,
     ),
+    Case("ABS is branch-free and preserves complete eventual state", (0xFF56,), check_abs_eventual_state),
+    Case("ABSTC is branch-free and toggles TC from the original sign", (0x565F,), check_abstc_eventual_state),
+    Case("NEG ACC is branch-free with sticky V and OVM saturation", (0xFF54,), check_neg_acc_eventual_state),
+    Case("NEG AL is branch-free with 16-bit minimum behavior", (0xFF5C,), check_neg_ax_eventual_state),
+    Case("NEG AH is branch-free with 16-bit minimum behavior", (0xFF5D,), check_neg_ax_eventual_state),
+    Case("NEG64 is branch-free with complete eventual state", (0x5658,), check_neg64_eventual_state),
+    Case("NEGTC is branch-free and preserves inactive C", (0x5632,), check_negtc_eventual_state),
+    Case("LSL64 ACC:P,T is branch-free for zero and maximum shifts", (0x5652,), check_lsl64_t_eventual_state),
+    Case("SFR ACC,#5 is branch-free with SXM and carry", (0xFF44,), check_sfr_immediate_eventual_state),
+    Case("SFR ACC,T is branch-free for zero and maximum shifts", (0xFF51,), check_sfr_t_eventual_state),
+    Case("CMPF32 conditions special values without internal CFG", (0xE694, 0x0008), check_cmpf32_branch_free),
+    Case("MOVST0 all flags commits selected eventual state", (0xADFF,), check_movst0_all_eventual_state),
+    Case("MOVST0 LVF preserves unselected state", (0xAD01,), check_movst0_lvf_selective),
+    Case("MOVST0 CI maps TF to C without internal CFG", (0xAD40,), check_movst0_ci_selective),
+    Case("MOVST0 TF maps TF to TC without internal CFG", (0xAD80,), check_movst0_tf_selective),
     Case("DIVF32 conditions inputs and models result/LUF/LVF", (0xE274, 0x0058), check_divf32),
     Case("SQRTF32 conditions input and models result/LVF", (0xE277, 0x0000), check_sqrtf32),
     Case("DIV2PIF32 uses exact scale and models result/LUF", (0xE271, 0x0000), check_div2pif32),
@@ -2889,6 +3092,7 @@ def main() -> int:
         return 1
 
     print(f"SEMANTIC_TESTS={len(CASES)}")
+    print("INTERNAL_CFG_VECTOR_PASS=all")
     return 0
 
 
