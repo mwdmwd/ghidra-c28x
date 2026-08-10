@@ -37,6 +37,19 @@ def _translate(words: Iterable[int]) -> list:
     return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
 
 
+def _translate_at(words: Iterable[int], base_address: int) -> list:
+    """Translate a schedule at an explicit byte-domain program address."""
+    ctx = Context("tms320c28:LE:32:default")
+    ctx.setVariableDefault("ctx_objmode", 1)
+    ctx.setVariableDefault("ctx_amode", 0)
+    ctx.setVariableDefault("ctx_page0", 0)
+    data = b"".join(struct.pack("<H", word) for word in words)
+    return [
+        op for op in ctx.translate(data, base_address=base_address).ops
+        if op.opcode != OpCode.IMARK
+    ]
+
+
 def _key(varnode) -> tuple[str, int, int]:
     return (varnode.space.name, varnode.offset, varnode.size)
 
@@ -1121,7 +1134,7 @@ def _check_sp_update(ops: list, opcode: OpCode, delta: int, width: int) -> None:
     if opcode == OpCode.INT_ADD:
         snapshot = _find(
             ops,
-            lambda op: op.opcode == OpCode.INT_ZEXT
+            lambda op: op.opcode == OpCode.COPY
             and op.inputs
             and _reg(op.inputs[0]) == "SP"
             and _depends_on_varnode(ops, address, op.output),
@@ -2292,6 +2305,168 @@ def check_movl_acc_self_flags(ops: list) -> None:
         )
 
 
+
+def _execute_call_state(
+    ops: list,
+    initial: dict[str, int],
+    memory: dict[int, int] | None = None,
+) -> tuple[dict[str, int], dict[int, int], list[int]]:
+    """Execute the finite register/memory subset used by call/return P-Code.
+
+    C28x LOAD/STORE pointers are word indices in a wordsize=2 RAM space.  The
+    memory dictionary is byte-addressed internally so 32-bit push/pop order is
+    tested exactly rather than inferred from decompiler text.
+    """
+    cells: dict[tuple[str, int], int] = {}
+    registers: dict[str, object] = {}
+    mem = dict(memory or {})
+    flows: list[int] = []
+
+    for op in ops:
+        for node in (*op.inputs, op.output):
+            name = _reg(node)
+            if name is not None:
+                registers.setdefault(name, node)
+
+    def mask(size: int) -> int:
+        return (1 << (size * 8)) - 1
+
+    def signed(value: int, size: int) -> int:
+        sign = 1 << (size * 8 - 1)
+        value &= mask(size)
+        return value - (1 << (size * 8)) if value & sign else value
+
+    def read(node) -> int:
+        if node.space.name == "const":
+            return node.offset & mask(node.size)
+        value = 0
+        for index in range(node.size):
+            value |= cells.get((node.space.name, node.offset + index), 0) << (8 * index)
+        return value
+
+    def write(node, value: int) -> None:
+        value &= mask(node.size)
+        for index in range(node.size):
+            cells[(node.space.name, node.offset + index)] = (value >> (8 * index)) & 0xFF
+
+    def load(word: int, size: int) -> int:
+        byte = word * 2
+        return sum(mem.get(byte + i, 0) << (8 * i) for i in range(size))
+
+    def store(word: int, size: int, value: int) -> None:
+        byte = word * 2
+        for i in range(size):
+            mem[byte + i] = (value >> (8 * i)) & 0xFF
+
+    passthrough = {name: value for name, value in initial.items() if name not in registers}
+    for name, value in initial.items():
+        node = registers.get(name)
+        if node is not None:
+            write(node, value)
+
+    for op in ops:
+        args = [read(node) for node in op.inputs]
+        code = op.opcode
+        if code == OpCode.STORE:
+            store(args[1], op.inputs[2].size, args[2])
+            continue
+        if code == OpCode.LOAD:
+            write(op.output, load(args[1], op.output.size))
+            continue
+        if code in (OpCode.CALL, OpCode.CALLIND, OpCode.RETURN):
+            flows.append(args[0])
+            continue
+        if op.output is None:
+            raise AssertionError(f"unsupported call P-Code side effect {code.name}")
+        if code in (OpCode.COPY, OpCode.INT_ZEXT):
+            result = args[0]
+        elif code == OpCode.INT_SEXT:
+            result = signed(args[0], op.inputs[0].size)
+        elif code == OpCode.INT_ADD:
+            result = args[0] + args[1]
+        elif code == OpCode.INT_SUB:
+            result = args[0] - args[1]
+        elif code == OpCode.INT_AND:
+            result = args[0] & args[1]
+        elif code == OpCode.INT_OR:
+            result = args[0] | args[1]
+        elif code == OpCode.SUBPIECE:
+            result = args[0] >> (8 * args[1])
+        else:
+            raise AssertionError(f"unsupported call P-Code op {code.name}")
+        write(op.output, result)
+
+    final = dict(passthrough)
+    final.update({name: read(node) for name, node in registers.items()})
+    return (final, mem, flows)
+
+
+def _memory_value(memory: dict[int, int], word: int, size: int) -> int:
+    byte = word * 2
+    return sum(memory.get(byte + i, 0) << (8 * i) for i in range(size))
+
+
+def check_lcr_nested_state(_ops: list) -> None:
+    first = _translate_at((0x7641, 0x7010), 0x200)
+    second = _translate_at((0x7641, 0x7020), 0x300)
+    ret = _translate_at((0x0006,), 0x400)
+    state = {"SP": 0x400, "RPC": 0x111111}
+    state, memory, flow1 = _execute_call_state(first, state)
+    first_link = state["RPC"]
+    assert state["SP"] == 0x402 and _memory_value(memory, 0x400, 4) == 0x111111
+    state, memory, flow2 = _execute_call_state(second, state, memory)
+    second_link = state["RPC"]
+    assert state["SP"] == 0x404 and _memory_value(memory, 0x402, 4) == first_link
+    state, memory, returns = _execute_call_state(ret, state, memory)
+    assert returns == [second_link] and state["RPC"] == first_link and state["SP"] == 0x402
+    state, memory, returns = _execute_call_state(ret, state, memory)
+    assert returns == [first_link] and state["RPC"] == 0x111111 and state["SP"] == 0x400
+    assert len(flow1) == len(flow2) == 1
+
+
+def check_lcr_indirect_state(ops: list) -> None:
+    assert any(op.opcode == OpCode.INT_AND and any(_is_const(v, 0x3FFFFF) for v in op.inputs)
+               for op in ops), "indirect LCR must mask XAR0 to 22 bits"
+    state, memory, flow = _execute_call_state(
+        ops, {"SP": 0x500, "RPC": 0x123456, "XAR0": 0xFFC23456}
+    )
+    assert flow == [0x023456] and state["SP"] == 0x502 and state["RPC"] != 0x123456
+    assert _memory_value(memory, 0x500, 4) == 0x123456
+
+
+def check_lc_direct_state(ops: list) -> None:
+    state, memory, flow = _execute_call_state(ops, {"SP": 0x600, "RPC": 0x234567})
+    assert len(flow) == 1 and state["SP"] == 0x602 and state["RPC"] == 0x234567
+    assert _memory_value(memory, 0x600, 4) != 0
+
+
+def check_lret_state(ops: list) -> None:
+    memory: dict[int, int] = {}
+    value = 0x345678
+    for i in range(4): memory[0x700 * 2 + i] = (value >> (8 * i)) & 0xFF
+    state, _memory, flow = _execute_call_state(ops, {"SP": 0x702, "RPC": 0x111111}, memory)
+    assert flow == [value] and state["SP"] == 0x700 and state["RPC"] == 0x111111
+
+
+def check_lretr_state(ops: list) -> None:
+    memory: dict[int, int] = {}
+    older = 0x123456
+    for i in range(4): memory[0x800 * 2 + i] = (older >> (8 * i)) & 0xFF
+    current = 0x234567
+    state, _memory, flow = _execute_call_state(ops, {"SP": 0x802, "RPC": current}, memory)
+    assert flow == [current] and state["SP"] == 0x800 and state["RPC"] == older
+
+
+def check_iret_stack_release(ops: list) -> None:
+    sp_subs = [
+        op for op in ops
+        if op.opcode == OpCode.INT_SUB and _reg(op.output) == "SP"
+    ]
+    assert sum(any(_is_const(v, 2) for v in op.inputs) for op in sp_subs) == 7
+    assert sum(any(_is_const(v, 1) for v in op.inputs) for op in sp_subs) == 1
+    assert sum(op.opcode == OpCode.RETURN for op in ops) == 1
+
+
 CASES = (
     Case("BANZ decrements before branching", (0x000A, 0x0001), check_banz),
     Case("MOV32 UNCF flags are branch-free", (0xE2AF, 0x0021), check_mov32_uncf),
@@ -2490,6 +2665,12 @@ CASES = (
     Case("XRETC OV snapshots then clears V", (0x56FB,), check_branch_v_clear),
     Case("LB *XAR7 masks its target to 22 code-address bits", (0x7620,), check_lb_xar7_target),
     Case("LC *XAR7 masks its target to 22 code-address bits", (0x7604,), check_lc_xar7_target),
+    Case("LCR direct preserves nested RPC/SP state", (0x7641, 0x7010), check_lcr_nested_state),
+    Case("LCR indirect masks its target and saves RPC", (0x3E60,), check_lcr_indirect_state),
+    Case("LC direct uses the stack without changing RPC", (0x0081, 0x700F), check_lc_direct_state),
+    Case("LRET pops a direct-call return without changing RPC", (0x7614,), check_lret_state),
+    Case("LRETR returns through current RPC then restores the older RPC", (0x0006,), check_lretr_state),
+    Case("IRET releases seven context pairs and the alignment word", (0x7602,), check_iret_stack_release),
     Case("MOVL ACC,ACC refreshes N and Z", (0x1EA9,), check_movl_acc_self_flags),
     Case("MOVL ACC,P refreshes N and Z", (0xA9A9,), check_movl_register_to_acc_flags),
     Case("MOVL ACC,XT refreshes N and Z", (0xABA9,), check_movl_register_to_acc_flags),

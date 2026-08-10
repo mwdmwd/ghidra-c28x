@@ -90,31 +90,24 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="ACC"/>
         </pentry>
 
-        <!-- XAR4/XAR5: general-purpose when not consumed by pointer arguments -->
-        <pentry minsize="1" maxsize="4">
-          <register name="XAR4"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4">
-          <register name="XAR5"/>
-        </pentry>
-
-        <!-- Any remaining arguments not placed in registers are pushed on the stack 
-             offset="2" accounts for the 2-word RPC pushed at the top of the frame -->
+        <!-- Remaining arguments are pushed below the two-word RPC save on
+             the positive-growing stack.  This reverse allocation range puts
+             the first 32-bit stack argument at architectural *-SP[4]. -->
         <pentry minsize="1" maxsize="500" align="2">
-          <addr offset="2" space="stack"/>
+          <addr offset="0x1fffffe08" space="stack"/>
         </pentry>
       </input>
 
       <output>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
         <pentry minsize="1" maxsize="4" metatype="float">
           <register name="R0H"/>
         </pentry>
         <!-- ACC covers both 32-bit and 16-bit integer returns (subsumes AL) -->
         <pentry minsize="1" maxsize="4">
           <register name="ACC"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4">
-          <register name="XAR4"/>
         </pentry>
       </output>
 

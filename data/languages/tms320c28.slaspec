@@ -21,8 +21,13 @@ define register offset=0x110 size=1  [  ARP XF M0M1MAP OBJMODE AMODE IDLESTAT EA
 # ???
 define register offset=0x120 size=1  [  BIO  ];
 
-define register offset=0x200 size=2  [  DP  IFR  IER  DBGIER  SP  ST0  ST1  ];
-define register offset=0x20e size=4  [  STF ];
+define register offset=0x200 size=2  [  DP  IFR  IER  DBGIER  ];
+# SP is architecturally 16-bit, but a pointer-width spacebase avoids nonstandard
+# ZEXT24 stack expressions in Ghidra.  SP16 is the overlapping encoded alias.
+define register offset=0x208 size=4  [  SP  ];
+define register offset=0x208 size=2  [  SP16  ];
+define register offset=0x20c size=2  [  ST0  ST1  ];
+define register offset=0x210 size=4  [  STF ];
 
 # FPU32 registers (32-bit IEEE-754 floating-point)
 define register offset=0x300 size=4  [  R0H  R1H  R2H  R3H  R4H  R5H  R6H  R7H  ];

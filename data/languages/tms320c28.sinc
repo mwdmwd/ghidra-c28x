@@ -87,7 +87,25 @@ attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
 attach values shift8_3_1 [ 1 2 3 4 5 6 7 8 ];
 
 # T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH, we call it T throughout as this matches dis2000
-attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP _ _ ];
+attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP16 _ _ ];
+
+# Most 16-bit register encodings use the attached variable directly.  SP is
+# special: its encoded architectural operand is the low half of the pointer-
+# width spacebase, while the display remains `SP`.
+reg16loc: "AR0" is reg16=0 { export AR0; }
+reg16loc: "AR1" is reg16=1 { export AR1; }
+reg16loc: "AR2" is reg16=2 { export AR2; }
+reg16loc: "AR3" is reg16=3 { export AR3; }
+reg16loc: "AR4" is reg16=4 { export AR4; }
+reg16loc: "AR5" is reg16=5 { export AR5; }
+reg16loc: "AR6" is reg16=6 { export AR6; }
+reg16loc: "AR7" is reg16=7 { export AR7; }
+reg16loc: "AH" is reg16=8 { export AH; }
+reg16loc: "AL" is reg16=9 { export AL; }
+reg16loc: "PH" is reg16=10 { export PH; }
+reg16loc: "PL" is reg16=11 { export PL; }
+reg16loc: "T" is reg16=12 { export T; }
+reg16loc: "SP" is reg16=13 { export SP16; }
 attach variables regax [ _ _ _ _ _ _ _ _ AH AL _ _ _ _ _ _ ];
 attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
 attach variables [ xarn0 xarn8 ] [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
@@ -114,27 +132,37 @@ macro mext(out, in) {
 	out = zval | (sval & sxm_mask);
 }
 
+# Keep stack changes as ordinary pointer-width deltas.  SP16 preserves the
+# architectural low 16-bit alias; normal ABI frames are confined to low 64K.
+macro sp_add(delta) {
+	SP = SP + delta;
+}
+
+macro sp_sub(delta) {
+	SP = SP - delta;
+}
+
 macro push16(val16) {
-	local sp4:4 = zext(SP);
+	local sp4:4 = SP;
 	*:2 sp4 = val16;
-	SP = SP + 1;
+	sp_add(1);
 }
 
 macro pop16(ret16) {
-	SP = SP - 1;
-	local sp4:4 = zext(SP);
+	sp_sub(1);
+	local sp4:4 = SP;
 	ret16 = *:2 sp4;
 }
 
 macro push32(val32) {
-	local sp4:4 = zext(SP);
+	local sp4:4 = SP;
 	*:4 sp4 = val32;
-	SP = SP + 2;
+	sp_add(2);
 }
 
 macro pop32(ret32) {
-	SP = SP - 2;
-	local sp4:4 = zext(SP);
+	sp_sub(2);
+	local sp4:4 = SP;
 	ret32 = *:4 sp4;
 }
 
@@ -276,7 +304,7 @@ macro intr_enter(vec) {
 	RB_RA = 0;
 	packst0(ST0);
 	local ie_v1:4 = zext(ST0) | (zext(T) << 16);
-	SP = SP + 1;
+	sp_add(1);
 	push32(ie_v1);
 	push32(ACC);
 	push32(P);
@@ -515,7 +543,7 @@ loc16: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
 	export *:2 addr;
 }
 loc16: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
-	local addr:4 = zext(SP) - imm6;
+	local addr:4 = SP - imm6;
 	export *:2 addr;
 }
 # The manual's AMODE column for @@7bit is printed as 0, but Section 5.2,
@@ -525,23 +553,23 @@ loc16: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
 	export *:2 addr;
 }
 loc16: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 1;
+	local addr:4 = SP;
+	sp_add(1);
 	export *:2 addr;
 }
 loc16: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 1;
+	local addr:4 = SP;
+	sp_add(1);
 	export *:2 addr;
 }
 loc16: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
-	SP = SP - 1;
-	local addr:4 = zext(SP);
+	sp_sub(1);
+	local addr:4 = SP;
 	export *:2 addr;
 }
 loc16: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
-	SP = SP - 1;
-	local addr:4 = zext(SP);
+	sp_sub(1);
+	local addr:4 = SP;
 	export *:2 addr;
 }
 loc16: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
@@ -756,8 +784,8 @@ loc16: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
 	circular_amode1_address(addr, 1);
 	export *:2 addr;
 }
-loc16: reg16             is ctx_amode=0 & op4_4=0b1010 & reg16 { export reg16; }
-loc16: reg16             is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16 { export reg16; }
+loc16: reg16loc          is ctx_amode=0 & op4_4=0b1010 & reg16loc { export reg16loc; }
+loc16: reg16loc          is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16loc { export reg16loc; }
 
 # 32-bit operand.  Pointer deltas are two C28x words; AR0/bit-reversed
 # modifiers remain independent of operand width as specified by Section 5.6.2.
@@ -770,7 +798,7 @@ loc32: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
 	export *:4 addr;
 }
 loc32: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
-	local addr:4 = zext(SP) - imm6;
+	local addr:4 = SP - imm6;
 	export *:4 addr;
 }
 loc32: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
@@ -778,23 +806,23 @@ loc32: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
 	export *:4 addr;
 }
 loc32: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 2;
+	local addr:4 = SP;
+	sp_add(2);
 	export *:4 addr;
 }
 loc32: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 2;
+	local addr:4 = SP;
+	sp_add(2);
 	export *:4 addr;
 }
 loc32: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
-	SP = SP - 2;
-	local addr:4 = zext(SP);
+	sp_sub(2);
+	local addr:4 = SP;
 	export *:4 addr;
 }
 loc32: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
-	SP = SP - 2;
-	local addr:4 = zext(SP);
+	sp_sub(2);
+	local addr:4 = SP;
 	export *:4 addr;
 }
 loc32: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
@@ -1022,7 +1050,7 @@ mem16_addr: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
 	export addr;
 }
 mem16_addr: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
-	local addr:4 = zext(SP) - imm6;
+	local addr:4 = SP - imm6;
 	export addr;
 }
 mem16_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
@@ -1030,23 +1058,23 @@ mem16_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
 	export addr;
 }
 mem16_addr: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 1;
+	local addr:4 = SP;
+	sp_add(1);
 	export addr;
 }
 mem16_addr: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 1;
+	local addr:4 = SP;
+	sp_add(1);
 	export addr;
 }
 mem16_addr: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
-	SP = SP - 1;
-	local addr:4 = zext(SP);
+	sp_sub(1);
+	local addr:4 = SP;
 	export addr;
 }
 mem16_addr: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
-	SP = SP - 1;
-	local addr:4 = zext(SP);
+	sp_sub(1);
+	local addr:4 = SP;
 	export addr;
 }
 mem16_addr: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
@@ -1268,7 +1296,7 @@ mem32_addr: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
 	export addr;
 }
 mem32_addr: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
-	local addr:4 = zext(SP) - imm6;
+	local addr:4 = SP - imm6;
 	export addr;
 }
 mem32_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
@@ -1276,23 +1304,23 @@ mem32_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
 	export addr;
 }
 mem32_addr: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 2;
+	local addr:4 = SP;
+	sp_add(2);
 	export addr;
 }
 mem32_addr: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 2;
+	local addr:4 = SP;
+	sp_add(2);
 	export addr;
 }
 mem32_addr: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
-	SP = SP - 2;
-	local addr:4 = zext(SP);
+	sp_sub(2);
+	local addr:4 = SP;
 	export addr;
 }
 mem32_addr: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
-	SP = SP - 2;
-	local addr:4 = zext(SP);
+	sp_sub(2);
+	local addr:4 = SP;
 	export addr;
 }
 mem32_addr: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
@@ -1580,7 +1608,7 @@ loc8: @imm6 is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
 	export byte;
 }
 loc8: *-SP[imm6] is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
-	local addr:4 = zext(SP) - imm6;
+	local addr:4 = SP - imm6;
 	local word:2 = *:2 addr;
 	local byte:1 = word:1;
 	export byte;
@@ -1594,29 +1622,29 @@ loc8: @@imm7 is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
 
 # Stack and C28x XAR modes.  MOVB advances pointers by one C28x word.
 loc8: *SP++ is ctx_amode=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 1;
+	local addr:4 = SP;
+	sp_add(1);
 	local word:2 = *:2 addr;
 	local byte:1 = word:1;
 	export byte;
 }
 loc8: *SP++ is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
-	local addr:4 = zext(SP);
-	SP = SP + 1;
+	local addr:4 = SP;
+	sp_add(1);
 	local word:2 = *:2 addr;
 	local byte:1 = word:1;
 	export byte;
 }
 loc8: *--SP is ctx_amode=0 & op0_8=0b10111110 & SP {
-	SP = SP - 1;
-	local addr:4 = zext(SP);
+	sp_sub(1);
+	local addr:4 = SP;
 	local word:2 = *:2 addr;
 	local byte:1 = word:1;
 	export byte;
 }
 loc8: *--SP is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
-	SP = SP - 1;
-	local addr:4 = zext(SP);
+	sp_sub(1);
+	local addr:4 = SP;
 	local word:2 = *:2 addr;
 	local byte:1 = word:1;
 	export byte;
@@ -1749,12 +1777,12 @@ loc8: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
 }
 
 # Register modes always address the low byte.
-loc8: reg16 is ctx_amode=0 & op4_4=0b1010 & reg16 {
-	local byte:1 = reg16:1;
+loc8: reg16loc is ctx_amode=0 & op4_4=0b1010 & reg16loc {
+	local byte:1 = reg16loc:1;
 	export byte;
 }
-loc8: reg16 is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16 {
-	local byte:1 = reg16:1;
+loc8: reg16loc is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16loc {
+	local byte:1 = reg16loc:1;
 	export byte;
 }
 
@@ -1951,7 +1979,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.136
 :addb SP, #imm7 is op7_9=0b111111100 & SP & imm7 {
-	SP = SP + imm7;
+	sp_add(imm7);
 }
 
 # p.137
@@ -2080,7 +2108,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :asp is op0_16=0b0111011000011011 {
 	SPA = 0;
 	if ((SP % 2) == 0) goto inst_next;
-	SP = SP + 1;
+	sp_add(1);
 	SPA = 1;
 }
 
@@ -2560,6 +2588,8 @@ with : ctx_objmode=1 {
 	T = t_st0[16,16];
 	RB_RA = RB_RAS;
 	RB_RAS = 0;
+	# Interrupt entry reserves one alignment word before seven context pairs.
+	sp_sub(1);
 	return [ret_pc];
 }
 
@@ -2621,7 +2651,8 @@ with : ctx_objmode=1 {
 	local tmp:4 = RPC;
 	push32(tmp);
 	RPC = inst_next;
-	call [xarn0];
+	local target:4 = xarn0 & 0x003fffff;
+	call [target];
 }
 
 # p.222
@@ -3562,6 +3593,9 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.318
+:movz arn8, SP is op11_5=0b01011 & arn8 & xarn8 & op4_4=0b1010 & reg16=13 & SP {
+	xarn8 = SP;
+}
 :movz arn8, loc16 is op11_5=0b01011 & arn8 & xarn8 & loc16 {
 	xarn8 = zext(loc16);
 }
@@ -3669,7 +3703,7 @@ movl_store_flags: is op0_8=0b10101001 {
 :nasp is op0_16=0b0111011000010111 {
 	if (SPA == 0) goto inst_next;
 	SPA = 0;
-	SP = SP - 1;
+	sp_sub(1);
 }
 
 # p.334
@@ -4472,7 +4506,7 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.421
 :subb SP, #imm7 is op7_9=0b111111101 & SP & imm7 {
-	SP = SP - imm7;
+	sp_sub(imm7);
 }
 
 # p.422

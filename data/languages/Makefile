@@ -20,6 +20,8 @@ GHIDRA_DECOMP_DIR := ghidra-decomp
 GHIDRA_SWITCH_DIR := ghidra-switch-test
 GHIDRA_ZOO_DIR := ghidra-zoo-test
 GHIDRA_PROFILE_DIR := ghidra-profile-test
+GHIDRA_RPC_ABI_DIR := ghidra-rpc-abi-test
+RPC_ABI_BUILD_DIR := rpc-abi-build
 PROFILE_GENERATE_DIR := profile-generate-check
 C2000WARE_F2837XS_SUBSET ?=
 ZOO_BUILD_DIR := compiler-zoo-build
@@ -224,6 +226,13 @@ qasm:
 # Compile a C sample with cl2000, import it into Ghidra, and decompile selected functions.
 # DECOMPILE_FUNCTIONS is a space-separated list; Decompile.java uses its ABI defaults when empty.
 # Set an isolated environment to avoid using any user Ghidra settings.
+.PHONY: rpc-abi-test
+rpc-abi-test: tms320c28.sla rpc_abi_test.py RpcAbiTest.java rpc_abi_test.c \
+		rpc_abi_test.cmd rpc_flow_validation.asm rpc_flow_validation.cmd
+	$(Q)$(PYTHON) rpc_abi_test.py --root $$PWD --cl2000 "$(AS)" \
+		--dis2000 "$(DIS)" --ghidra-headless "$(GHIDRA_HEADLESS)" \
+		--build $$PWD/$(RPC_ABI_BUILD_DIR) --work $$PWD/$(GHIDRA_RPC_ABI_DIR)
+
 .PHONY: decompile
 decompile: tms320c28.sla $(DECOMPILE_OBJECT) Decompile.java
 	@mkdir -p $(GHIDRA_DECOMP_DIR)/home $(GHIDRA_DECOMP_DIR)/config $(GHIDRA_DECOMP_DIR)/project $(GHIDRA_DECOMP_DIR)/tmp $(GHIDRA_DECOMP_DIR)/cache $(GHIDRA_DECOMP_DIR)/scripts
@@ -378,7 +387,7 @@ zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 .PHONY: clean
 clean:
 	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR) $(GHIDRA_ZOO_DIR)
-	@rm -rf $(GHIDRA_PROFILE_DIR) $(PROFILE_GENERATE_DIR)
+	@rm -rf $(GHIDRA_PROFILE_DIR) $(GHIDRA_RPC_ABI_DIR) $(RPC_ABI_BUILD_DIR) $(PROFILE_GENERATE_DIR)
 	@rm -rf $(ZOO_BUILD_DIR)
 	@rm -rf $(ANALYZER_BUILD_DIR)
 	@rm -f $(ANALYZER_JAR)
