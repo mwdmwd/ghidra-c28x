@@ -1648,8 +1648,17 @@ def check_amode1_arp_postincrement32(ops: list) -> None:
     _check_amode1_arp_postincrement(ops, delta=2, width=4)
 
 
+def _no_nonstandard_arithmetic_widths(ops: list) -> None:
+    assert not any(
+        (op.output is not None and op.output.size in (3, 5))
+        or any(value.size in (3, 5) for value in op.inputs)
+        for op in ops
+    ), "targeted arithmetic must use only ordinary-width or one-bit varnodes"
+
+
 def check_signed_acc_status(ops: list) -> None:
     _no_internal_cfg(ops)
+    _no_nonstandard_arithmetic_widths(ops)
     _find(
         ops,
         lambda op: op.opcode == OpCode.BOOL_OR and _reg(op.output) == "V",
@@ -1676,18 +1685,31 @@ def check_signed_carry_acc_status(ops: list) -> None:
     carry_extend = _find(
         ops,
         lambda op: op.opcode == OpCode.INT_ZEXT
-        and op.output.size == 5
+        and op.output.size == 4
         and op.inputs
         and _reg(op.inputs[0]) == "C",
-        "five-byte carry-in extension",
+        "ordinary-width carry-in extension",
     )
-    _find(
+    carries = [op for op in ops if op.opcode == OpCode.INT_CARRY]
+    signed_overflows = [op for op in ops if op.opcode == OpCode.INT_SCARRY]
+    assert len(carries) == 2, "carry-in addition must combine both stage carries"
+    assert len(signed_overflows) == 2, "carry-in addition must combine both stage overflows"
+    c_write = _find(ops, lambda op: _reg(op.output) == "C", "eventual carry write")
+    assert c_write.opcode == OpCode.BOOL_OR
+    assert {_key(value) for value in c_write.inputs} == {_key(op.output) for op in carries}
+    overflow = _find(
         ops,
-        lambda op: op.opcode == OpCode.INT_ADD
-        and op.output.size == 5
-        and _key(carry_extend.output) in {_key(value) for value in op.inputs},
-        "carry-in contribution to the full-width sum",
+        lambda op: op.opcode == OpCode.INT_NOTEQUAL
+        and {_key(value) for value in op.inputs} == {_key(op.output) for op in signed_overflows},
+        "XOR-equivalent eventual signed overflow",
     )
+    assert any(
+        op.opcode == OpCode.INT_ADD
+        and op.output.size == 4
+        and _key(carry_extend.output) in {_key(value) for value in op.inputs}
+        for op in ops
+    ), "carry-in must participate in the wrapped 32-bit result"
+    assert _key(_find(ops, lambda op: _reg(op.output) == "V", "sticky V").inputs[1]) == _key(overflow.output)
 
 
 def check_addcl_status(ops: list) -> None:
@@ -1748,18 +1770,37 @@ def check_signed_borrow_acc_status(ops: list) -> None:
     borrow_extend = _find(
         ops,
         lambda op: op.opcode == OpCode.INT_ZEXT
-        and op.output.size == 5
+        and op.output.size == 4
         and op.inputs
         and _key(op.inputs[0]) == _key(borrow.output),
-        "five-byte borrow extension",
+        "ordinary-width borrow extension",
     )
-    _find(
+    borrows = [op for op in ops if op.opcode == OpCode.INT_LESS]
+    signed_overflows = [op for op in ops if op.opcode == OpCode.INT_SBORROW]
+    assert len(borrows) == 2, "borrow-in subtraction must combine both stage borrows"
+    assert len(signed_overflows) == 2, "borrow-in subtraction must combine both stage overflows"
+    c_write = _find(ops, lambda op: _reg(op.output) == "C", "eventual no-borrow write")
+    assert c_write.opcode == OpCode.BOOL_NEGATE
+    borrow_or = _find(
         ops,
-        lambda op: op.opcode == OpCode.INT_SUB
-        and op.output.size == 5
-        and _key(borrow_extend.output) in {_key(value) for value in op.inputs},
-        "borrow contribution to the full-width difference",
+        lambda op: op.opcode == OpCode.BOOL_OR
+        and {_key(value) for value in op.inputs} == {_key(op.output) for op in borrows},
+        "combined unsigned borrow",
     )
+    assert _key(c_write.inputs[0]) == _key(borrow_or.output)
+    overflow = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_NOTEQUAL
+        and {_key(value) for value in op.inputs} == {_key(op.output) for op in signed_overflows},
+        "XOR-equivalent eventual signed overflow",
+    )
+    assert any(
+        op.opcode == OpCode.INT_SUB
+        and op.output.size == 4
+        and _key(borrow_extend.output) in {_key(value) for value in op.inputs}
+        for op in ops
+    ), "borrow-in must participate in the wrapped 32-bit result"
+    assert _key(_find(ops, lambda op: _reg(op.output) == "V", "sticky V").inputs[1]) == _key(overflow.output)
 
 
 def check_subbl_status(ops: list) -> None:
@@ -1810,6 +1851,7 @@ def check_sbbu_status(ops: list) -> None:
 
 def _check_unsigned_ovcu(ops: list, destination: str) -> None:
     _no_internal_cfg(ops)
+    _no_nonstandard_arithmetic_widths(ops)
     _find(ops, lambda op: _reg(op.output) == destination, f"{destination} result write")
     _find(ops, lambda op: _reg(op.output) == "C", "carry/no-borrow write")
     _find(
@@ -1828,6 +1870,103 @@ def _check_unsigned_ovcu(ops: list, destination: str) -> None:
     ), "OVM must not suppress unsigned OVCU carry/borrow accounting"
     _find(ops, lambda op: _reg(op.output) == "N", "negative flag update")
     _find(ops, lambda op: _reg(op.output) == "Z", "zero flag update")
+
+
+def check_add_standard_width(ops: list) -> None:
+    check_signed_acc_status(ops)
+    for initial, expected, description in (
+        ({"ACC": 1, "AR6": 0xFFFF, "SXM": 1, "V": 0, "OVC": 0, "OVM": 0},
+         {"ACC": 0, "C": 1, "V": 0, "OVC": 0, "N": 0, "Z": 1},
+         "ADD sign-extends the 16-bit source under SXM"),
+        ({"ACC": 1, "AR6": 0xFFFF, "SXM": 0, "V": 0, "OVC": 0, "OVM": 0},
+         {"ACC": 0x10000, "C": 0, "V": 0, "OVC": 0, "N": 0, "Z": 0},
+         "ADD zero-extends the 16-bit source when SXM is clear"),
+    ):
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_sub_standard_width(ops: list) -> None:
+    check_signed_acc_status(ops)
+    for initial, expected, description in (
+        ({"ACC": 0, "AR6": 0xFFFF, "SXM": 1, "V": 0, "OVC": 0, "OVM": 0},
+         {"ACC": 1, "C": 0, "V": 0, "OVC": 0, "N": 0, "Z": 0},
+         "SUB sign-extends the 16-bit source under SXM"),
+        ({"ACC": 0, "AR6": 0xFFFF, "SXM": 0, "V": 0, "OVC": 0, "OVM": 0},
+         {"ACC": 0xFFFF0001, "C": 0, "V": 0, "OVC": 0, "N": 1, "Z": 0},
+         "SUB zero-extends the 16-bit source when SXM is clear"),
+    ):
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_addl_standard_width(ops: list) -> None:
+    check_signed_acc_status(ops)
+    for initial, expected, description in (
+        ({"ACC": 0xFFFFFFFF, "XAR6": 1, "C": 0, "V": 0, "OVC": 0, "OVM": 0},
+         {"ACC": 0, "C": 1, "V": 0, "OVC": 0, "N": 0, "Z": 1}, "ADDL carry and equality boundary"),
+        ({"ACC": 0x7FFFFFFF, "XAR6": 1, "C": 0, "V": 0, "OVC": 0, "OVM": 0},
+         {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0}, "ADDL positive overflow"),
+    ):
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_addl_alias_safe(ops: list) -> None:
+    check_signed_acc_status(ops)
+    _assert_execution(
+        ops,
+        {"ACC": 0x40000000, "V": 0, "OVC": 0, "OVM": 0},
+        {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+        "ADDL snapshots an aliased ACC source before writeback",
+    )
+
+
+def check_addcl_alias_safe(ops: list) -> None:
+    check_signed_carry_acc_status(ops)
+    _assert_execution(
+        ops,
+        {"ACC": 0x7FFFFFFF, "C": 1, "V": 0, "OVC": 0, "OVM": 0},
+        {"ACC": 0xFFFFFFFF, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+        "ADDCL snapshots aliased ACC and includes incoming carry",
+    )
+
+
+def check_subbl_alias_safe(ops: list) -> None:
+    check_signed_borrow_acc_status(ops)
+    _assert_execution(
+        ops,
+        {"ACC": 0x12345678, "C": 0, "V": 0, "OVC": 0, "OVM": 0},
+        {"ACC": 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0, "N": 1, "Z": 0},
+        "SUBBL snapshots aliased ACC before subtracting inverse carry",
+    )
+
+
+def check_addb_standard_width(ops: list) -> None:
+    check_signed_acc_status(ops)
+    _assert_execution(
+        ops,
+        {"ACC": 0x7FFFFFFF, "V": 0, "OVC": 0, "OVM": 1},
+        {"ACC": 0x7FFFFFFF, "C": 0, "V": 1, "OVC": 0, "N": 0, "Z": 0},
+        "ADDB OVM saturation",
+    )
+
+
+def check_subb_standard_width(ops: list) -> None:
+    check_signed_acc_status(ops)
+    _assert_execution(
+        ops,
+        {"ACC": 0, "V": 0, "OVC": 0, "OVM": 0},
+        {"ACC": 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0, "N": 1, "Z": 0},
+        "SUBB borrow boundary",
+    )
+
+
+def check_addu_standard_width(ops: list) -> None:
+    check_signed_acc_status(ops)
+    _assert_execution(
+        ops,
+        {"ACC": 0x7FFFFFFF, "AR6": 1, "V": 0, "OVC": 0, "OVM": 0},
+        {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+        "ADDU zero-extension and signed overflow",
+    )
 
 
 def check_addul_acc(ops: list) -> None:
@@ -2031,60 +2170,98 @@ def _check_subul_execution(ops: list, destination: str) -> None:
         _assert_execution(ops, initial, expected, description)
 
 
-def check_cmpl_infinite_precision(ops: list) -> None:
-    acc_extend = _find(
-        ops,
-        lambda op: op.opcode == OpCode.INT_SEXT
-        and op.output.size == 5
-        and op.inputs
-        and _reg(op.inputs[0]) == "ACC",
-        "CMPL five-byte ACC sign extension",
-    )
-    operand_extend = _find(
-        ops,
-        lambda op: op.opcode == OpCode.INT_SEXT
-        and op.output.size == 5
-        and op.inputs
-        and _depends_on_register(ops, op.inputs[0], "XAR6"),
-        "CMPL five-byte operand sign extension",
-    )
-    difference = _find(
-        ops,
-        lambda op: op.opcode == OpCode.INT_SUB
-        and op.output.size == 5
-        and {_key(value) for value in op.inputs}
-        == {_key(acc_extend.output), _key(operand_extend.output)},
-        "CMPL infinite-precision difference",
-    )
-    n_write = _find(ops, lambda op: _reg(op.output) == "N", "CMPL N update")
-    assert _key(difference.output) in {_key(value) for value in n_write.inputs}
-    _find(
-        ops,
-        lambda op: op.opcode == OpCode.INT_LESSEQUAL
-        and any(_depends_on_register(ops, value, "ACC") for value in op.inputs)
-        and any(_depends_on_register(ops, value, "XAR6") for value in op.inputs),
-        "CMPL unsigned no-borrow comparison",
-    )
-    assert not any(_reg(op.output) == "V" for op in ops), "CMPL must leave sticky V unchanged"
-    vectors = (
-        (
-            {"ACC": 0x80000000, "XAR6": 1},
-            {"N": 1, "Z": 0, "C": 1},
-            "CMPL infinite-precision signed negative with unsigned no-borrow",
-        ),
-        (
-            {"ACC": 0, "XAR6": 0xFFFFFFFF},
-            {"N": 0, "Z": 0, "C": 0},
-            "CMPL signed positive result with unsigned borrow",
-        ),
-        (
-            {"ACC": 0x12345678, "XAR6": 0x12345678},
-            {"N": 0, "Z": 1, "C": 1},
-            "CMPL equality",
-        ),
-    )
+def _check_standard_compare(
+    ops: list,
+    left_register: str,
+    right_register: str | None,
+    vectors: tuple,
+) -> None:
+    _no_internal_cfg(ops)
+    _no_nonstandard_arithmetic_widths(ops)
+    n_write = _find(ops, lambda op: _reg(op.output) == "N", "infinite-precision N update")
+    z_write = _find(ops, lambda op: _reg(op.output) == "Z", "compare equality update")
+    c_write = _find(ops, lambda op: _reg(op.output) == "C", "unsigned no-borrow update")
+    assert n_write.opcode == OpCode.INT_SLESS
+    assert z_write.opcode == OpCode.INT_EQUAL
+    assert c_write.opcode == OpCode.INT_LESSEQUAL
+    assert _depends_on_register(ops, n_write.inputs[0], left_register)
+    assert _depends_on_register(ops, z_write.inputs[0], left_register)
+    assert _depends_on_register(ops, c_write.inputs[1], left_register)
+    if right_register is not None:
+        assert _depends_on_register(ops, n_write.inputs[1], right_register)
+        assert _depends_on_register(ops, z_write.inputs[1], right_register)
+        assert _depends_on_register(ops, c_write.inputs[0], right_register)
+    assert not any(_reg(op.output) == "V" for op in ops), "compare must leave sticky V unchanged"
     for initial, expected, description in vectors:
         _assert_execution(ops, initial, expected, description)
+
+
+def check_cmp_infinite_precision(ops: list) -> None:
+    _check_standard_compare(
+        ops,
+        "AL",
+        "AR6",
+        (
+            ({"AL": 0x8000, "AR6": 1}, {"N": 1, "Z": 0, "C": 1},
+             "CMP signed-negative result can still be unsigned no-borrow"),
+            ({"AL": 0, "AR6": 0xFFFF}, {"N": 0, "Z": 0, "C": 0},
+             "CMP signed-positive result can still borrow unsigned"),
+            ({"AL": 0x1234, "AR6": 0x1234}, {"N": 0, "Z": 1, "C": 1},
+             "CMP equality"),
+            ({"AL": 0x7FFF, "AR6": 0x8000}, {"N": 0, "Z": 0, "C": 0},
+             "CMP signed high boundary differs from unsigned ordering"),
+        ),
+    )
+
+
+def check_cmp_immediate_infinite_precision(ops: list) -> None:
+    _check_standard_compare(
+        ops,
+        "AR6",
+        None,
+        (
+            ({"AR6": 0xFFFF}, {"N": 1, "Z": 0, "C": 1},
+             "CMP immediate signed-negative left with unsigned no-borrow"),
+            ({"AR6": 0}, {"N": 1, "Z": 0, "C": 0},
+             "CMP immediate ordinary borrow"),
+            ({"AR6": 1}, {"N": 0, "Z": 1, "C": 1}, "CMP immediate equality"),
+            ({"AR6": 0x7FFF}, {"N": 0, "Z": 0, "C": 1},
+             "CMP immediate signed high boundary"),
+        ),
+    )
+
+
+def check_cmpb_infinite_precision(ops: list) -> None:
+    _check_standard_compare(
+        ops,
+        "AL",
+        None,
+        (
+            ({"AL": 0x00FF}, {"N": 0, "Z": 1, "C": 1}, "CMPB equality"),
+            ({"AL": 0}, {"N": 1, "Z": 0, "C": 0}, "CMPB unsigned low boundary"),
+            ({"AL": 0x8000}, {"N": 1, "Z": 0, "C": 1},
+             "CMPB signed-negative AL still has unsigned no-borrow"),
+            ({"AL": 0x7FFF}, {"N": 0, "Z": 0, "C": 1}, "CMPB signed high boundary"),
+        ),
+    )
+
+
+def check_cmpl_infinite_precision(ops: list) -> None:
+    _check_standard_compare(
+        ops,
+        "ACC",
+        "XAR6",
+        (
+            ({"ACC": 0x80000000, "XAR6": 1}, {"N": 1, "Z": 0, "C": 1},
+             "CMPL infinite-precision signed negative with unsigned no-borrow"),
+            ({"ACC": 0, "XAR6": 0xFFFFFFFF}, {"N": 0, "Z": 0, "C": 0},
+             "CMPL signed positive result with unsigned borrow"),
+            ({"ACC": 0x12345678, "XAR6": 0x12345678}, {"N": 0, "Z": 1, "C": 1},
+             "CMPL equality"),
+            ({"ACC": 0x7FFFFFFF, "XAR6": 0x80000000}, {"N": 0, "Z": 0, "C": 0},
+             "CMPL signed high boundary differs from unsigned ordering"),
+        ),
+    )
 
 
 def check_cmpl_signed_branch(ops: list) -> None:
@@ -2622,9 +2799,18 @@ CASES = (
         check_xar_predecrement32,
     ),
     Case("SUBL models V, signed OVC, and OVM branch-free", (0x11AC,), check_signed_acc_status),
+    Case("ADD uses ordinary widths and preserves SXM", (0x81A6,), check_add_standard_width),
+    Case("SUB uses ordinary widths and preserves SXM", (0xAEA6,), check_sub_standard_width),
+    Case("ADDL uses ordinary widths with exact signed status", (0x07A6,), check_addl_standard_width),
+    Case("ADDL snapshots an aliased ACC source", (0x07A9,), check_addl_alias_safe),
+    Case("ADDB uses ordinary widths with OVM saturation", (0x0901,), check_addb_standard_width),
+    Case("SUBB uses ordinary widths with exact no-borrow", (0x1901,), check_subb_standard_width),
+    Case("ADDU uses ordinary widths with zero-extended source", (0x0DA6,), check_addu_standard_width),
     Case("ADDCL includes carry in signed status", (0x5640, 0x00A6), check_addcl_status),
+    Case("ADDCL snapshots an aliased ACC source", (0x5640, 0x00A9), check_addcl_alias_safe),
     Case("ADDCU includes carry in signed status", (0x0CAC,), check_addcu_status),
     Case("SUBBL preserves full-width inverse borrow", (0x5654, 0x00A6), check_subbl_status),
+    Case("SUBBL snapshots an aliased ACC source", (0x5654, 0x00A9), check_subbl_alias_safe),
     Case("SBBU preserves full-width inverse borrow", (0x1DAC,), check_sbbu_status),
     Case("ADDUL ACC counts unsigned carry in OVCU", (0x5653, 0x00A6), check_addul_acc),
     Case("ADDUL P counts unsigned carry in OVCU", (0x5657, 0x00A6), check_addul_p),
@@ -2632,6 +2818,9 @@ CASES = (
     Case("SUBUL P counts unsigned borrow in OVCU", (0x565D, 0x00A6), check_subul_p),
     Case("SUBCU models the unsigned 33-bit no-borrow step without uint5", (0x1FA6,), check_subcu),
     Case("SUBCUL models the unsigned 33-bit no-borrow step without uint5", (0x5617, 0x00A6), check_subcul),
+    Case("CMP uses signed ordering for infinite-precision N", (0x54A6,), check_cmp_infinite_precision),
+    Case("CMP immediate uses signed ordering and unsigned no-borrow", (0x1BA6, 0x0001), check_cmp_immediate_infinite_precision),
+    Case("CMPB uses signed ordering and unsigned no-borrow", (0x52FF,), check_cmpb_infinite_precision),
     Case("CMPL uses infinite-precision N and unsigned C", (0x0FA6,), check_cmpl_infinite_precision),
     Case(
         "compiler signed CMPL/SB LT sequence branches from N",

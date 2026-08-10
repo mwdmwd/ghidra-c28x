@@ -383,46 +383,50 @@ macro commit_acc_signed(wrapped, old, overflow) {
 
 macro acc_add32(value) {
 	local old:4 = ACC;
-	local wide:5 = zext(old) + zext(value);
-	local wrapped:4 = wide[0,32];
-	C = wide[32,1];
-	local overflow:1 = (((old ^ wrapped) & (value ^ wrapped) & 0x80000000) != 0);
+	local wrapped:4 = old + value;
+	local overflow:1 = scarry(old, value);
+	C = carry(old, value);
 	commit_acc_signed(wrapped, old, overflow);
 }
 
 macro acc_sub32(value) {
 	local old:4 = ACC;
-	local wide:5 = zext(old) - zext(value);
-	local wrapped:4 = wide[0,32];
-	C = (wide[32,1] == 0);
-	local overflow:1 = (((old ^ value) & (old ^ wrapped) & 0x80000000) != 0);
+	local wrapped:4 = old - value;
+	local overflow:1 = sborrow(old, value);
+	C = old >= value;
 	commit_acc_signed(wrapped, old, overflow);
 }
 
-# Carry/borrow-chain variants use full-width arithmetic for both the unsigned
-# carry/no-borrow result and the signed overflow decision.  Keeping the
-# incoming C contribution five bytes wide avoids losing a second carry or
-# borrow when the 32-bit intermediate itself wraps.
+# Carry/borrow chains are decomposed into two ordinary-width operations.  The
+# unsigned carry/borrow is the OR of the two stages.  A signed overflow in both
+# stages cancels (for example INT_MIN - 1 + 1), so the eventual infinite-
+# precision overflow predicate is the XOR of the stage predicates.
 macro acc_add_carry32(value) {
 	local old:4 = ACC;
-	local carry_wide:5 = zext(C);
-	local unsigned_wide:5 = zext(old) + zext(value) + carry_wide;
-	local signed_wide:5 = sext(old) + sext(value) + carry_wide;
-	local wrapped:4 = unsigned_wide[0,32];
-	local overflow:1 = (signed_wide != sext(wrapped));
-	C = unsigned_wide[32,1];
+	local incoming:4 = zext(C);
+	local partial:4 = old + value;
+	local first_carry:1 = carry(old, value);
+	local second_carry:1 = carry(partial, incoming);
+	local first_overflow:1 = scarry(old, value);
+	local second_overflow:1 = scarry(partial, incoming);
+	local wrapped:4 = partial + incoming;
+	local overflow:1 = first_overflow != second_overflow;
+	C = first_carry || second_carry;
 	commit_acc_signed(wrapped, old, overflow);
 }
 
 macro acc_sub_borrow32(value) {
 	local old:4 = ACC;
 	local borrow:1 = (C == 0);
-	local borrow_wide:5 = zext(borrow);
-	local unsigned_wide:5 = zext(old) - zext(value) - borrow_wide;
-	local signed_wide:5 = sext(old) - sext(value) - borrow_wide;
-	local wrapped:4 = unsigned_wide[0,32];
-	local overflow:1 = (signed_wide != sext(wrapped));
-	C = (unsigned_wide[32,1] == 0);
+	local borrow_value:4 = zext(borrow);
+	local partial:4 = old - value;
+	local first_borrow:1 = old < value;
+	local second_borrow:1 = partial < borrow_value;
+	local first_overflow:1 = sborrow(old, value);
+	local second_overflow:1 = sborrow(partial, borrow_value);
+	local wrapped:4 = partial - borrow_value;
+	local overflow:1 = first_overflow != second_overflow;
+	C = !(first_borrow || second_borrow);
 	commit_acc_signed(wrapped, old, overflow);
 }
 
@@ -448,27 +452,23 @@ macro ovcu_decrement(event) {
 
 macro add_unsigned32(destination, value) {
 	local old:4 = destination;
-	local unsigned_wide:5 = zext(old) + zext(value);
-	local signed_wide:5 = sext(old) + sext(value);
-	local wrapped:4 = unsigned_wide[0,32];
-	local carry:1 = unsigned_wide[32,1];
-	local overflow:1 = (signed_wide != sext(wrapped));
+	local wrapped:4 = old + value;
+	local carry_out:1 = carry(old, value);
+	local overflow:1 = scarry(old, value);
 	destination = wrapped;
-	C = carry;
+	C = carry_out;
 	V = V || overflow;
-	ovcu_increment(carry);
+	ovcu_increment(carry_out);
 	flagnz(destination);
 }
 
 macro sub_unsigned32(destination, value) {
 	local old:4 = destination;
-	local unsigned_wide:5 = zext(old) - zext(value);
-	local signed_wide:5 = sext(old) - sext(value);
-	local wrapped:4 = unsigned_wide[0,32];
-	local borrow:1 = (unsigned_wide[32,1] != 0);
-	local overflow:1 = (signed_wide != sext(wrapped));
+	local wrapped:4 = old - value;
+	local borrow:1 = old < value;
+	local overflow:1 = sborrow(old, value);
 	destination = wrapped;
-	C = (borrow == 0);
+	C = !borrow;
 	V = V || overflow;
 	ovcu_decrement(borrow);
 	flagnz(destination);
@@ -2266,20 +2266,23 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	VMAP  = VMAP  && (bimm8[7,1] == 0);
 }
 
-# p.177
+# p.177.  CMP determines the sign as though the subtraction had infinite
+# precision.  That sign is exactly the signed ordering predicate, while C is
+# the independent unsigned no-borrow predicate.
 :cmp ax8, loc16 is op9_7=0b0101010 & ax8 & loc16 {
 	local loc:2 = loc16;
-	local tmp:3 = sext(ax8) - sext(loc);
-	flagnz(tmp);
+	N = ax8 s< loc;
+	Z = ax8 == loc;
 	C = ax8 >= loc;
 }
 
 # p.178
 :cmp loc16, #simm16 is op8_8=0b00011011 & loc16; simm16 {
 	local loc:2 = loc16;
-	local tmp:3 = zext(loc) - simm16;
-	flagnz(tmp);
-	C = loc >= simm16:2;
+	local immediate:2 = simm16:2;
+	N = loc s< immediate;
+	Z = loc == immediate;
+	C = loc >= immediate;
 }
 
 # p.179
@@ -2293,16 +2296,17 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.180
 :cmpb ax8, #imm8 is op9_7=0b0101001 & ax8 & imm8 {
-	local tmp:3 = zext(ax8) - imm8; # 3 bytes so it behaves like infinite precision in all cases
-	flagnz(tmp);
-	C = ax8 >= zext(imm8:1);
+	local immediate:2 = zext(imm8:1);
+	N = ax8 s< immediate;
+	Z = ax8 == immediate;
+	C = ax8 >= immediate;
 }
 
 # p.181
 :cmpl ACC, loc32 is op8_8=0b00001111 & ACC & loc32 {
 	local loc:4 = loc32;
-	local tmp:5 = sext(ACC) - sext(loc);
-	flagnz(tmp);
+	N = ACC s< loc;
+	Z = ACC == loc;
 	C = ACC >= loc;
 }
 
@@ -2310,8 +2314,8 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 :cmpl ACC, P << PM is op0_16=0b1111111101011001 & ACC & P & PM {
 	local shifted:4;
 	pmshift(shifted, P);
-	local tmp:5 = sext(ACC) - sext(shifted);
-	flagnz(tmp);
+	N = ACC s< shifted;
+	Z = ACC == shifted;
 	C = ACC >= shifted;
 }
 
@@ -2375,16 +2379,8 @@ with : ctx_objmode=1 {
 	local sh_lo:4;
 	pmshift(sh_hi, prod_hi);
 	pmshift(sh_lo, prod_lo);
-	local old:4 = ACC;
-	local wide_acc:5 = zext(old) + zext(sh_hi);
-	ACC = wide_acc[0,32];
-	C = wide_acc[32,1];
-	if (((old ^ ACC) & (sh_hi ^ ACC) & 0x80000000) == 0) goto <padd>;
-	V = 1;
-	# TODO: OVC and OVM saturation for ACC.
-<padd>
+	acc_add32(sh_hi);
 	P = P + sh_lo;
-	flagnz(ACC);
 }
 
 # p.187
@@ -2397,17 +2393,9 @@ with : ctx_objmode=1 {
 	local sh_lo:4;
 	pmshift(sh_hi, prod_hi);
 	pmshift(sh_lo, prod_lo);
-	local old:4 = ACC;
-	local wide_acc:5 = zext(old) + zext(sh_hi);
-	ACC = wide_acc[0,32];
-	C = wide_acc[32,1];
-	if (((old ^ ACC) & (sh_hi ^ ACC) & 0x80000000) == 0) goto <padd>;
-	V = 1;
-	# TODO: OVC and OVM saturation for ACC.
-<padd>
+	acc_add32(sh_hi);
 	P = P + sh_lo;
 	XAR7 = XAR7 + 2;
-	flagnz(ACC);
 }
 
 # p.189
@@ -2485,17 +2473,13 @@ with : ctx_objmode=1 {
 
 # p.201
 :impyal P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001001100; op8_8=0b00000000 & P & XT & loc32 {
-	local old:4 = ACC;
-	local wide:5 = zext(old) + zext(P);
-	ACC = wide[0,32];
-	C = wide[32,1];
-	if (((old ^ ACC) & (P ^ ACC) & 0x80000000) == 0) goto <mul>;
-	V = 1;
-	# TODO: OVCU.
-<mul>
-	local prod:8 = sext(XT) * sext(loc32);
+	# Snapshot both sources before ACC and P writeback so register-addressed
+	# aliases observe the instruction's original state.
+	local old_p:4 = P;
+	local multiplicand:4 = loc32;
+	add_unsigned32(ACC, old_p);
+	local prod:8 = sext(XT) * sext(multiplicand);
 	store_p_lower38(prod);
-	flagnz(ACC);
 }
 
 # p.203

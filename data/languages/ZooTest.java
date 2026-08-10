@@ -30,6 +30,10 @@ public class ZooTest extends GhidraScript {
         }
     }
 
+    private static boolean containsTypeToken(String text, String typeName) {
+        return text.matches("(?s).*\\b" + typeName + "\\b.*");
+    }
+
     @Override
     public void run() throws Exception {
         String name = currentProgram.getName().toLowerCase(Locale.ROOT);
@@ -456,6 +460,8 @@ public class ZooTest extends GhidraScript {
         requireNoIndirectJumpWarning(c);
         require(!c.contains("in_Z"),
             "decompiler consumed stale incoming Z after MOVL-to-ACC\n" + c);
+        require(!containsTypeToken(c, "int5") && !containsTypeToken(c, "uint3"),
+            "common compare arithmetic exposed a nonstandard-width type\n" + c);
         require(c.contains("param_1 == 0") && c.contains("0x55aa"),
             "null check or reverse-loop sentinel was lost\n" + c);
         require(c.contains("while") || c.contains("for ("),
@@ -472,6 +478,8 @@ public class ZooTest extends GhidraScript {
 
         String c = decompile(function);
         requireNoIndirectJumpWarning(c);
+        require(!containsTypeToken(c, "int5") && !containsTypeToken(c, "uint3"),
+            "common carry/borrow arithmetic exposed a nonstandard-width type\n" + c);
         require(c.contains(">> 1") && c.contains("0xff") &&
                 c.contains("0x100000000"),
             "byte-index scaling/masking or 64-bit carry boundary was lost\n" + c);
