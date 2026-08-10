@@ -2,6 +2,7 @@
 """Build and audit focused TI EABI RPC call/return fixtures."""
 from __future__ import annotations
 import argparse, os, shutil, subprocess, sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 COMMON=("--float_support=fpu32","--abi=eabi")
 
@@ -13,6 +14,24 @@ def run(cmd:list[str],cwd:Path,out:Path|None=None)->None:
     if p.returncode:
         if out and out.exists(): sys.stderr.write(out.read_text(errors="replace"))
         raise RuntimeError(f"command failed ({p.returncode}): {' '.join(cmd)}")
+
+def check_cspec(root: Path) -> None:
+    tree = ET.parse(root / "tms320c28.cspec")
+    protos = list(tree.findall("./default_proto/prototype")) + list(tree.findall("./prototype"))
+    by_name = {proto.get("name"): proto for proto in protos}
+    for name in ("__stdcall", "__lc", "__ffc"):
+        proto = by_name.get(name)
+        if proto is None:
+            raise RuntimeError(f"missing compiler prototype {name}")
+        registers = [node.get("name") for node in proto.findall("./input/pentry/register")]
+        for register in ("XAR4", "XAR5"):
+            if registers.count(register) != 2:
+                raise RuntimeError(
+                    f"{name} must expose {register} once as a pointer pool and once "
+                    f"as a general fallback, got {registers.count(register)}"
+                )
+    print("RPC_ABI_GENERAL_REGISTER_FALLBACKS=PASS")
+
 
 def build(root:Path,out:Path,cc:Path,dis:Path)->list[Path]:
     shutil.rmtree(out,ignore_errors=True); out.mkdir(parents=True)
@@ -52,7 +71,7 @@ def headless(root:Path,work:Path,ghidra:Path,subject:Path,index:int)->str:
 
 def main()->int:
     ap=argparse.ArgumentParser(); ap.add_argument('--root',type=Path,required=True); ap.add_argument('--cl2000',type=Path,required=True); ap.add_argument('--dis2000',type=Path,required=True); ap.add_argument('--ghidra-headless',type=Path,required=True); ap.add_argument('--build',type=Path,required=True); ap.add_argument('--work',type=Path,required=True); a=ap.parse_args()
-    root=a.root.resolve(); subjects=build(root,a.build.resolve(),a.cl2000.resolve(),a.dis2000.resolve()); shutil.rmtree(a.work.resolve(),ignore_errors=True); a.work.resolve().mkdir(parents=True)
+    root=a.root.resolve(); check_cspec(root); subjects=build(root,a.build.resolve(),a.cl2000.resolve(),a.dis2000.resolve()); shutil.rmtree(a.work.resolve(),ignore_errors=True); a.work.resolve().mkdir(parents=True)
     for i,s in enumerate(subjects,1): print(headless(root,a.work.resolve(),a.ghidra_headless.resolve(),s,i))
     print(f"RPC_ABI_GHIDRA_PROGRAMS={len(subjects)}"); print("RPC_ABI_TEST_PASS=all"); return 0
 if __name__=='__main__': raise SystemExit(main())

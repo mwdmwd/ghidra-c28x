@@ -87,6 +87,17 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="ACC"/>
         </pentry>
 
+        <!-- XAR4/XAR5 are also the next general-purpose argument slots when
+             their type-specific pointer pools were not consumed.  Keeping
+             these fallback entries is required by TI EABI allocation and by
+             Ghidra's parameter-allocation analysis on untyped raw firmware. -->
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR5"/>
+        </pentry>
+
         <!-- Remaining arguments are pushed below the two-word RPC save on
              the positive-growing stack.  This reverse allocation range puts
              the first 32-bit stack argument at architectural *-SP[4]. -->
@@ -200,6 +211,17 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="ACC"/>
         </pentry>
 
+        <!-- XAR4/XAR5 are also the next general-purpose argument slots when
+             their type-specific pointer pools were not consumed.  Keeping
+             these fallback entries is required by TI EABI allocation and by
+             Ghidra's parameter-allocation analysis on untyped raw firmware. -->
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR5"/>
+        </pentry>
+
         <!-- Remaining arguments are pushed below the two-word RPC save on
              the positive-growing stack.  This reverse allocation range puts
              the first 32-bit stack argument at architectural *-SP[4]. -->
@@ -303,6 +325,17 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
               causes the physical-overlap error) -->
         <pentry minsize="1" maxsize="4">
           <register name="ACC"/>
+        </pentry>
+
+        <!-- XAR4/XAR5 are also the next general-purpose argument slots when
+             their type-specific pointer pools were not consumed.  Keeping
+             these fallback entries is required by TI EABI allocation and by
+             Ghidra's parameter-allocation analysis on untyped raw firmware. -->
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR5"/>
         </pentry>
 
         <!-- FFC has no two-word call save.  This reverse allocation range
