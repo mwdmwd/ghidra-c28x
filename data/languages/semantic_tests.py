@@ -2755,6 +2755,11 @@ def _execute_call_state(
             result = args[0] & args[1]
         elif code == OpCode.INT_OR:
             result = args[0] | args[1]
+        elif code == OpCode.INT_EQUAL:
+            result = int(args[0] == args[1])
+        elif code == OpCode.INT_SLESS:
+            result = int(signed(args[0], op.inputs[0].size) <
+                         signed(args[1], op.inputs[1].size))
         elif code == OpCode.SUBPIECE:
             result = args[0] >> (8 * args[1])
         else:
@@ -2770,6 +2775,26 @@ def _memory_value(memory: dict[int, int], word: int, size: int) -> int:
     byte = word * 2
     return sum(memory.get(byte + i, 0) << (8 * i) for i in range(size))
 
+
+
+def check_add_sp_large_frame(ops: list) -> None:
+    assert not any(op.opcode == OpCode.INT_ZEXT for op in ops), \
+        "large ADD SP must not reintroduce a 16-to-32-bit stack ZEXT"
+    adds = [op for op in ops if op.opcode == OpCode.INT_ADD and _reg(op.output) == "SP"]
+    assert len(adds) == 1, "ADD SP must commit one pointer-width delta"
+    assert adds[0].output.size == 4 and all(node.size == 4 for node in adds[0].inputs), \
+        "ADD SP carrier arithmetic must remain four bytes"
+    assert all(node.size not in (3, 5) for op in ops for node in
+               ([op.output] if op.output is not None else []) + list(op.inputs))
+    state, _memory, _flow = _execute_call_state(ops, {"SP": 0x400, "N": 1, "Z": 1})
+    assert state["SP"] == 0x60C and state["SP16"] == 0x60C
+    assert state["N"] == 0 and state["Z"] == 0
+
+
+def check_add_sp_large_negative_frame(ops: list) -> None:
+    state, _memory, _flow = _execute_call_state(ops, {"SP": 0x800, "N": 1, "Z": 1})
+    assert state["SP"] == 0x5F4 and state["SP16"] == 0x5F4
+    assert state["N"] == 0 and state["Z"] == 0
 
 def check_lcr_nested_state(_ops: list) -> None:
     first = _translate_at((0x7641, 0x7010), 0x200)
@@ -3057,6 +3082,8 @@ CASES = (
     Case("XRETC OV snapshots then clears V", (0x56FB,), check_branch_v_clear),
     Case("LB *XAR7 masks its target to 22 code-address bits", (0x7620,), check_lb_xar7_target),
     Case("LC *XAR7 masks its target to 22 code-address bits", (0x7604,), check_lc_xar7_target),
+    Case("ADD SP large positive frame uses pointer-width carrier", (0x08AD, 0x020C), check_add_sp_large_frame),
+    Case("ADD SP large negative frame uses pointer-width carrier", (0x08AD, 0xFDF4), check_add_sp_large_negative_frame),
     Case("LCR direct preserves nested RPC/SP state", (0x7641, 0x7010), check_lcr_nested_state),
     Case("LCR indirect masks its target and saves RPC", (0x3E60,), check_lcr_indirect_state),
     Case("LC direct uses the stack without changing RPC", (0x0081, 0x700F), check_lc_direct_state),

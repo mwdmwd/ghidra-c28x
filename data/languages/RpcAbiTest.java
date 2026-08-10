@@ -96,10 +96,30 @@ public class RpcAbiTest extends GhidraScript {
             "first stack parameter offset must be -4 words, got " + model.getStackParameterOffset());
         Varnode[] ra = model.getReturnAddress();
         require(ra.length == 1 && isRegister(ra[0], "RPC"), "return address must be RPC");
+        PrototypeModel lcModel = currentProgram.getFunctionManager().getCallingConvention("__lc");
+        PrototypeModel ffcModel = currentProgram.getFunctionManager().getCallingConvention("__ffc");
+        require(lcModel != null, "missing __lc prototype");
+        require(ffcModel != null, "missing __ffc prototype");
+        require(lcModel.getStackshift() == 2, "__lc stackshift must be two words");
+        require(Long.valueOf(-4).equals(lcModel.getStackParameterOffset()),
+            "__lc first stack parameter must be -4 words");
+        require(lcModel.getReturnAddress().length == 0,
+            "__lc must not invent an RPC return address");
+        require(ffcModel.getStackshift() == 0, "__ffc must not shift the stack");
+        require(Long.valueOf(-2).equals(ffcModel.getStackParameterOffset()),
+            "__ffc first stack parameter must be -2 words, got " +
+                ffcModel.getStackParameterOffset());
+        Varnode[] ffcRa = ffcModel.getReturnAddress();
+        require(ffcRa.length == 1 && isRegister(ffcRa[0], "XAR7"),
+            "__ffc return address must be XAR7");
         println("RPC_ABI_STACK_REGISTER_BYTES=4");
         println("RPC_ABI_STACK_ADDRESSABLE_UNIT_BYTES=2");
         println("RPC_ABI_STACK_SHIFT_WORDS=2");
         println("RPC_ABI_FIRST_STACK_PARAMETER_WORD_OFFSET=-4");
+        println("RPC_ABI_LC_STACK_SHIFT_WORDS=2");
+        println("RPC_ABI_FFC_STACK_SHIFT_WORDS=0");
+        println("RPC_ABI_FFC_FIRST_STACK_PARAMETER_WORD_OFFSET=-2");
+        println("RPC_ABI_CALL_MECHANISM_MODELS=3");
     }
 
     private void noStackZext(Function function) {
@@ -240,6 +260,7 @@ public class RpcAbiTest extends GhidraScript {
         println("RPC_ABI_INDIRECT_LC=" + lci);
         println("RPC_ABI_DIRECT_LCR=" + lcr);
         println("RPC_ABI_INDIRECT_LCR=" + lcri);
+        println("RPC_ABI_LC_CONVENTION_FUNCTIONS=3");
         println("RPC_ABI_LRET=PASS");
         println("RPC_ABI_LRETR=PASS");
         println("RPC_ABI_LRETE=PASS");

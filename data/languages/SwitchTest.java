@@ -142,6 +142,9 @@ public class SwitchTest extends GhidraScript {
             "positive helper lost one of its two FFC callers");
         Function helper = getFunctionAt(wordAddress(0x16017));
         require(helper != null, "missing positive FFC helper function");
+        require("__ffc".equals(helper.getCallingConventionName()),
+            "positive FFC helper did not select __ffc: " +
+                helper.getCallingConventionName());
         require(helper.getBody().contains(wordAddress(0x16017)) &&
                 helper.getBody().contains(validReturn),
             "positive FFC helper body does not include its terminal return");
@@ -164,6 +167,7 @@ public class SwitchTest extends GhidraScript {
         println("FFC_RETURN_CALLERS=2");
         println("FFC_RETURN_HELPER_INSTRUCTIONS=14");
         println("FFC_RETURN_NEAR_MISS_REJECTED=6");
+        println("FFC_RETURN_CALLING_CONVENTION=__ffc");
     }
 
     private void testAr6ValidationFixture() throws Exception {

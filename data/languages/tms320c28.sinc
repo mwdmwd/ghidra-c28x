@@ -1957,6 +1957,17 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.133
+# The encoded SP operand is 16-bit, but normal TI frames stay within low 64K.
+# Keep the analysis carrier as one ordinary pointer-width delta so large frames
+# remain recognizable to the stack model; SP16 continues to expose the
+# architectural low-word alias to encoded register operations.
+:add SP, #simm16 is op8_8=0b00001000 & op4_4=0b1010 & reg16=13 & SP; simm16 {
+	local delta:4 = sext(simm16:2);
+	sp_add(delta);
+	local r:2 = SP16;
+	flagnz(r);
+}
+
 :add loc16, #simm16 is op8_8=0b00001000 & loc16; simm16 {
 	local r:2 = loc16 + simm16:2;
 	loc16 = r;

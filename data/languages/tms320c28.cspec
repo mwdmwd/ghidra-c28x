@@ -45,14 +45,124 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
     <range space="ram"/>
   </global>
 
-  <returnaddress>
-    <register name="RPC"/>
-  </returnaddress>
 
   <stackpointer register="SP" space="ram" growth="positive"/>
 
   <default_proto>
     <prototype name="__stdcall" extrapop="0" stackshift="2">
+      <input>
+        <!-- Class 3: Hidden return pointer (structure returns) -->
+        <!-- Placed in XAR6 (manual sec 7.3.2) -->
+        <pentry minsize="1" maxsize="4" storage="hiddenret">
+          <register name="XAR6"/>
+        </pentry>
+
+        <!-- Class 2: Pointers -->
+        <!-- Placed in XAR4 and XAR5 (Manual Sec 7.3.1) -->
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- Class 1: 32-bit floats go to R0H-R3H -->
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R1H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R2H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R3H"/>
+        </pentry>
+
+        <!-- Class 0: General: ACC covers both 16-bit and 32-bit integer args
+            (AL/AH are sub-registers of ACC; listing them separately
+              causes the physical-overlap error) -->
+        <pentry minsize="1" maxsize="4">
+          <register name="ACC"/>
+        </pentry>
+
+        <!-- Remaining arguments are pushed below the two-word RPC save on
+             the positive-growing stack.  This reverse allocation range puts
+             the first 32-bit stack argument at architectural *-SP[4]. -->
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr offset="0x1fffffe08" space="stack"/>
+        </pentry>
+      </input>
+
+      <output>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <!-- ACC covers both 32-bit and 16-bit integer returns (subsumes AL) -->
+        <pentry minsize="1" maxsize="4">
+          <register name="ACC"/>
+        </pentry>
+      </output>
+
+      <returnaddress>
+        <register name="RPC"/>
+      </returnaddress>
+
+      <unaffected>
+        <!-- Registers preserved across function calls (Save on Entry conventions) -->
+        <!-- Derived from Manual Table 7-2 & 7-3 -->
+        <register name="XAR1"/>
+        <register name="XAR2"/>
+        <register name="XAR3"/>
+        <register name="R4H"/>
+        <register name="R5H"/>
+        <register name="R6H"/>
+        <register name="R7H"/>
+        <register name="SP"/>
+      </unaffected>
+
+      <killedbycall>
+        <register name="ACC"/>
+        <register name="P"/>
+        <register name="XT"/>
+        <register name="XAR0"/>
+        <register name="XAR4"/>
+        <register name="XAR5"/>
+        <register name="XAR6"/>
+        <register name="XAR7"/>
+        <register name="R0H"/>
+        <register name="R1H"/>
+        <register name="R2H"/>
+        <register name="R3H"/>
+        <register name="STF"/>
+        <register name="DP"/>
+        <register name="IFR"/>
+        <register name="IER"/>
+        <register name="DBGIER"/>
+        <register name="ST0"/>
+        <register name="ST1"/>
+      </killedbycall>
+
+      <!-- LCR/LRETR's callee-visible stack/RPC machinery is already present
+           in raw instruction P-Code.  For caller analysis, model the matching
+           LRETR effects that occur across an ordinary completed call. -->
+      <pcode inject="uponreturn" incidentalcopy="true">
+        <body><![CDATA[
+          SP = SP - 2;
+          RPC = *:4 SP;
+        ]]></body>
+      </pcode>
+    </prototype>
+  </default_proto>
+
+  <!-- LC/LRET and FFC/XAR7 are distinct architectural call mechanisms.
+       Their parameter classes remain TI EABI-compatible, while their return
+       address and completed-call stack effects differ from LCR/LRETR. -->
+  <prototype name="__lc" extrapop="0" stackshift="2">
       <input>
         <!-- Class 3: Hidden return pointer (structure returns) -->
         <!-- Placed in XAR6 (manual sec 7.3.2) -->
@@ -122,6 +232,7 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <register name="R6H"/>
         <register name="R7H"/>
         <register name="SP"/>
+        <register name="RPC"/>
       </unaffected>
 
       <killedbycall>
@@ -145,8 +256,119 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <register name="ST0"/>
         <register name="ST1"/>
       </killedbycall>
+
+      <!-- LC/LRET stores the return PC directly on the positive-growing
+           architectural stack.  Model the callee's matching pop across the
+           completed call without inventing an RPC effect. -->
+      <pcode inject="uponreturn" incidentalcopy="true">
+        <body><![CDATA[
+          SP = SP - 2;
+        ]]></body>
+      </pcode>
     </prototype>
-  </default_proto>
+
+  <prototype name="__ffc" extrapop="0" stackshift="0">
+      <input>
+        <!-- Class 3: Hidden return pointer (structure returns) -->
+        <!-- Placed in XAR6 (manual sec 7.3.2) -->
+        <pentry minsize="1" maxsize="4" storage="hiddenret">
+          <register name="XAR6"/>
+        </pentry>
+
+        <!-- Class 2: Pointers -->
+        <!-- Placed in XAR4 and XAR5 (Manual Sec 7.3.1) -->
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- Class 1: 32-bit floats go to R0H-R3H -->
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R1H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R2H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R3H"/>
+        </pentry>
+
+        <!-- Class 0: General: ACC covers both 16-bit and 32-bit integer args
+            (AL/AH are sub-registers of ACC; listing them separately
+              causes the physical-overlap error) -->
+        <pentry minsize="1" maxsize="4">
+          <register name="ACC"/>
+        </pentry>
+
+        <!-- FFC has no two-word call save.  This reverse allocation range
+             puts the first 32-bit stack argument at architectural *-SP[2]. -->
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr offset="0x1fffffe0a" space="stack"/>
+        </pentry>
+      </input>
+
+      <output>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <!-- ACC covers both 32-bit and 16-bit integer returns (subsumes AL) -->
+        <pentry minsize="1" maxsize="4">
+          <register name="ACC"/>
+        </pentry>
+      </output>
+
+      <returnaddress>
+        <register name="XAR7"/>
+      </returnaddress>
+
+      <unaffected>
+        <!-- Registers preserved across function calls (Save on Entry conventions) -->
+        <!-- Derived from Manual Table 7-2 & 7-3 -->
+        <register name="XAR1"/>
+        <register name="XAR2"/>
+        <register name="XAR3"/>
+        <register name="R4H"/>
+        <register name="R5H"/>
+        <register name="R6H"/>
+        <register name="R7H"/>
+        <register name="SP"/>
+        <register name="RPC"/>
+      </unaffected>
+
+      <killedbycall>
+        <register name="ACC"/>
+        <register name="P"/>
+        <register name="XT"/>
+        <register name="XAR0"/>
+        <register name="XAR4"/>
+        <register name="XAR5"/>
+        <register name="XAR6"/>
+        <register name="R0H"/>
+        <register name="R1H"/>
+        <register name="R2H"/>
+        <register name="R3H"/>
+        <register name="STF"/>
+        <register name="DP"/>
+        <register name="IFR"/>
+        <register name="IER"/>
+        <register name="DBGIER"/>
+        <register name="ST0"/>
+        <register name="ST1"/>
+      </killedbycall>
+
+      <!-- FFC writes the link to XAR7 and the proven helper returns through
+           the same untouched register; it has no architectural stack/RPC
+           save or restore to inject at the completed call. -->
+    </prototype>
+
   <prototype name="interrupt" extrapop="0" stackshift="0">
     <input/>
     <output>

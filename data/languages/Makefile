@@ -227,7 +227,7 @@ qasm:
 # DECOMPILE_FUNCTIONS is a space-separated list; Decompile.java uses its ABI defaults when empty.
 # Set an isolated environment to avoid using any user Ghidra settings.
 .PHONY: rpc-abi-test
-rpc-abi-test: tms320c28.sla rpc_abi_test.py RpcAbiTest.java rpc_abi_test.c \
+rpc-abi-test: tms320c28.sla analyzer rpc_abi_test.py RpcAbiTest.java rpc_abi_test.c \
 		rpc_abi_test.cmd rpc_flow_validation.asm rpc_flow_validation.cmd
 	$(Q)$(PYTHON) rpc_abi_test.py --root $$PWD --cl2000 "$(AS)" \
 		--dis2000 "$(DIS)" --ghidra-headless "$(GHIDRA_HEADLESS)" \
