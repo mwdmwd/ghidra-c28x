@@ -601,11 +601,58 @@ public class ZooTest extends GhidraScript {
         return false;
     }
 
+    private boolean mentionsRegisterOperand(Instruction instruction, String expected) {
+        for (int index = 0; index < instruction.getNumOperands(); index++) {
+            Register register = instruction.getRegister(index);
+            if (register != null && register.getName().equalsIgnoreCase(expected)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Return true when a delay-slot instruction observes or destructively
+     * updates a sticky TMU flag.  SPRUHS1C 7.4.3 explicitly permits FPU/TMU
+     * operations that set LUF/LVF in a delay slot: simultaneous sets are ORed.
+     * The branch-free semantics expose that monotonic read-modify-write as
+     * BOOL_OR(flag,event), which is not an architectural observation.  Any
+     * other use remains outside the eventual-state proof.
+     */
+    private boolean hasUnsafeStickyFlagAccess(Instruction instruction, String flag) {
+        PcodeOp[] pcode = instruction.getPcode();
+        for (PcodeOp op : pcode) {
+            String output = registerName(op.getOutput());
+            boolean writesFlag = output != null && output.equalsIgnoreCase(flag);
+            boolean monotonicOr = writesFlag && op.getOpcode() == PcodeOp.BOOL_OR;
+            boolean readsFlag = false;
+            for (Varnode input : op.getInputs()) {
+                if (dependsOnRegister(pcode, input, flag)) {
+                    readsFlag = true;
+                    if (!monotonicOr) {
+                        return true;
+                    }
+                }
+            }
+            if (writesFlag) {
+                if (monotonicOr && readsFlag) {
+                    continue;
+                }
+                if (op.getOpcode() == PcodeOp.COPY && op.getNumInputs() == 1 &&
+                        op.getInput(0).isConstant() && op.getInput(0).getOffset() != 0) {
+                    continue;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void requireTmuDelaySlotSafe(Instruction producer, int count,
             String destination) {
         Instruction slot = producer;
-        String[] destructiveFlags = {
-            "STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF", "STF_LU", "STF_LV"
+        String[] observedFlags = {
+            "STF_TF", "STF_ZI", "STF_NI", "STF_ZF", "STF_NF"
         };
         for (int index = 0; index < count; index++) {
             slot = currentProgram.getListing().getInstructionAfter(slot.getAddress());
@@ -618,13 +665,20 @@ public class ZooTest extends GhidraScript {
                     !pcodeWritesRegister(slot, destination),
                 producer.getMnemonicString() + " destination is observed/clobbered early by " +
                     slot);
-            for (String flag : destructiveFlags) {
-                // Sticky TMU producers may write LUF/LVF in an overlapping safe
-                // schedule, but no delay-slot instruction may observe any STF
-                // flag.  The eventual-state model deliberately does not claim
-                // cycle-accurate publication for such overlap.
+            String mnemonic = slot.getMnemonicString().toUpperCase();
+            require(!mnemonic.equals("SETFLG") && !mnemonic.equals("SAVE") &&
+                    !mnemonic.equals("RESTORE") && !mnemonic.equals("MOVST0") &&
+                    !(mnemonic.equals("MOV32") && mentionsRegisterOperand(slot, "STF")),
+                producer.getMnemonicString() +
+                    " has a destructive STF operation in delay slot: " + slot);
+            for (String flag : observedFlags) {
                 require(!pcodeReadsRegister(slot, flag),
                     producer.getMnemonicString() + " flag is observed in delay slot by " + slot);
+            }
+            for (String flag : new String[] { "STF_LU", "STF_LV" }) {
+                require(!hasUnsafeStickyFlagAccess(slot, flag),
+                    producer.getMnemonicString() +
+                        " sticky flag is observed/destructively changed in delay slot by " + slot);
             }
         }
     }
@@ -649,7 +703,9 @@ public class ZooTest extends GhidraScript {
 
         // SQRTF32 is 5p and COSPUF32 is 4p.  These checks prove that the
         // compiler's intervening instructions neither observe nor overwrite
-        // the pending destination and do not branch/call/return or read STF.
+        // the pending destination, branch/call/return, destructively touch STF,
+        // or observe a pending flag.  Monotonic LUF/LVF sets are allowed and
+        // OR together architecturally (SPRUHS1C 7.4.3).
         requireTmuDelaySlotSafe(root, 4, rootDestination.getName());
         requireTmuDelaySlotSafe(cosine, 3, cosineDestination.getName());
 
