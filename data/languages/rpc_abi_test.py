@@ -42,7 +42,8 @@ def build(root:Path,out:Path,cc:Path,dis:Path)->list[Path]:
         run([str(cc),*COMMON,"--run_linker","--entry_point=rpc_fixture_entry",f"--output_file={linked}",str(obj),str(root/'rpc_abi_test.cmd')],root)
         listing=out/f"rpc_abi_{opt}.dis.txt"; run([str(dis),str(linked)],root,listing)
         text=listing.read_text(errors="replace")
-        for marker in ("LCR","LRETR","rpc_stack_args","rpc_stack_caller"):
+        for marker in ("LCR","LRETR","rpc_stack_args","rpc_stack_caller",
+                       "rpc_branch_rejoin","rpc_void_a","rpc_void_b","rpc_void_c"):
             if marker not in text: raise RuntimeError(f"{opt} disassembly lost {marker}")
         if "LCR          *XAR" not in text: raise RuntimeError(f"{opt} lost indirect LCR")
         subjects.append(linked)

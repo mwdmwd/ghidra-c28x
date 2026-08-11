@@ -49,7 +49,10 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
   <stackpointer register="SP" space="ram" growth="positive"/>
 
   <default_proto>
-    <prototype name="__stdcall" extrapop="0" stackshift="2">
+    <!-- LCR raw P-Code pushes the older RPC and the call's upon-return
+         P-Code pops it again.  A nonzero completed-call stackshift would
+         count that architectural two-word transition a second time. -->
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
       <input>
         <!-- Class 3: Hidden return pointer (structure returns) -->
         <!-- Placed in XAR6 (manual sec 7.3.2) -->
@@ -173,7 +176,9 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
   <!-- LC/LRET and FFC/XAR7 are distinct architectural call mechanisms.
        Their parameter classes remain TI EABI-compatible, while their return
        address and completed-call stack effects differ from LCR/LRETR. -->
-  <prototype name="__lc" extrapop="0" stackshift="2">
+  <!-- LC raw P-Code likewise pushes its two-word return PC and its
+       upon-return model pops it; keep the completed call SP-balanced. -->
+  <prototype name="__lc" extrapop="0" stackshift="0">
       <input>
         <!-- Class 3: Hidden return pointer (structure returns) -->
         <!-- Placed in XAR6 (manual sec 7.3.2) -->

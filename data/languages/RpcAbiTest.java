@@ -8,8 +8,10 @@ import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.PcodeOpAST;
 import ghidra.program.model.pcode.Varnode;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
@@ -18,7 +20,8 @@ public class RpcAbiTest extends GhidraScript {
     private static final String[] FUNCTIONS = {
         "rpc_leaf", "rpc_multi_return", "rpc_nested_inner", "rpc_nested_outer",
         "rpc_indirect_target", "rpc_indirect_call", "rpc_stack_args",
-        "rpc_stack_caller", "rpc_preserve_older", "rpc_fixture_entry"
+        "rpc_stack_caller", "rpc_void_a", "rpc_void_b", "rpc_void_c",
+        "rpc_branch_rejoin", "rpc_preserve_older", "rpc_fixture_entry"
     };
 
     private static void require(boolean condition, String message) {
@@ -91,7 +94,7 @@ public class RpcAbiTest extends GhidraScript {
         require(!spec.stackGrowsNegative(), "stack must grow positive");
         require(spec.getStackSpace().getAddressableUnitSize() == 2, "stack word size must be two bytes");
         PrototypeModel model = spec.getDefaultCallingConvention();
-        require(model.getStackshift() == 2, "stackshift must be two words");
+        require(model.getStackshift() == 0, "completed LCR calls must not add a second stack shift");
         require(Long.valueOf(-4).equals(model.getStackParameterOffset()),
             "first stack parameter offset must be -4 words, got " + model.getStackParameterOffset());
         Varnode[] ra = model.getReturnAddress();
@@ -100,7 +103,7 @@ public class RpcAbiTest extends GhidraScript {
         PrototypeModel ffcModel = currentProgram.getFunctionManager().getCallingConvention("__ffc");
         require(lcModel != null, "missing __lc prototype");
         require(ffcModel != null, "missing __ffc prototype");
-        require(lcModel.getStackshift() == 2, "__lc stackshift must be two words");
+        require(lcModel.getStackshift() == 0, "completed LC calls must not add a second stack shift");
         require(Long.valueOf(-4).equals(lcModel.getStackParameterOffset()),
             "__lc first stack parameter must be -4 words");
         require(lcModel.getReturnAddress().length == 0,
@@ -114,9 +117,9 @@ public class RpcAbiTest extends GhidraScript {
             "__ffc return address must be XAR7");
         println("RPC_ABI_STACK_REGISTER_BYTES=4");
         println("RPC_ABI_STACK_ADDRESSABLE_UNIT_BYTES=2");
-        println("RPC_ABI_STACK_SHIFT_WORDS=2");
+        println("RPC_ABI_STACK_SHIFT_WORDS=0");
         println("RPC_ABI_FIRST_STACK_PARAMETER_WORD_OFFSET=-4");
-        println("RPC_ABI_LC_STACK_SHIFT_WORDS=2");
+        println("RPC_ABI_LC_STACK_SHIFT_WORDS=0");
         println("RPC_ABI_FFC_STACK_SHIFT_WORDS=0");
         println("RPC_ABI_FFC_FIRST_STACK_PARAMETER_WORD_OFFSET=-2");
         println("RPC_ABI_CALL_MECHANISM_MODELS=3");
@@ -140,12 +143,17 @@ public class RpcAbiTest extends GhidraScript {
         StringBuilder all = new StringBuilder();
         StringBuilder diagnostics = new StringBuilder();
         int firstPass = 0;
-        String stackArgs = "", stackCaller = "", indirect = "";
+        int completedCalls = 0;
+        int branchCalls = 0;
+        String stackArgs = "", stackCaller = "", indirect = "", branch = "";
         for (String name : FUNCTIONS) {
             Function function = function(name);
             noStackZext(function);
             DecompileResults first = decompile(function, "firstpass");
             require(first.getHighFunction() != null, "no first-pass high function for " + name);
+            int functionCalls = requireBalancedCompletedCalls(name, first);
+            completedCalls += functionCalls;
+            if (name.equals("rpc_branch_rejoin")) branchCalls = functionCalls;
             firstPass++;
             DecompileResults full = decompile(function, "decompile");
             require(full.getDecompiledFunction() != null, "no C for " + name);
@@ -154,6 +162,7 @@ public class RpcAbiTest extends GhidraScript {
             if (name.equals("rpc_stack_args")) stackArgs = c;
             if (name.equals("rpc_stack_caller")) stackCaller = c;
             if (name.equals("rpc_indirect_call")) indirect = c;
+            if (name.equals("rpc_branch_rejoin")) branch = c;
             String error = full.getErrorMessage();
             if (error != null && !error.isBlank()) diagnostics.append(error).append('\n');
         }
@@ -171,6 +180,16 @@ public class RpcAbiTest extends GhidraScript {
             "ten argument caller not recovered\n" + stackCaller);
         require(indirect.contains("code *") || indirect.contains("(*)"),
             "indirect call not recovered\n" + indirect);
+        require(branch.contains("rpc_void_a") && branch.contains("rpc_void_b") &&
+            branch.contains("rpc_void_c") && branch.contains("if"),
+            "branch-sensitive fixture lost unequal call arms\n" + branch);
+        require(branchCalls == 4,
+            "branch-sensitive fixture must contain four ordinary LCR sites, got " + branchCalls);
+        require(branch.contains("in_stack_") && branch.contains("lVar"),
+            "branch-sensitive fixture lost stack-argument/local accesses\n" + branch);
+        require(!branch.contains("unaff_retaddr") && !branch.contains("[10000]") &&
+            !branch.contains("[249998]") && !branch.contains("auStack_"),
+            "branch-sensitive fixture still has a path-dependent stack\n" + branch);
         println("RPC_ABI_OPTIMIZATION=" + optimization);
         println("RPC_ABI_FIRST_PASS_FUNCTIONS=" + firstPass);
         println("RPC_ABI_FULL_FUNCTIONS=" + FUNCTIONS.length);
@@ -180,6 +199,78 @@ public class RpcAbiTest extends GhidraScript {
         println("RPC_ABI_STACK_HEX_VARIABLES=" + stackHex);
         println("RPC_ABI_FULL_DIAGNOSTIC_CHARS=" + diagnostics.length());
         println("RPC_ABI_STACK_ARGUMENTS_10=PASS");
+        println("RPC_ABI_BALANCED_COMPLETED_CALLS=" + completedCalls);
+        println("RPC_ABI_BRANCH_LCR_SITES=" + branchCalls);
+        println("RPC_ABI_BRANCH_SENSITIVE_REJOIN=PASS");
+    }
+
+    private boolean outputRegister(PcodeOp op, String register) {
+        return op != null && isRegister(op.getOutput(), register);
+    }
+
+    private boolean binaryRegisterConstant(PcodeOp op, int opcode, String register,
+            long constant) {
+        return op != null && op.getOpcode() == opcode && outputRegister(op, register) &&
+            op.getNumInputs() == 2 && isRegister(op.getInput(0), register) &&
+            constant(op.getInput(1), constant);
+    }
+
+    private int requireBalancedCompletedCalls(String functionName, DecompileResults first) {
+        List<PcodeOpAST> ops = new ArrayList<>();
+        Iterator<PcodeOpAST> iterator = first.getHighFunction().getPcodeOps();
+        while (iterator.hasNext()) ops.add(iterator.next());
+        int calls = 0;
+        for (int index = 0; index < ops.size(); index++) {
+            PcodeOpAST call = ops.get(index);
+            if (call.getOpcode() != PcodeOp.CALL && call.getOpcode() != PcodeOp.CALLIND) continue;
+            Instruction instruction = currentProgram.getListing().getInstructionContaining(
+                call.getSeqnum().getTarget());
+            if (instruction == null ||
+                !"LCR".equalsIgnoreCase(instruction.getMnemonicString())) {
+                continue; // decompiler synthetic tail-call or another call mechanism
+            }
+            calls++;
+            int saveIndex = -1, addIndex = -1, rpcCopyIndex = -1;
+            int subIndex = -1, rpcLoadIndex = -1;
+            int stackAdds = 0, stackSubs = 0;
+            for (int candidateIndex = 0; candidateIndex < ops.size(); candidateIndex++) {
+                PcodeOp candidate = ops.get(candidateIndex);
+                if (!candidate.getSeqnum().getTarget().equals(call.getSeqnum().getTarget())) continue;
+                if (candidate.getOpcode() == PcodeOp.STORE && candidate.getNumInputs() == 3 &&
+                    isRegister(candidate.getInput(1), "SP") &&
+                    isRegister(candidate.getInput(2), "RPC")) {
+                    saveIndex = candidateIndex;
+                }
+                if (binaryRegisterConstant(candidate, PcodeOp.INT_ADD, "SP", 2)) {
+                    stackAdds++;
+                    addIndex = candidateIndex;
+                }
+                if (candidate.getOpcode() == PcodeOp.COPY && outputRegister(candidate, "RPC")) {
+                    rpcCopyIndex = candidateIndex;
+                }
+                if (binaryRegisterConstant(candidate, PcodeOp.INT_SUB, "SP", 2)) {
+                    stackSubs++;
+                    subIndex = candidateIndex;
+                }
+                if (candidate.getOpcode() == PcodeOp.LOAD && outputRegister(candidate, "RPC") &&
+                    candidate.getNumInputs() == 2 && isRegister(candidate.getInput(1), "SP")) {
+                    rpcLoadIndex = candidateIndex;
+                }
+            }
+            require(stackAdds == 1 && stackSubs == 1,
+                "completed LCR call must have one SP += 2 and one SP -= 2 in " +
+                    functionName + " at " + instruction.getAddress() +
+                    ", got adds=" + stackAdds + " subs=" + stackSubs);
+            require(saveIndex >= 0 && addIndex >= 0 && rpcCopyIndex >= 0 &&
+                    subIndex >= 0 && rpcLoadIndex >= 0,
+                "incomplete LCR/LRETR state transition in " + functionName +
+                    " at " + instruction.getAddress());
+            require(saveIndex < addIndex && addIndex < rpcCopyIndex && rpcCopyIndex < index &&
+                    index < subIndex && subIndex < rpcLoadIndex,
+                "misordered completed LCR state transition in " + functionName +
+                    " at " + instruction.getAddress());
+        }
+        return calls;
     }
 
     private Instruction one(String function, String mnemonic) {
