@@ -22,6 +22,47 @@ cndf: "LV"   is cond0_4=0b1101 { local b:1 = (STF_LV == 1); export b; }
 cndf: "UNC"  is cond0_4=0b1110 { local b:1 = 1; export b; }                    # Unconditional
 cndf: "UNCF" is cond0_4=0b1111 { local b:1 = 1; export b; }                    # Unconditional with flag modification
 
+
+# MOVST0 FLAG is an eight-bit select mask. Give it a dedicated display field
+# because the shared imm8 field must remain numeric for other instructions.
+# TI dis2000 prints selected names in ascending mask-bit order.
+# Generated with (Python):
+# print("\n".join(map(lambda hi:" ".join(map(lambda lo:(lambda j:f'"{",".join(map(lambda x:x[1],filter(lambda x:j&(1<<x[0]),enumerate("LVF LUF NF NI ZF ZI CI TF".split()))))or"#0"}"')(hi<<3|lo),range(8))),range(32))))
+attach names [ movst0_flags ] [
+	"#0" "LVF" "LUF" "LVF,LUF" "NF" "LVF,NF" "LUF,NF" "LVF,LUF,NF"
+	"NI" "LVF,NI" "LUF,NI" "LVF,LUF,NI" "NF,NI" "LVF,NF,NI" "LUF,NF,NI" "LVF,LUF,NF,NI"
+	"ZF" "LVF,ZF" "LUF,ZF" "LVF,LUF,ZF" "NF,ZF" "LVF,NF,ZF" "LUF,NF,ZF" "LVF,LUF,NF,ZF"
+	"NI,ZF" "LVF,NI,ZF" "LUF,NI,ZF" "LVF,LUF,NI,ZF" "NF,NI,ZF" "LVF,NF,NI,ZF" "LUF,NF,NI,ZF" "LVF,LUF,NF,NI,ZF"
+	"ZI" "LVF,ZI" "LUF,ZI" "LVF,LUF,ZI" "NF,ZI" "LVF,NF,ZI" "LUF,NF,ZI" "LVF,LUF,NF,ZI"
+	"NI,ZI" "LVF,NI,ZI" "LUF,NI,ZI" "LVF,LUF,NI,ZI" "NF,NI,ZI" "LVF,NF,NI,ZI" "LUF,NF,NI,ZI" "LVF,LUF,NF,NI,ZI"
+	"ZF,ZI" "LVF,ZF,ZI" "LUF,ZF,ZI" "LVF,LUF,ZF,ZI" "NF,ZF,ZI" "LVF,NF,ZF,ZI" "LUF,NF,ZF,ZI" "LVF,LUF,NF,ZF,ZI"
+	"NI,ZF,ZI" "LVF,NI,ZF,ZI" "LUF,NI,ZF,ZI" "LVF,LUF,NI,ZF,ZI" "NF,NI,ZF,ZI" "LVF,NF,NI,ZF,ZI" "LUF,NF,NI,ZF,ZI" "LVF,LUF,NF,NI,ZF,ZI"
+	"CI" "LVF,CI" "LUF,CI" "LVF,LUF,CI" "NF,CI" "LVF,NF,CI" "LUF,NF,CI" "LVF,LUF,NF,CI"
+	"NI,CI" "LVF,NI,CI" "LUF,NI,CI" "LVF,LUF,NI,CI" "NF,NI,CI" "LVF,NF,NI,CI" "LUF,NF,NI,CI" "LVF,LUF,NF,NI,CI"
+	"ZF,CI" "LVF,ZF,CI" "LUF,ZF,CI" "LVF,LUF,ZF,CI" "NF,ZF,CI" "LVF,NF,ZF,CI" "LUF,NF,ZF,CI" "LVF,LUF,NF,ZF,CI"
+	"NI,ZF,CI" "LVF,NI,ZF,CI" "LUF,NI,ZF,CI" "LVF,LUF,NI,ZF,CI" "NF,NI,ZF,CI" "LVF,NF,NI,ZF,CI" "LUF,NF,NI,ZF,CI" "LVF,LUF,NF,NI,ZF,CI"
+	"ZI,CI" "LVF,ZI,CI" "LUF,ZI,CI" "LVF,LUF,ZI,CI" "NF,ZI,CI" "LVF,NF,ZI,CI" "LUF,NF,ZI,CI" "LVF,LUF,NF,ZI,CI"
+	"NI,ZI,CI" "LVF,NI,ZI,CI" "LUF,NI,ZI,CI" "LVF,LUF,NI,ZI,CI" "NF,NI,ZI,CI" "LVF,NF,NI,ZI,CI" "LUF,NF,NI,ZI,CI" "LVF,LUF,NF,NI,ZI,CI"
+	"ZF,ZI,CI" "LVF,ZF,ZI,CI" "LUF,ZF,ZI,CI" "LVF,LUF,ZF,ZI,CI" "NF,ZF,ZI,CI" "LVF,NF,ZF,ZI,CI" "LUF,NF,ZF,ZI,CI" "LVF,LUF,NF,ZF,ZI,CI"
+	"NI,ZF,ZI,CI" "LVF,NI,ZF,ZI,CI" "LUF,NI,ZF,ZI,CI" "LVF,LUF,NI,ZF,ZI,CI" "NF,NI,ZF,ZI,CI" "LVF,NF,NI,ZF,ZI,CI" "LUF,NF,NI,ZF,ZI,CI" "LVF,LUF,NF,NI,ZF,ZI,CI"
+	"TF" "LVF,TF" "LUF,TF" "LVF,LUF,TF" "NF,TF" "LVF,NF,TF" "LUF,NF,TF" "LVF,LUF,NF,TF"
+	"NI,TF" "LVF,NI,TF" "LUF,NI,TF" "LVF,LUF,NI,TF" "NF,NI,TF" "LVF,NF,NI,TF" "LUF,NF,NI,TF" "LVF,LUF,NF,NI,TF"
+	"ZF,TF" "LVF,ZF,TF" "LUF,ZF,TF" "LVF,LUF,ZF,TF" "NF,ZF,TF" "LVF,NF,ZF,TF" "LUF,NF,ZF,TF" "LVF,LUF,NF,ZF,TF"
+	"NI,ZF,TF" "LVF,NI,ZF,TF" "LUF,NI,ZF,TF" "LVF,LUF,NI,ZF,TF" "NF,NI,ZF,TF" "LVF,NF,NI,ZF,TF" "LUF,NF,NI,ZF,TF" "LVF,LUF,NF,NI,ZF,TF"
+	"ZI,TF" "LVF,ZI,TF" "LUF,ZI,TF" "LVF,LUF,ZI,TF" "NF,ZI,TF" "LVF,NF,ZI,TF" "LUF,NF,ZI,TF" "LVF,LUF,NF,ZI,TF"
+	"NI,ZI,TF" "LVF,NI,ZI,TF" "LUF,NI,ZI,TF" "LVF,LUF,NI,ZI,TF" "NF,NI,ZI,TF" "LVF,NF,NI,ZI,TF" "LUF,NF,NI,ZI,TF" "LVF,LUF,NF,NI,ZI,TF"
+	"ZF,ZI,TF" "LVF,ZF,ZI,TF" "LUF,ZF,ZI,TF" "LVF,LUF,ZF,ZI,TF" "NF,ZF,ZI,TF" "LVF,NF,ZF,ZI,TF" "LUF,NF,ZF,ZI,TF" "LVF,LUF,NF,ZF,ZI,TF"
+	"NI,ZF,ZI,TF" "LVF,NI,ZF,ZI,TF" "LUF,NI,ZF,ZI,TF" "LVF,LUF,NI,ZF,ZI,TF" "NF,NI,ZF,ZI,TF" "LVF,NF,NI,ZF,ZI,TF" "LUF,NF,NI,ZF,ZI,TF" "LVF,LUF,NF,NI,ZF,ZI,TF"
+	"CI,TF" "LVF,CI,TF" "LUF,CI,TF" "LVF,LUF,CI,TF" "NF,CI,TF" "LVF,NF,CI,TF" "LUF,NF,CI,TF" "LVF,LUF,NF,CI,TF"
+	"NI,CI,TF" "LVF,NI,CI,TF" "LUF,NI,CI,TF" "LVF,LUF,NI,CI,TF" "NF,NI,CI,TF" "LVF,NF,NI,CI,TF" "LUF,NF,NI,CI,TF" "LVF,LUF,NF,NI,CI,TF"
+	"ZF,CI,TF" "LVF,ZF,CI,TF" "LUF,ZF,CI,TF" "LVF,LUF,ZF,CI,TF" "NF,ZF,CI,TF" "LVF,NF,ZF,CI,TF" "LUF,NF,ZF,CI,TF" "LVF,LUF,NF,ZF,CI,TF"
+	"NI,ZF,CI,TF" "LVF,NI,ZF,CI,TF" "LUF,NI,ZF,CI,TF" "LVF,LUF,NI,ZF,CI,TF" "NF,NI,ZF,CI,TF" "LVF,NF,NI,ZF,CI,TF" "LUF,NF,NI,ZF,CI,TF" "LVF,LUF,NF,NI,ZF,CI,TF"
+	"ZI,CI,TF" "LVF,ZI,CI,TF" "LUF,ZI,CI,TF" "LVF,LUF,ZI,CI,TF" "NF,ZI,CI,TF" "LVF,NF,ZI,CI,TF" "LUF,NF,ZI,CI,TF" "LVF,LUF,NF,ZI,CI,TF"
+	"NI,ZI,CI,TF" "LVF,NI,ZI,CI,TF" "LUF,NI,ZI,CI,TF" "LVF,LUF,NI,ZI,CI,TF" "NF,NI,ZI,CI,TF" "LVF,NF,NI,ZI,CI,TF" "LUF,NF,NI,ZI,CI,TF" "LVF,LUF,NF,NI,ZI,CI,TF"
+	"ZF,ZI,CI,TF" "LVF,ZF,ZI,CI,TF" "LUF,ZF,ZI,CI,TF" "LVF,LUF,ZF,ZI,CI,TF" "NF,ZF,ZI,CI,TF" "LVF,NF,ZF,ZI,CI,TF" "LUF,NF,ZF,ZI,CI,TF" "LVF,LUF,NF,ZF,ZI,CI,TF"
+	"NI,ZF,ZI,CI,TF" "LVF,NI,ZF,ZI,CI,TF" "LUF,NI,ZF,ZI,CI,TF" "LVF,LUF,NI,ZF,ZI,CI,TF" "NF,NI,ZF,ZI,CI,TF" "LVF,NF,NI,ZF,ZI,CI,TF" "LUF,NF,NI,ZF,ZI,CI,TF" "LVF,LUF,NF,NI,ZF,ZI,CI,TF"
+];
+
 # p2_ee, p2_d3, p2_a3, p1_*, p2_rdh, p2_reh3 are defined on 'opcode' token in tms320c28.sinc
 attach variables [ p2_d3 p2_a3 p2_rdh p2_reh3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 attach variables [ p1_f3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
@@ -695,7 +736,7 @@ macro update_stf_mov(res) {
 }
 
 # p.106 - copy selected STF flags to ST0; clear LUF/LVF if selected
-:movst0 #imm8 is op8_8=0b10101101 & imm8 {
+:movst0 movst0_flags is op8_8=0b10101101 & movst0_flags & imm8 {
 	local flag:4 = imm8;
 	# MOVST0 uses LVF/LUF/NF/NI/ZF/ZI/CI/TF mask order, not STF bit order.
 	# Snapshot all selected sources before clearing the latched flags.

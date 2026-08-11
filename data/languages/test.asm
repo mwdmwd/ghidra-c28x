@@ -508,8 +508,7 @@
 	NOP
 	MOV32		@ACC, *(0xC000)
 	NOP
-	;MOVST0		ZF, NF			; Ghidra shows raw mask (#0x14)
-								; while DIS2000 decodes flag names (NF,ZF)
+	MOVST0		ZF, NF
 	RPTB		$+11, AL	; loc16 form: RSIZE=9, block=9 words
 	NOP
 	NOP

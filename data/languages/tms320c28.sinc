@@ -67,6 +67,7 @@ define token opcode (16)
 	page0_bit	= (6,6)
 	imm7		= (0,6)
 	imm8		= (0,7)
+	movst0_flags= (0,7)
 	imm8_4		= (8,11)
 	imm8_8		= (8,15)
 	simm8		= (0,7) signed
