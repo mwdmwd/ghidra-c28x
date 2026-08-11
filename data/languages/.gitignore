@@ -14,3 +14,6 @@ ghidra-profile-test/
 profile-generate-check/
 rpc-abi-build/
 ghidra-rpc-abi-test/
+
+division-build/
+ghidra-division-test/

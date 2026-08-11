@@ -37,6 +37,17 @@ def _translate(words: Iterable[int]) -> list:
     return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
 
 
+def _translate_div32(words: Iterable[int]) -> list:
+    """Translate an analyzer-proved full-width SUBCUL division schedule."""
+    ctx = Context("tms320c28:LE:32:default")
+    ctx.setVariableDefault("ctx_objmode", 1)
+    ctx.setVariableDefault("ctx_amode", 0)
+    ctx.setVariableDefault("ctx_page0", 0)
+    ctx.setVariableDefault("subcul_div32", 1)
+    data = b"".join(struct.pack("<H", word) for word in words)
+    return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
+
+
 def _translate_at(words: Iterable[int], base_address: int) -> list:
     """Translate a schedule at an explicit byte-domain program address."""
     ctx = Context("tms320c28:LE:32:default")
@@ -203,6 +214,14 @@ def _evaluates_to_constant(ops: list, varnode, value: int) -> bool:
             result = args[0] - args[1]
         elif opcode == OpCode.INT_MULT:
             result = args[0] * args[1]
+        elif opcode == OpCode.INT_DIV:
+            if args[1] == 0:
+                raise AssertionError("canonical unsigned division by zero")
+            result = args[0] // args[1]
+        elif opcode == OpCode.INT_REM:
+            if args[1] == 0:
+                raise AssertionError("canonical unsigned remainder by zero")
+            result = args[0] % args[1]
         elif opcode == OpCode.INT_LEFT:
             result = args[0] << args[1]
         elif opcode == OpCode.INT_RIGHT:
@@ -276,6 +295,14 @@ def _execute_integer_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]
             result = args[0] - args[1]
         elif opcode == OpCode.INT_MULT:
             result = args[0] * args[1]
+        elif opcode == OpCode.INT_DIV:
+            if args[1] == 0:
+                raise AssertionError("canonical unsigned division by zero")
+            result = args[0] // args[1]
+        elif opcode == OpCode.INT_REM:
+            if args[1] == 0:
+                raise AssertionError("canonical unsigned remainder by zero")
+            result = args[0] % args[1]
         elif opcode == OpCode.INT_AND:
             result = args[0] & args[1]
         elif opcode == OpCode.INT_OR:
@@ -2319,6 +2346,57 @@ def check_subcul(ops: list) -> None:
         )
 
 
+
+def check_subcul_div32_canonical(_: list) -> None:
+    # RPT #31 followed by SUBCUL ACC,XAR6.  The analyzer-only context selects
+    # a one-shot quotient/remainder summary and final repeat-counter state.
+    ops = _translate_div32((0xF61F, 0x5617, 0x00A6))
+    opcodes = [op.opcode for op in ops]
+    assert opcodes.count(OpCode.INT_DIV) == 1, opcodes
+    assert opcodes.count(OpCode.INT_REM) == 1, opcodes
+    _no_internal_cfg(ops)
+
+    written = {_reg(op.output) for op in ops if op.output is not None}
+    for register in ("P", "ACC", "C", "N", "Z", "RPTC"):
+        assert register in written, (register, written)
+    assert "V" not in written and "OVC" not in written, written
+
+    vectors = (
+        (0x00000000, 1),
+        (0x00000001, 1),
+        (0x00000009, 10),
+        (0x0000000A, 10),
+        (0x0000000B, 10),
+        (0x80000000, 3),
+        (0xFFFFFFFF, 10),
+        (0xFFFFFFFF, 0xFFFFFFFF),
+    )
+    for dividend, divisor in vectors:
+        state = _execute_integer_pcode(
+            ops,
+            {
+                "P": dividend,
+                "ACC": 0,
+                "XAR6": divisor,
+                "C": 0,
+                "N": 0,
+                "Z": 0,
+                "RPTC": 0xBEEF,
+            },
+        )
+        quotient, remainder = divmod(dividend, divisor)
+        assert state["P"] == quotient, (dividend, divisor, state)
+        assert state["ACC"] == remainder, (dividend, divisor, state)
+        assert state["C"] == (quotient & 1), (dividend, divisor, state)
+        assert state["N"] == ((remainder >> 31) & 1), (dividend, divisor, state)
+        assert state["Z"] == int(remainder == 0), (dividend, divisor, state)
+        assert state["RPTC"] == 0, (dividend, divisor, state)
+
+    ordinary = _translate((0xF61F, 0x5617, 0x00A6))
+    ordinary_opcodes = [op.opcode for op in ordinary]
+    assert OpCode.INT_DIV not in ordinary_opcodes and OpCode.INT_REM not in ordinary_opcodes
+    assert OpCode.CBRANCH in ordinary_opcodes and OpCode.BRANCH in ordinary_opcodes
+
 def check_subul_p(ops: list) -> None:
     _check_unsigned_ovcu(ops, destination="P")
     _check_subul_execution(ops, destination="P")
@@ -3031,6 +3109,11 @@ CASES = (
     Case("SUBUL P counts unsigned borrow in OVCU", (0x565D, 0x00A6), check_subul_p),
     Case("SUBCU models the unsigned 33-bit no-borrow step without uint5", (0x1FA6,), check_subcu),
     Case("SUBCUL models the unsigned 33-bit no-borrow step without uint5", (0x5617, 0x00A6), check_subcul),
+    Case(
+        "proved RPT #31 SUBCUL exposes unsigned quotient and remainder",
+        (0xF61F, 0x5617, 0x00A6),
+        check_subcul_div32_canonical,
+    ),
     Case("CMP uses signed ordering for infinite-precision N", (0x54A6,), check_cmp_infinite_precision),
     Case("CMP immediate uses signed ordering and unsigned no-borrow", (0x1BA6, 0x0001), check_cmp_immediate_infinite_precision),
     Case("CMPB uses signed ordering and unsigned no-borrow", (0x52FF,), check_cmpb_infinite_precision),

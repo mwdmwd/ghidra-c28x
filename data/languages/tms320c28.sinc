@@ -1825,7 +1825,13 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # RPT repeat wrapper: when an instruction follows RPT, execute it N+1 times.
 # rpt_active is set (with noflow) by RPT on inst_next; rpt_phase prevents recursion.
-:^instruction is rpt_phase=0 & rpt_active=1 & instruction [ rpt_phase=1; ] {
+# A separately proved full-width SUBCUL division has already summarized all
+# 32 executions, so it only needs the architecturally final repeat-counter state.
+:^instruction is rpt_phase=0 & rpt_active=1 & subcul_div32=1 & instruction [ rpt_phase=1; ] {
+    build instruction;
+    RPTC = 0;
+}
+:^instruction is rpt_phase=0 & rpt_active=1 & subcul_div32=0 & instruction [ rpt_phase=1; ] {
     build instruction;
     if (RPTC == 0) goto inst_next;
     RPTC = RPTC - 1;
@@ -4537,7 +4543,7 @@ movl_store_flags: is op0_8=0b10101001 {
 # an unsigned low-word compare decides it.  The quotient bit is the same
 # no-borrow predicate, so no intra-instruction branch or nonstandard width is
 # required.
-:subcul ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {
+:subcul ACC, loc32 is subcul_div32=0 & ctx_objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {
 	local old_acc:4 = ACC;
 	local old_p:4 = P;
 	local divisor:4 = loc32;
@@ -4550,6 +4556,22 @@ movl_store_flags: is op0_8=0b10101001 {
 	C = no_borrow;
 	ACC = (difference & mask) | (shifted & ~mask);
 	P = (old_p << 1) | zext(no_borrow);
+	flagnz(ACC);
+}
+
+# Analyzer-selected canonical form for the complete manual division idiom.
+# The analyzer proves ACC=0, RPT #31, an unchanged nonzero register divisor,
+# a current P dividend snapshot, straight-line/exclusive ingress, and no alias.
+# One constructor therefore exposes exactly the 32-step unsigned quotient and
+# remainder data flow while preserving the final documented C/N/Z state.
+:subcul ACC, loc32 is subcul_div32=1 & ctx_objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {
+	local dividend:4 = P;
+	local divisor:4 = loc32;
+	local quotient:4 = dividend / divisor;
+	local remainder:4 = dividend % divisor;
+	P = quotient;
+	ACC = remainder;
+	C = quotient[0,1];
 	flagnz(ACC);
 }
 

@@ -22,6 +22,8 @@ GHIDRA_ZOO_DIR := ghidra-zoo-test
 GHIDRA_PROFILE_DIR := ghidra-profile-test
 GHIDRA_RPC_ABI_DIR := ghidra-rpc-abi-test
 RPC_ABI_BUILD_DIR := rpc-abi-build
+GHIDRA_DIVISION_DIR := ghidra-division-test
+DIVISION_BUILD_DIR := division-build
 PROFILE_GENERATE_DIR := profile-generate-check
 C2000WARE_F2837XS_SUBSET ?=
 ZOO_BUILD_DIR := compiler-zoo-build
@@ -233,6 +235,14 @@ rpc-abi-test: tms320c28.sla analyzer rpc_abi_test.py RpcAbiTest.java rpc_abi_tes
 		--dis2000 "$(DIS)" --ghidra-headless "$(GHIDRA_HEADLESS)" \
 		--build $$PWD/$(RPC_ABI_BUILD_DIR) --work $$PWD/$(GHIDRA_RPC_ABI_DIR)
 
+.PHONY: division-test
+division-test: tms320c28.sla analyzer division_idiom_test.py DivisionIdiomTest.java \
+		division_idiom_test.c division_idiom_test.cmd division_validation.asm \
+		division_validation.cmd
+	$(Q)$(PYTHON) division_idiom_test.py --root $$PWD --cl2000 "$(AS)" \
+		--dis2000 "$(DIS)" --ghidra-headless "$(GHIDRA_HEADLESS)" \
+		--build $$PWD/$(DIVISION_BUILD_DIR) --work $$PWD/$(GHIDRA_DIVISION_DIR)
+
 .PHONY: decompile
 decompile: tms320c28.sla $(DECOMPILE_OBJECT) Decompile.java
 	@mkdir -p $(GHIDRA_DECOMP_DIR)/home $(GHIDRA_DECOMP_DIR)/config $(GHIDRA_DECOMP_DIR)/project $(GHIDRA_DECOMP_DIR)/tmp $(GHIDRA_DECOMP_DIR)/cache $(GHIDRA_DECOMP_DIR)/scripts
@@ -388,6 +398,7 @@ zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 clean:
 	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR) $(GHIDRA_ZOO_DIR)
 	@rm -rf $(GHIDRA_PROFILE_DIR) $(GHIDRA_RPC_ABI_DIR) $(RPC_ABI_BUILD_DIR) $(PROFILE_GENERATE_DIR)
+	@rm -rf $(GHIDRA_DIVISION_DIR) $(DIVISION_BUILD_DIR)
 	@rm -rf $(ZOO_BUILD_DIR)
 	@rm -rf $(ANALYZER_BUILD_DIR)
 	@rm -f $(ANALYZER_JAR)
