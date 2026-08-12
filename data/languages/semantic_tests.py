@@ -48,6 +48,17 @@ def _translate_div32(words: Iterable[int]) -> list:
     return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
 
 
+def _translate_pm_store_noshift(words: Iterable[int]) -> list:
+    """Translate an analyzer-proved decoded-PM-zero MOV loc16,P."""
+    ctx = Context("tms320c28:LE:32:default")
+    ctx.setVariableDefault("ctx_objmode", 1)
+    ctx.setVariableDefault("ctx_amode", 0)
+    ctx.setVariableDefault("ctx_page0", 0)
+    ctx.setVariableDefault("pm_store_noshift", 1)
+    data = b"".join(struct.pack("<H", word) for word in words)
+    return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
+
+
 def _translate_at(words: Iterable[int], base_address: int) -> list:
     """Translate a schedule at an explicit byte-domain program address."""
     ctx = Context("tms320c28:LE:32:default")
@@ -2562,6 +2573,61 @@ def check_max_snapshot(ops: list) -> None:
     assert snapshot < move_write
 
 
+def check_mov_p_generic_pmshift(ops: list) -> None:
+    """Unproved MOV loc16,P must retain the complete architectural PM shift."""
+    assert any(
+        _reg(node) == "PM"
+        for op in ops
+        for node in (*op.inputs, op.output)
+        if node is not None
+    ), "ordinary MOV loc16,P must read decoded PM"
+    assert any(op.opcode == OpCode.INT_LEFT for op in ops), (
+        "ordinary MOV loc16,P lost its left-shift path"
+    )
+    assert any(op.opcode == OpCode.INT_SRIGHT for op in ops), (
+        "ordinary MOV loc16,P lost its arithmetic-right path"
+    )
+
+    vectors = (
+        (0, 0x89ABCDEF, 0xCDEF),
+        (1, 0x89ABCDEF, 0x9BDE),
+        (-1, 0x89ABCDEF, 0xE6F7),
+    )
+    for pm_value, product, expected in vectors:
+        actual = _execute_integer_pcode(
+            ops,
+            {"PM": pm_value & 0xFF, "P": product, "AR0": 0x1234},
+        )
+        assert actual["AR0"] == expected, (pm_value, product, actual)
+
+
+def check_mov_p_proved_noshift(_: list) -> None:
+    """The context-selected form is exactly a low-half copy, including aliasing."""
+    ops = _translate_pm_store_noshift((0x3FAA,))  # MOV PH,P
+    assert not any(
+        _reg(node) == "PM"
+        for op in ops
+        for node in (*op.inputs, op.output)
+        if node is not None
+    ), "proved no-shift MOV loc16,P still references PM"
+    forbidden = {OpCode.INT_LEFT, OpCode.INT_RIGHT, OpCode.INT_SRIGHT, OpCode.INT_SLESS}
+    assert not any(op.opcode in forbidden for op in ops), (
+        "proved no-shift MOV loc16,P retained shift/sign P-Code"
+    )
+    assert any(_reg(op.output) == "PH" for op in ops), (
+        "proved no-shift alias fixture must write PH"
+    )
+    assert any(any(_reg(node) == "PL" for node in op.inputs) for op in ops), (
+        "proved no-shift alias fixture must read the old low product half"
+    )
+    actual = _execute_integer_pcode(
+        ops,
+        {"PL": 0xCDEF, "PH": 0x1234},
+    )
+    assert actual["PH"] == 0xCDEF, actual
+    assert actual["PL"] == 0xCDEF, actual
+
+
 def check_push_st0_encoding(ops: list) -> None:
     _no_internal_cfg(ops)
     pm_decode_to_raw = _find(
@@ -3153,6 +3219,16 @@ CASES = (
         check_divf32_aliased_numerator,
     ),
     Case("MAXF32||MOV32 snapshots aliased source", (0xE69C, 0x0088), check_max_snapshot),
+    Case(
+        "ordinary MOV loc16,P retains generic PM shift semantics",
+        (0x3FA0,),
+        check_mov_p_generic_pmshift,
+    ),
+    Case(
+        "proved decoded-PM-zero MOV loc16,P is an alias-safe low-half copy",
+        (0x3FAA,),
+        check_mov_p_proved_noshift,
+    ),
     Case("PUSH ST0 encodes decoded PM and six-bit OVC", (0x7618,), check_push_st0_encoding),
     Case("POP ST0 decodes PM and sign-extends OVC", (0x7613,), check_pop_st0_decoding),
     Case("B OV snapshots then clears V", (0xFFEB, 0x0001), check_branch_v_clear),

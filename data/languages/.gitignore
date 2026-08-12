@@ -17,3 +17,6 @@ ghidra-rpc-abi-test/
 
 division-build/
 ghidra-division-test/
+
+pm-build/
+ghidra-pm-test/

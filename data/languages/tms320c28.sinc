@@ -3164,7 +3164,13 @@ with : ctx_objmode=1 {
 }
 
 # p.270
-:mov loc16, P is op8_8=0b00111111 & loc16 & P {
+:mov loc16, P is pm_store_noshift=1 & op8_8=0b00111111 & loc16 & P {
+	# The analyzer proves decoded PM=0 at this instruction.  Snapshot the low
+	# half before the destination write so register aliases remain well-defined.
+	local low_product:2 = P[0,16];
+	loc16 = low_product;
+}
+:mov loc16, P is pm_store_noshift=0 & op8_8=0b00111111 & loc16 & P {
 	local tmp:4;
 	pmshift(tmp, P);
 	loc16 = tmp:2;
