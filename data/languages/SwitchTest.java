@@ -9,20 +9,29 @@ import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.pcode.HighFunction;
 import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.symbol.Namespace;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
 import ghidra.program.model.symbol.ReferenceManager;
 import ghidra.program.model.symbol.RefType;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.symbol.Symbol;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class SwitchTest extends GhidraScript {
+    private static final String SWITCH_OWNER_MARKER =
+        "tms320c28_switch_analyzer_owned";
     private static final long VALID_FUNCTION = 0x13015;
     private static final long VALID_INDEX = 0x1301d;
     private static final long VALID_BRANCH = 0x13024;
@@ -48,8 +57,14 @@ public class SwitchTest extends GhidraScript {
             println("SWITCH_PROGRAM_PASS=" + currentProgram.getName());
             return;
         }
-        if (name.contains("ar6_validation")) {
+        if (name.contains("saved_layout_validation")) {
+            testSavedSelectorLayoutValidationFixture();
+        }
+        else if (name.contains("ar6_validation")) {
             testAr6ValidationFixture();
+        }
+        else if (name.contains("saved_validation")) {
+            testSavedSelectorValidationFixture();
         }
         else if (name.contains("pread_validation")) {
             testPreadNegativeFixture();
@@ -65,6 +80,322 @@ public class SwitchTest extends GhidraScript {
         }
         requireNoFfcReturnContext();
         println("SWITCH_PROGRAM_PASS=" + currentProgram.getName());
+    }
+
+    private void testSavedSelectorLayoutValidationFixture() throws Exception {
+        Register context = currentProgram.getProgramContext().getRegister("switch_canonical");
+        require(context != null, "missing switch_canonical context");
+
+        long[] canonicalSites = { 0x1801a, 0x1801e, 0x18038, 0x1803c };
+        for (long word : canonicalSites) {
+            require(isCanonical(wordAddress(word), context),
+                "non-adjacent saved-selector site was not canonicalized at " +
+                    wordAddress(word));
+        }
+        int tagged = 0;
+        InstructionIterator instructions = currentProgram.getListing().getInstructions(true);
+        while (instructions.hasNext()) {
+            if (isCanonical(instructions.next().getAddress(), context)) {
+                tagged++;
+            }
+        }
+        require(tagged == canonicalSites.length,
+            "unexpected non-adjacent saved-selector canonical-site count: " + tagged);
+
+        long[] globalTargets = { 0x1800b, 0x1800d, 0x1800f, 0x18011 };
+        long[] stackTargets = { 0x18025, 0x18028, 0x1802b, 0x1802e };
+        requireExactComputedTargets(0x1801e, globalTargets,
+            "non-adjacent global saved AR6");
+        requireExactComputedTargets(0x1803c, stackTargets,
+            "non-adjacent stack saved AR6");
+        requireOwnedSwitchOverride(0x1801e, true,
+            "non-adjacent global saved AR6");
+        requireOwnedSwitchOverride(0x1803c, true,
+            "non-adjacent stack saved AR6");
+
+        requireCompleteSwitch(0x18005, 0x1801e, 0x1801f, globalTargets, 0, 3,
+            "non-adjacent global saved AR6");
+        requireCompleteSwitch(0x18021, 0x1803c, 0x1803d, stackTargets, 0, 3,
+            "non-adjacent stack saved AR6");
+
+        requireNonAdjacentIngress(0x18009, 0x18013,
+            "non-adjacent global saved AR6");
+        requireNonAdjacentIngress(0x18023, 0x18031,
+            "non-adjacent stack saved AR6");
+
+        requireWords(0x18006, 0x761f, 0x0090);
+        requireWords(0x18009, 0xffef, 0x000a);
+        requireWords(0x1801a, 0x5604, 0x01a6);
+        requireWords(0x1801e, 0x7620);
+        requireWords(0x18021, 0xfe02);
+        requireWords(0x18022, 0x9641);
+        requireWords(0x18023, 0xffef, 0x000e);
+        requireWords(0x18038, 0x5604, 0x01a6);
+        requireWords(0x1803c, 0x7620);
+        requireInstructionText(0x18006, "movw DP,#0x90");
+        requireInstructionText(0x1801a, "add ACC,AR6 << #0x1");
+        requireInstructionText(0x1801e, "lb *XAR7");
+        requireInstructionText(0x18021, "addb SP,#0x2");
+        requireInstructionText(0x18022, "mov *-SP[0x1],AL");
+        requireInstructionText(0x18038, "add ACC,AR6 << #0x1");
+        requireInstructionText(0x1803c, "lb *XAR7");
+        requireOrdinaryIndirectBranch(0x1801e);
+        requireOrdinaryIndirectBranch(0x1803c);
+
+        println("SWITCH_SAVED_LAYOUT_POSITIVE_REFS=4,4");
+        println("SWITCH_SAVED_LAYOUT_CANONICAL_SITES=" + tagged);
+        println("SWITCH_SAVED_LAYOUT_CASE_RANGES=0-3,0-3");
+        println("SWITCH_SAVED_LAYOUT_OWNED_OVERRIDES=2");
+    }
+
+    private void requireNonAdjacentIngress(long ingressWord, long compareWord,
+            String description) {
+        Instruction ingress = getInstructionAt(wordAddress(ingressWord));
+        Instruction compare = getInstructionAt(wordAddress(compareWord));
+        require(ingress != null && compare != null,
+            description + " lost its ingress or compare instruction");
+        Address[] flows = ingress.getFlows();
+        require(flows.length == 1 && flows[0].equals(compare.getMinAddress()),
+            description + " ingress no longer branches directly to the compare");
+        require(compare.getPrevious() != null && !compare.getPrevious().equals(ingress),
+            description + " fixture no longer places case bodies between ingress and compare");
+        require(!compare.getPrevious().getFlowType().hasFallthrough(),
+            description + " physical predecessor now falls through into the dispatcher");
+    }
+
+    private void testSavedSelectorValidationFixture() throws Exception {
+        Register context = currentProgram.getProgramContext().getRegister("switch_canonical");
+        require(context != null, "missing switch_canonical context");
+
+        long[] canonicalSites = {
+            0x17046, 0x1704a,
+            0x1705f, 0x17063,
+            0x17071, 0x17078, 0x1707c
+        };
+        for (long word : canonicalSites) {
+            require(isCanonical(wordAddress(word), context),
+                "saved-selector positive site was not canonicalized at " + wordAddress(word));
+        }
+        require(!isCanonical(wordAddress(0x17077), context),
+            "SUBB switch LSL must retain ordinary context");
+
+        long[] globalTargets = { 0x1704d, 0x1704f, 0x17051, 0x17053 };
+        long[] stackTargets = { 0x17066, 0x17068, 0x1706a, 0x1706c };
+        long[] subbTargets = { 0x1707f, 0x17081, 0x17083, 0x17085 };
+        requireExactComputedTargets(0x1704a, globalTargets, "global saved AR6");
+        requireExactComputedTargets(0x17063, stackTargets, "stack saved AR6");
+        requireExactComputedTargets(0x1707c, subbTargets, "saved SUBB");
+
+        int tagged = 0;
+        InstructionIterator instructions = currentProgram.getListing().getInstructions(true);
+        while (instructions.hasNext()) {
+            if (isCanonical(instructions.next().getAddress(), context)) {
+                tagged++;
+            }
+        }
+        require(tagged == canonicalSites.length,
+            "unexpected saved-selector canonical-site count: " + tagged);
+
+        // The two AR6 schedules require a generic analyzer-owned descriptor;
+        // the SUBB form is recovered by stock Switch Analysis from canonical
+        // arithmetic alone.
+        requireOwnedSwitchOverride(0x1704a, true, "global saved AR6");
+        requireOwnedSwitchOverride(0x17063, true, "stack saved AR6");
+        requireOwnedSwitchOverride(0x1707c, false, "saved SUBB");
+
+        requireCompleteSwitch(0x1703b, 0x1704a, 0x1704b, globalTargets, 0, 3,
+            "global saved AR6");
+        requireCompleteSwitch(0x17055, 0x17063, 0x17064, stackTargets, 0, 3,
+            "stack saved AR6");
+        requireCompleteSwitch(0x1706e, 0x1707c, 0x1707d, subbTargets, 1, 4,
+            "saved SUBB");
+
+        // Context changes must not alter bytes or rendering.  These words are
+        // the exact linked TI encodings, including both canonical SUBBs.
+        requireWords(0x17046, 0x5604, 0x01a6);
+        requireWords(0x1704a, 0x7620);
+        requireWords(0x1705f, 0x5604, 0x01a6);
+        requireWords(0x17063, 0x7620);
+        requireWords(0x17071, 0x1901);
+        requireWords(0x17077, 0xff30);
+        requireWords(0x17078, 0x1902);
+        requireWords(0x1707c, 0x7620);
+        requireInstructionText(0x17046, "add ACC,AR6 << #0x1");
+        requireInstructionText(0x1704a, "lb *XAR7");
+        requireInstructionText(0x1705f, "add ACC,AR6 << #0x1");
+        requireInstructionText(0x17063, "lb *XAR7");
+        requireInstructionText(0x17071, "subb ACC,#0x1");
+        requireInstructionText(0x17078, "subb ACC,#0x2");
+        requireInstructionText(0x1707c, "lb *XAR7");
+
+        requireCanonicalSubbPcode(0x17071);
+        requireCanonicalSubbPcode(0x17078);
+        requireOrdinaryIndirectBranch(0x1704a);
+        requireOrdinaryIndirectBranch(0x17063);
+        requireOrdinaryIndirectBranch(0x1707c);
+
+        long[] nearMissBranches = {
+            0x17096, 0x170ae, 0x170c7, 0x170df, 0x170f7, 0x17110,
+            0x17128, 0x17140, 0x17158, 0x17170, 0x17188, 0x171a0,
+            0x171b8, 0x171d0, 0x171ea, 0x17202, 0x1721a, 0x17231,
+            0x17248, 0x1725f, 0x17276, 0x1728d, 0x172a4
+        };
+        long[] nearMissAdds = {
+            0x17092, 0x170aa, 0x170c3, 0x170db, 0x170f3, 0x1710c,
+            0x17124, 0x1713c, 0x17154, 0x1716c, 0x17184, 0x1719c,
+            0x171b4, 0x171cc, 0x171e6, 0x171fe, 0x17216, 0x1722d
+        };
+        for (long branch : nearMissBranches) {
+            require(!isCanonical(wordAddress(branch), context),
+                "near miss branch was canonicalized at " + wordAddress(branch));
+            requireOwnedSwitchOverride(branch, false, "near miss " + wordAddress(branch));
+            requireOrdinaryIndirectBranch(branch);
+        }
+        for (long add : nearMissAdds) {
+            require(!isCanonical(wordAddress(add), context),
+                "near miss ADD was canonicalized at " + wordAddress(add));
+        }
+
+        long[] ordinarySubbs = {
+            0x1723d, 0x17244, 0x17254, 0x1725b, 0x1726b,
+            0x17272, 0x17282, 0x17289, 0x17299, 0x172a0
+        };
+        for (long subb : ordinarySubbs) {
+            require(!isCanonical(wordAddress(subb), context),
+                "near miss SUBB was canonicalized at " + wordAddress(subb));
+            requireOrdinarySubbPcode(subb);
+        }
+
+        // Prove every relaxed condition remains isolated in the linked image.
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x17088)), 1, "AH"),
+            "save-source near miss no longer stores AH");
+        require(getInstructionAt(wordAddress(0x170a4))
+                .getDefaultOperandRepresentation(1).contains("0x2"),
+            "reload-slot near miss no longer reloads the alternate slot");
+        require(getInstructionAt(wordAddress(0x170b9)).getMnemonicString()
+                .equalsIgnoreCase("MOVB"),
+            "partial-overwrite near miss lost its byte write");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x170d4)), 0, "AH"),
+            "compare-register near miss no longer compares AH");
+        require(getInstructionAt(wordAddress(0x170ee))
+                .getDefaultOperandRepresentation(1).equalsIgnoreCase("GEQ"),
+            "guard-condition near miss no longer uses GEQ");
+        require(getInstructionAt(wordAddress(0x17106)).getMnemonicString()
+                .equalsIgnoreCase("ADDB"),
+            "flag-changing near miss lost the intervening ADDB");
+        require(hasFlowReferenceFromTo(0x172ad, 0x1711d),
+            "alternate dispatcher ingress is no longer present");
+        require(hasFlowReferenceFromTo(0x172af, 0x1713c),
+            "interior dispatcher ingress is no longer present");
+        require(getInstructionAt(wordAddress(0x17152)).getMnemonicString()
+                .equalsIgnoreCase("CLRC"),
+            "global CLRC near miss no longer clears SXM");
+        require(getInstructionAt(wordAddress(0x1722b)).getMnemonicString()
+                .equalsIgnoreCase("SETC"),
+            "stack SETC near miss no longer sets SXM");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x1716c)), 1, "AR5"),
+            "wrong-index-source near miss no longer uses AR5");
+        require(scalarAt(0x17184, 2) == 2,
+            "wrong-scale near miss no longer shifts by two");
+        require(scalarAt(0x17198, 1) == 0x1730f,
+            "table-base near miss no longer points one word into the table");
+
+        Memory memory = currentProgram.getMemory();
+        MemoryBlock writable = memory.getBlock(wordAddress(0x230a));
+        require(writable != null && writable.isInitialized() && writable.isLoaded() &&
+                writable.isRead() && writable.isWrite(),
+            "writable-table near miss is not in initialized writable memory");
+        MemoryBlock shortTable = memory.getBlock(wordAddress(0x1f000));
+        int wordSize = wordAddress(0).getAddressSpace().getAddressableUnitSize();
+        Address requiredShortEnd = wordAddress(0x1f000).add(4L * 2 * wordSize - 1);
+        require(shortTable != null && !shortTable.contains(requiredShortEnd),
+            "short-table near miss unexpectedly contains four entries");
+        long highWord = memory.getShort(wordAddress(0x17315), false) & 0xffffL;
+        require((highWord & 0x40) != 0,
+            "high-target-bits near miss no longer sets raw address bit 22");
+        MemoryBlock nonExecutable = memory.getBlock(wordAddress(0x2306));
+        require(nonExecutable != null && !nonExecutable.isExecute(),
+            "non-executable target near miss became executable");
+        require(hasCallReference(0x172b1),
+            "called-target near miss lost its ordinary call destination");
+        require(computedJumpCount(wordAddress(0x1721a)) == 0,
+            "called-target near miss gained computed switch references");
+
+        require(scalarAt(0x1723d, 1) == 2,
+            "guard-SUBB immediate near miss no longer uses two");
+        require(scalarAt(0x1725b, 1) == 4,
+            "tail-SUBB immediate near miss no longer uses four");
+        require(scalarAt(0x17269, 1) == 0,
+            "bound near miss no longer has a one-entry range");
+        require(isRegisterOperand(getInstructionAt(wordAddress(0x17285)), 1, "P"),
+            "selector-reload near miss no longer reloads P");
+        require(getInstructionAt(wordAddress(0x17297)).getMnemonicString()
+                .equalsIgnoreCase("MOVL") &&
+                !isRegisterOperand(getInstructionAt(wordAddress(0x17297)), 1, "XAR7"),
+            "unsafe-range near miss no longer loads an unproved memory bound");
+        require(scalarAt(0x17299, 1) == 1 && scalarAt(0x172a0, 1) == 2,
+            "unsafe-range near miss changed either exact SUBB immediate");
+
+        // The pre-analysis seed deliberately supplied stale context, edges,
+        // body membership, and an owned override for the reload-slot near miss.
+        // All four conclusions must be revoked without changing its bytes/text.
+        require(!isCanonical(wordAddress(0x170aa), context) &&
+                !isCanonical(wordAddress(0x170ae), context),
+            "stale saved-selector context survived revalidation");
+        require(computedJumpCount(wordAddress(0x170ae)) == 0,
+            "stale saved-selector computed references survived revalidation");
+        requireOwnedSwitchOverride(0x170ae, false, "stale reload-slot descriptor");
+        Function stale = getFunctionContaining(wordAddress(0x1709f));
+        require(stale != null, "missing stale-seed function after analysis");
+        for (long target : new long[] { 0x170b1, 0x170b3, 0x170b5 }) {
+            require(!stale.getBody().contains(wordAddress(target)),
+                "stale target survived function-body repair: " + wordAddress(target));
+        }
+        requireWords(0x170aa, 0x5604, 0x01a6);
+        requireWords(0x170ae, 0x7620);
+        requireInstructionText(0x170aa, "add ACC,AR6 << #0x1");
+        requireInstructionText(0x170ae, "lb *XAR7");
+
+        println("SWITCH_SAVED_POSITIVE_REFS=4,4,4");
+        println("SWITCH_SAVED_CANONICAL_SITES=" + tagged);
+        println("SWITCH_SAVED_CASE_RANGES=0-3,0-3,1-4");
+        println("SWITCH_SAVED_REJECTED_NEAR_MISSES=" + nearMissBranches.length);
+        println("SWITCH_SAVED_STALE_REVOCATION=PASS");
+        println("SWITCH_SAVED_OWNED_OVERRIDES=2");
+    }
+
+    private void requireCompleteSwitch(long functionWord, long branchWord, long defaultWord,
+            long[] targetWords, int lowCase, int highCase, String description) {
+        Function function = getFunctionContaining(wordAddress(functionWord));
+        require(function != null, "missing " + description + " function");
+        require(function.getBody().contains(wordAddress(defaultWord)),
+            description + " default is outside the function body");
+        for (long targetWord : targetWords) {
+            Address target = wordAddress(targetWord);
+            require(function.getBody().contains(target),
+                description + " target is outside function body: " + target);
+            require(getInstructionAt(target) != null,
+                description + " target was not disassembled: " + target);
+            require(!hasCallReference(targetWord),
+                description + " target was classified as a function/call: " + target);
+            require(getFunctionAt(target) == null,
+                description + " target became a separate function: " + target);
+        }
+        String c = decompile(function);
+        require(!c.contains("Could not recover jumptable") &&
+                !c.contains("Too many branches") &&
+                !c.contains("Treating indirect jump as call"),
+            description + " did not decompile as a complete switch\n" + c);
+        require(hasCaseLabel(c, lowCase) && hasCaseLabel(c, highCase),
+            description + " lost its case bounds " + lowCase + "-" + highCase + "\n" + c);
+        require(c.contains("0xff") || c.contains("255"),
+            description + " lost its default result\n" + c);
+        requireExactComputedTargets(branchWord, targetWords, description);
+    }
+
+    private boolean hasCaseLabel(String c, int value) {
+        return c.contains("case " + value + ":") ||
+            c.contains("case 0x" + Integer.toHexString(value) + ":");
     }
 
     private void testFfcValidationFixture() throws Exception {
@@ -693,12 +1024,133 @@ public class SwitchTest extends GhidraScript {
     private List<Address> computedJumpDestinations(Address address) {
         List<Address> destinations = new ArrayList<>();
         ReferenceManager references = currentProgram.getReferenceManager();
-        for (Reference reference : references.getReferencesFrom(address, Reference.MNEMONIC)) {
+        for (Reference reference : references.getReferencesFrom(address)) {
             if (reference.getReferenceType() == RefType.COMPUTED_JUMP) {
                 destinations.add(reference.getToAddress());
             }
         }
         return destinations;
+    }
+
+    private void requireExactComputedTargets(long branchWord, long[] targetWords,
+            String description) {
+        List<Address> actual = computedJumpDestinations(wordAddress(branchWord));
+        List<Address> expected = new ArrayList<>();
+        for (long targetWord : targetWords) {
+            expected.add(wordAddress(targetWord));
+        }
+        Collections.sort(actual);
+        Collections.sort(expected);
+        require(actual.equals(expected),
+            description + " computed targets differ: expected=" + expected + " actual=" + actual);
+    }
+
+    private Namespace switchOverrideNamespace(long branchWord) {
+        Address branch = wordAddress(branchWord);
+        Function function = getFunctionContaining(branch);
+        if (function == null) {
+            return null;
+        }
+        Namespace override = HighFunction.findOverrideSpace(function);
+        return override == null ? null :
+            HighFunction.findNamespace(currentProgram.getSymbolTable(), override,
+                "jmp_" + branch);
+    }
+
+    private void requireOwnedSwitchOverride(long branchWord, boolean expected,
+            String description) {
+        Namespace namespace = switchOverrideNamespace(branchWord);
+        Symbol marker = namespace == null ? null : currentProgram.getSymbolTable()
+            .getSymbol(SWITCH_OWNER_MARKER, wordAddress(branchWord), namespace);
+        boolean actual = marker != null && marker.getSource() == SourceType.ANALYSIS;
+        require(actual == expected,
+            description + " analyzer-owned override expectation " + expected +
+                " differed at " + wordAddress(branchWord) + " namespace=" + namespace);
+    }
+
+    private void requireWords(long startWord, int... expectedWords) throws Exception {
+        Address start = wordAddress(startWord);
+        int wordSize = start.getAddressSpace().getAddressableUnitSize();
+        Memory memory = currentProgram.getMemory();
+        for (int index = 0; index < expectedWords.length; index++) {
+            Address address = start.add((long) index * wordSize);
+            int actual = memory.getShort(address, false) & 0xffff;
+            require(actual == (expectedWords[index] & 0xffff),
+                "instruction bytes changed at " + address + ": expected 0x" +
+                    Integer.toHexString(expectedWords[index] & 0xffff) + " actual 0x" +
+                    Integer.toHexString(actual));
+        }
+    }
+
+    private void requireInstructionText(long word, String expected) {
+        Instruction instruction = getInstructionAt(wordAddress(word));
+        require(instruction != null, "missing instruction at " + wordAddress(word));
+        String actualText = instruction.toString().replaceAll("\\s+", " ").trim()
+            .toLowerCase();
+        String expectedText = expected.replaceAll("\\s+", " ").trim().toLowerCase();
+        require(actualText.equals(expectedText),
+            "disassembly text changed at " + wordAddress(word) + ": expected '" +
+                expectedText + "' actual '" + actualText + "'");
+    }
+
+    private String pcodeRegisterName(Varnode node) {
+        if (node == null || !node.getAddress().isRegisterAddress()) {
+            return null;
+        }
+        Register register = currentProgram.getLanguage().getRegister(
+            node.getAddress(), node.getSize());
+        return register == null ? null : register.getName();
+    }
+
+    private Set<String> pcodeRegisters(Instruction instruction) {
+        Set<String> result = new HashSet<>();
+        for (PcodeOp op : instruction.getPcode()) {
+            String output = pcodeRegisterName(op.getOutput());
+            if (output != null) {
+                result.add(output.toUpperCase());
+            }
+            for (Varnode input : op.getInputs()) {
+                String name = pcodeRegisterName(input);
+                if (name != null) {
+                    result.add(name.toUpperCase());
+                }
+            }
+        }
+        return result;
+    }
+
+    private void requireCanonicalSubbPcode(long word) {
+        Instruction instruction = getInstructionAt(wordAddress(word));
+        require(instruction != null && instruction.getMnemonicString().equalsIgnoreCase("SUBB"),
+            "missing canonical SUBB at " + wordAddress(word));
+        require(hasPcodeOp(instruction, PcodeOp.INT_SUB),
+            "canonical SUBB lacks ordinary-width INT_SUB at " + wordAddress(word));
+        Set<String> touched = pcodeRegisters(instruction);
+        require(!touched.contains("OVM") && !touched.contains("OVC") &&
+                !touched.contains("V"),
+            "canonical SUBB retained unsafe overflow state at " + wordAddress(word) +
+                ": " + touched);
+    }
+
+    private void requireOrdinarySubbPcode(long word) {
+        Instruction instruction = getInstructionAt(wordAddress(word));
+        require(instruction != null && instruction.getMnemonicString().equalsIgnoreCase("SUBB"),
+            "missing ordinary SUBB at " + wordAddress(word));
+        Set<String> touched = pcodeRegisters(instruction);
+        require(hasPcodeOp(instruction, PcodeOp.INT_SUB) && touched.contains("OVM") &&
+                touched.contains("OVC") && touched.contains("V"),
+            "near-miss SUBB lost ordinary architectural status behavior at " +
+                wordAddress(word) + ": " + touched);
+    }
+
+    private void requireOrdinaryIndirectBranch(long word) {
+        Instruction instruction = getInstructionAt(wordAddress(word));
+        require(instruction != null && instruction.getMnemonicString().equalsIgnoreCase("LB"),
+            "missing LB *XAR7 at " + wordAddress(word));
+        require(hasPcodeOp(instruction, PcodeOp.BRANCHIND) &&
+                !hasPcodeOp(instruction, PcodeOp.CALLIND) &&
+                !hasPcodeOp(instruction, PcodeOp.RETURN),
+            "LB *XAR7 gained unsafe call/return classification at " + wordAddress(word));
     }
 
     private boolean isCanonical(Address address, Register context) {

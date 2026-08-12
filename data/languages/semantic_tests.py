@@ -59,6 +59,17 @@ def _translate_pm_store_noshift(words: Iterable[int]) -> list:
     return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
 
 
+def _translate_switch_canonical(words: Iterable[int]) -> list:
+    """Translate an instruction selected by a complete switch proof."""
+    ctx = Context("tms320c28:LE:32:default")
+    ctx.setVariableDefault("ctx_objmode", 1)
+    ctx.setVariableDefault("ctx_amode", 0)
+    ctx.setVariableDefault("ctx_page0", 0)
+    ctx.setVariableDefault("switch_canonical", 1)
+    data = b"".join(struct.pack("<H", word) for word in words)
+    return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
+
+
 def _translate_at(words: Iterable[int], base_address: int) -> list:
     """Translate a schedule at an explicit byte-domain program address."""
     ctx = Context("tms320c28:LE:32:default")
@@ -2185,6 +2196,25 @@ def check_subb_standard_width(ops: list) -> None:
     )
 
 
+def check_subb_switch_canonical(_: list) -> None:
+    ops = _translate_switch_canonical((0x1901,))
+    _no_internal_cfg(ops)
+    assert any(op.opcode == OpCode.INT_SUB and _reg(op.output) == "ACC" for op in ops)
+    touched = {
+        _reg(node)
+        for op in ops
+        for node in (*op.inputs, op.output)
+        if node is not None and _reg(node) is not None
+    }
+    assert "OVM" not in touched and "OVC" not in touched and "V" not in touched, touched
+    actual = _execute_integer_pcode(
+        ops,
+        {"ACC": 3, "C": 0},
+    )
+    assert actual["ACC"] == 2 and actual["C"] == 1
+    assert actual["N"] == 0 and actual["Z"] == 0
+
+
 def check_addu_standard_width(ops: list) -> None:
     check_signed_acc_status(ops)
     _assert_execution(
@@ -3162,6 +3192,7 @@ CASES = (
     Case("ADDL snapshots an aliased ACC source", (0x07A9,), check_addl_alias_safe),
     Case("ADDB uses ordinary widths with OVM saturation", (0x0901,), check_addb_standard_width),
     Case("SUBB uses ordinary widths with exact no-borrow", (0x1901,), check_subb_standard_width),
+    Case("proved switch SUBB uses bounded no-borrow arithmetic", (0x1901,), check_subb_switch_canonical),
     Case("ADDU uses ordinary widths with zero-extended source", (0x0DA6,), check_addu_standard_width),
     Case("ADDCL includes carry in signed status", (0x5640, 0x00A6), check_addcl_status),
     Case("ADDCL snapshots an aliased ACC source", (0x5640, 0x00A9), check_addcl_alias_safe),

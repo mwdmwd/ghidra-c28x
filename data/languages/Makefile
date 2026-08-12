@@ -149,6 +149,28 @@ switch_ar6_validation.out: switch_ar6_validation.linked.out
 	$(Q)$(STRIP) --postlink --outfile=$@.new $<
 	$(Q)mv -f $@.new $@
 
+switch_saved_validation.obj: switch_saved_validation.asm Makefile
+	$(Q)$(AS) $(ASFLAGS) --abi=eabi --compile_only --output_file=$@ $<
+
+switch_saved_validation.linked.out: switch_saved_validation.obj switch_saved_validation.cmd
+	$(Q)$(AS) $(ASFLAGS) --abi=eabi --run_linker \
+		--entry_point=switch_saved_validation_entry --output_file=$@ $^
+
+switch_saved_validation.out: switch_saved_validation.linked.out
+	$(Q)$(STRIP) --postlink --outfile=$@.new $<
+	$(Q)mv -f $@.new $@
+
+switch_saved_layout_validation.obj: switch_saved_layout_validation.asm Makefile
+	$(Q)$(AS) $(ASFLAGS) --abi=eabi --compile_only --output_file=$@ $<
+
+switch_saved_layout_validation.linked.out: switch_saved_layout_validation.obj switch_saved_layout_validation.cmd
+	$(Q)$(AS) $(ASFLAGS) --abi=eabi --run_linker \
+		--entry_point=switch_saved_layout_validation_entry --output_file=$@ $^
+
+switch_saved_layout_validation.out: switch_saved_layout_validation.linked.out
+	$(Q)$(STRIP) --postlink --outfile=$@.new $<
+	$(Q)mv -f $@.new $@
+
 ffc_validation.obj: ffc_validation.asm Makefile
 	$(Q)$(AS) $(ASFLAGS) --abi=eabi --compile_only --output_file=$@ $<
 
@@ -275,13 +297,18 @@ decompile: tms320c28.sla $(DECOMPILE_OBJECT) Decompile.java
 .PHONY: switch-test
 switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 		switch_validation.out switch_pread32_test.out switch_pread_validation.out \
-		switch_ar6_validation.out ffc_validation.out SwitchTest.java
+		switch_ar6_validation.out switch_saved_validation.out \
+		switch_saved_layout_validation.out ffc_validation.out \
+		SwitchTest.java SwitchSeedStale.java SwitchLayoutSeed.java
 	@rm -rf $(GHIDRA_SWITCH_DIR)
 	@mkdir -p $(GHIDRA_SWITCH_DIR)/runs $(GHIDRA_SWITCH_DIR)/scripts
 	@cp SwitchTest.java $(GHIDRA_SWITCH_DIR)/scripts/
+	@cp SwitchSeedStale.java $(GHIDRA_SWITCH_DIR)/scripts/
+	@cp SwitchLayoutSeed.java $(GHIDRA_SWITCH_DIR)/scripts/
 	$(Q)switch_inputs=(switch_test.out switch_native_test.out switch_validation.out \
 		switch_pread32_test.out switch_pread_validation.out \
-		switch_ar6_validation.out ffc_validation.out); \
+		switch_ar6_validation.out switch_saved_validation.out \
+		switch_saved_layout_validation.out ffc_validation.out); \
 		expected=$${#switch_inputs[@]}; actual=0; index=0; \
 		for input in "$${switch_inputs[@]}"; do \
 			index=$$((index + 1)); \
@@ -292,6 +319,14 @@ switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 			ghidra_log=$$run_dir/ghidra.log; \
 			script_log=$$run_dir/script.log; \
 			console_log=$$run_dir/console.log; \
+			pre_script=(); \
+			if test "$$input" = switch_saved_validation.out; then \
+				pre_script=(-preScript \
+					$$PWD/$(GHIDRA_SWITCH_DIR)/scripts/SwitchSeedStale.java); \
+			elif test "$$input" = switch_saved_layout_validation.out; then \
+				pre_script=(-preScript \
+					$$PWD/$(GHIDRA_SWITCH_DIR)/scripts/SwitchLayoutSeed.java); \
+			fi; \
 			if ! HOME=$$run_dir/home \
 				XDG_CONFIG_HOME=$$run_dir/config \
 				GHIDRA_HEADLESS_JAVA_OPTIONS="-Dapplication.tempdir=$$run_dir/tmp -Dapplication.cachedir=$$run_dir/cache -Djava.io.tmpdir=$$run_dir/tmp" \
@@ -299,6 +334,7 @@ switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 				-import "$$input" \
 				-processor tms320c28:LE:32:default -cspec default \
 				-scriptPath $$PWD/$(GHIDRA_SWITCH_DIR)/scripts \
+				"$${pre_script[@]}" \
 				-postScript $$PWD/$(GHIDRA_SWITCH_DIR)/scripts/SwitchTest.java \
 				-log "$$ghidra_log" -scriptlog "$$script_log" \
 				-analysisTimeoutPerFile 60 -overwrite -deleteProject \
@@ -419,5 +455,7 @@ clean:
 	@rm -f switch_validation.obj switch_validation.linked.out switch_validation.out switch_validation.out.new
 	@rm -f switch_pread32_test.obj switch_pread32_test.linked.out switch_pread32_test.out switch_pread32_test.out.new
 	@rm -f switch_ar6_validation.obj switch_ar6_validation.linked.out switch_ar6_validation.out switch_ar6_validation.out.new
+	@rm -f switch_saved_validation.obj switch_saved_validation.linked.out switch_saved_validation.out switch_saved_validation.out.new
+	@rm -f switch_saved_layout_validation.obj switch_saved_layout_validation.linked.out switch_saved_layout_validation.out switch_saved_layout_validation.out.new
 	@rm -f ffc_validation.obj ffc_validation.linked.out ffc_validation.out ffc_validation.out.new
 	@rm -f switch_pread_validation.obj switch_pread_validation.linked.out switch_pread_validation.out switch_pread_validation.out.new

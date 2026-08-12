@@ -4503,7 +4503,20 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.420
-:subb ACC, #imm8 is op8_8=0b00011001 & ACC & imm8 {
+# The switch analyzer selects this form only for both SUBB instructions in the
+# exact saved-selector schedule whose finite unsigned guard proves that the
+# dispatch path cannot borrow, overflow, update OVC, or invoke OVM saturation.
+# Ordinary SUBB sites retain the complete architectural accumulator arithmetic
+# below.
+:subb ACC, #imm8 is switch_canonical=1 & op8_8=0b00011001 & ACC & imm8 {
+	local value:4 = zext(imm8:1);
+	ACC = ACC - value;
+	C = 1;
+	flagnz(ACC);
+}
+
+# p.420
+:subb ACC, #imm8 is switch_canonical=0 & op8_8=0b00011001 & ACC & imm8 {
 	local value:4 = zext(imm8:1);
 	acc_sub32(value);
 }

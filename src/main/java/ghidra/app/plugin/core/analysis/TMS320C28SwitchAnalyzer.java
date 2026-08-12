@@ -18,9 +18,13 @@ package ghidra.app.plugin.core.analysis;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import ghidra.app.cmd.disassemble.DisassembleCommand;
+import ghidra.app.cmd.function.CreateFunctionCmd;
 import ghidra.app.services.AbstractAnalyzer;
 import ghidra.app.services.AnalysisPriority;
 import ghidra.app.services.AnalyzerType;
@@ -41,11 +45,20 @@ import ghidra.program.model.listing.ProgramContext;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.pcode.HighFunction;
+import ghidra.program.model.pcode.JumpTable;
 import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.symbol.Namespace;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
+import ghidra.program.model.symbol.RefType;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolIterator;
+import ghidra.program.model.symbol.SymbolTable;
 import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
+import ghidra.util.exception.InvalidInputException;
 import ghidra.util.task.TaskMonitor;
 
 /**
@@ -72,6 +85,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 	private static final int MAX_DISPATCH_INSTRUCTIONS = 20;
 	private static final long CODE_ADDRESS_MASK = 0x003fffffL;
 	private static final long TABLE_ENTRY_WORDS = 2;
+	private static final String OVERRIDE_OWNER_MARKER =
+		"tms320c28_switch_analyzer_owned";
 
 	public TMS320C28SwitchAnalyzer() {
 		super(NAME, DESCRIPTION, AnalyzerType.INSTRUCTION_ANALYZER);
@@ -98,69 +113,305 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 
 		Listing listing = program.getListing();
-		List<SwitchDescriptor> matches = new ArrayList<>();
-		InstructionIterator instructions = listing.getInstructions(set, true);
+		Map<Address, SwitchDescriptor> descriptors = new LinkedHashMap<>();
+		Set<Address> validSites = new HashSet<>();
+
+		// Context is an analysis conclusion rather than an input assumption.  Scan
+		// the complete current listing, including already-tagged branches, so a
+		// later alternate ingress, table mutation, or permission change can revoke
+		// a stale conclusion deterministically.
+		InstructionIterator instructions = listing.getInstructions(true);
 		while (instructions.hasNext()) {
 			monitor.checkCancelled();
 			Instruction instruction = instructions.next();
 			if (!isComputedXar7Branch(instruction)) {
 				continue;
 			}
-			if (BigInteger.ONE.equals(context.getValue(switchContext,
-					instruction.getMinAddress(), false))) {
+			SwitchDescriptor descriptor = recoverSwitchDescriptor(program, instruction, monitor);
+			if (descriptor == null) {
 				continue;
 			}
+			descriptors.put(descriptor.branchAddress, descriptor);
+			validSites.add(descriptor.branchAddress);
+			validSites.add(descriptor.indexExpression.instruction.getMinAddress());
+			if (descriptor.guardCanonicalInstruction != null) {
+				validSites.add(descriptor.guardCanonicalInstruction.getMinAddress());
+			}
+		}
 
-			SwitchDescriptor descriptor = recoverSwitchDescriptor(program, instruction, monitor);
-			if (descriptor != null) {
-				matches.add(descriptor);
+		// Descriptor targets are known executable instruction starts.  Disassemble
+		// them before function-body publication so ordinary flow following can
+		// include every case body rather than only the first sequential target.
+		AddressSet descriptorTargets = new AddressSet();
+		for (SwitchDescriptor descriptor : descriptors.values()) {
+			if (descriptor.variant.requiresPublication) {
+				for (Address target : descriptor.validatedTargets) {
+					descriptorTargets.add(target);
+				}
+			}
+		}
+		if (!descriptorTargets.isEmpty()) {
+			DisassembleCommand command = new DisassembleCommand(descriptorTargets, null, true);
+			command.enableCodeAnalysis(false);
+			if (!command.applyTo(program, monitor)) {
+				log.appendMsg(NAME, "could not disassemble all proved switch targets: " +
+					command.getStatusMsg());
+			}
+		}
+
+		// The saved-selector AR6 families need an explicit, ordinary switch
+		// descriptor.  Computed references plus canonical P-Code are insufficient
+		// for stock Switch Analysis on these schedules, even after all targets are
+		// disassembled and the containing body is repaired.  Publish the same
+		// generic descriptor that a user override would contain, but mark it as
+		// analyzer-owned so it can be revalidated, refreshed, and revoked.
+		revokeStaleOwnedOverrides(program, descriptors, monitor, log);
+		for (SwitchDescriptor descriptor : descriptors.values()) {
+			monitor.checkCancelled();
+			if (descriptor.variant.requiresPublication) {
+				publishDerivedDescriptor(program, descriptor, monitor, log);
+			}
+		}
+
+		List<Instruction> additions = new ArrayList<>();
+		List<Instruction> revocations = new ArrayList<>();
+		instructions = listing.getInstructions(true);
+		while (instructions.hasNext()) {
+			monitor.checkCancelled();
+			Instruction instruction = instructions.next();
+			boolean tagged = tagged(context, switchContext, instruction);
+			boolean valid = validSites.contains(instruction.getMinAddress());
+			if (valid && !tagged) {
+				additions.add(instruction);
+			}
+			else if (tagged && !valid) {
+				revocations.add(instruction);
 			}
 		}
 
 		AddressSet redisassemble = new AddressSet();
-		AddressSet switchBranches = new AddressSet();
-		for (SwitchDescriptor descriptor : matches) {
-			Instruction branch = listing.getInstructionAt(descriptor.branchAddress);
-			if (branch == null) {
-				continue;
-			}
-			try {
-				List<Instruction> canonicalInstructions = new ArrayList<>();
-				canonicalInstructions.add(descriptor.indexExpression.instruction);
-				if (descriptor.guardCanonicalInstruction != null) {
-					canonicalInstructions.add(descriptor.guardCanonicalInstruction);
-				}
-				for (Instruction canonical : canonicalInstructions) {
-					listing.clearCodeUnits(canonical.getMinAddress(), canonical.getMaxAddress(), false);
-					context.setValue(switchContext, canonical.getMinAddress(), canonical.getMaxAddress(),
-						BigInteger.ONE);
-					redisassemble.add(canonical.getMinAddress());
-				}
-				listing.clearCodeUnits(branch.getMinAddress(), branch.getMaxAddress(), false);
-				context.setValue(switchContext, branch.getMinAddress(), branch.getMaxAddress(),
-					BigInteger.ONE);
-				redisassemble.add(branch.getMinAddress());
-				switchBranches.add(branch.getMinAddress());
-				long highestCase = descriptor.lowestCase + descriptor.count - 1;
-				Msg.info(this,
-					"recognized " + descriptor.variant.description + " switch at " +
-						descriptor.branchAddress + " table=" + descriptor.tableBase + " cases=" +
-						descriptor.lowestCase + "-" + highestCase + " default=" +
-						descriptor.defaultPath);
-			}
-			catch (ContextChangeException exception) {
-				log.appendException(exception);
-			}
+		// Revoke stale assumptions before publishing new ones.  The ordinary
+		// constructors are therefore restored even if analysis is interrupted
+		// while processing the additions.
+		for (Instruction instruction : revocations) {
+			Address address = instruction.getMinAddress();
+			changeContext(listing, context, switchContext, instruction,
+				BigInteger.ZERO, redisassemble, log);
+			Msg.info(this, "revoked stale switch context at " + address);
+		}
+		for (Instruction instruction : additions) {
+			changeContext(listing, context, switchContext, instruction,
+				BigInteger.ONE, redisassemble, log);
 		}
 
+		AddressSet switchBranches = new AddressSet();
+		for (SwitchDescriptor descriptor : descriptors.values()) {
+			switchBranches.add(descriptor.branchAddress);
+			long highestCase = descriptor.lowestCase + descriptor.count - 1;
+			Msg.info(this,
+				"recognized " + descriptor.variant.description + " switch at " +
+					descriptor.branchAddress + " table=" + descriptor.tableBase + " cases=" +
+					descriptor.lowestCase + "-" + highestCase + " default=" +
+					descriptor.defaultPath);
+		}
+
+		AutoAnalysisManager manager = AutoAnalysisManager.getAnalysisManager(program);
 		if (!redisassemble.isEmpty()) {
-			AutoAnalysisManager manager = AutoAnalysisManager.getAnalysisManager(program);
 			manager.disassemble(redisassemble, AnalysisPriority.DISASSEMBLY);
-			// Redisassembly only reports the changed canonical sites. Explicitly resubmit
-			// the downstream LB sites so switch analysis sees the new function P-Code.
+		}
+		if (!switchBranches.isEmpty()) {
+			// Redisassembly only reports the changed canonical sites.  Explicitly
+			// resubmit every still-proved LB so stock switch analysis also reruns
+			// when only references/body/override state changed.
 			manager.scheduleOneTimeAnalysis(new DecompilerSwitchAnalyzer(), switchBranches);
 		}
 		return true;
+	}
+
+	private static boolean tagged(ProgramContext context, Register switchContext,
+			Instruction instruction) {
+		return BigInteger.ONE.equals(context.getValue(switchContext,
+			instruction.getMinAddress(), false));
+	}
+
+	private static void changeContext(Listing listing, ProgramContext context,
+			Register switchContext, Instruction instruction, BigInteger value,
+			AddressSet redisassemble, MessageLog log) {
+		try {
+			Address start = instruction.getMinAddress();
+			Address end = instruction.getMaxAddress();
+			listing.clearCodeUnits(start, end, false);
+			context.setValue(switchContext, start, end, value);
+			redisassemble.add(start);
+		}
+		catch (ContextChangeException exception) {
+			log.appendException(exception);
+		}
+	}
+
+	private static void revokeStaleOwnedOverrides(Program program,
+			Map<Address, SwitchDescriptor> descriptors, TaskMonitor monitor, MessageLog log)
+			throws CancelledException {
+		SymbolTable symbols = program.getSymbolTable();
+		List<Symbol> markers = new ArrayList<>();
+		SymbolIterator iterator = symbols.getSymbols(OVERRIDE_OWNER_MARKER);
+		while (iterator.hasNext()) {
+			monitor.checkCancelled();
+			markers.add(iterator.next());
+		}
+		for (Symbol marker : markers) {
+			monitor.checkCancelled();
+			if (marker.getSource() != SourceType.ANALYSIS) {
+				continue;
+			}
+			SwitchDescriptor descriptor = descriptors.get(marker.getAddress());
+			if (descriptor != null && descriptor.variant.requiresOverride) {
+				continue;
+			}
+			Function function = program.getFunctionManager()
+					.getFunctionContaining(marker.getAddress());
+			Namespace expectedNamespace = function == null ? null :
+				findSwitchOverrideNamespace(function, marker.getAddress());
+			if (expectedNamespace == null ||
+				!expectedNamespace.equals(marker.getParentNamespace())) {
+				// Never clear a namespace merely because it contains a coincidentally
+				// named symbol.  Ownership is the conjunction of source, address, and
+				// the standard jump-override namespace for the containing function.
+				continue;
+			}
+			try {
+				if (HighFunction.clearNamespace(symbols, expectedNamespace)) {
+					removeAnalysisComputedJumpReferences(program, marker.getAddress());
+					if (function != null) {
+						CreateFunctionCmd.fixupFunctionBody(program, function, monitor);
+					}
+					Msg.info(TMS320C28SwitchAnalyzer.class,
+						"revoked stale analyzer-owned switch override at " + marker.getAddress());
+				}
+				else {
+					log.appendMsg(NAME,
+						"could not clear owned switch namespace at " + marker.getAddress());
+				}
+			}
+			catch (InvalidInputException exception) {
+				log.appendException(exception);
+			}
+		}
+	}
+
+	private static void publishDerivedDescriptor(Program program, SwitchDescriptor descriptor,
+			TaskMonitor monitor, MessageLog log) throws CancelledException {
+		if (!descriptor.variant.requiresPublication) {
+			return;
+		}
+
+		Function function = program.getFunctionManager()
+				.getFunctionContaining(descriptor.branchAddress);
+		if (function == null && descriptor.provenFunctionEntry != null) {
+			CreateFunctionCmd create = new CreateFunctionCmd(descriptor.provenFunctionEntry);
+			if (create.applyTo(program, monitor)) {
+				function = create.getFunction();
+			}
+		}
+		if (function == null) {
+			// Normal Subroutine References analysis may not have run yet.  Do not
+			// publish unowned references: a later analyzer invocation can create the
+			// complete, revocable descriptor once the branch belongs to a function.
+			return;
+		}
+		if (!function.getBody().contains(descriptor.branchAddress)) {
+			log.appendMsg(NAME,
+				"proved saved-selector switch is not in a function body at " +
+					descriptor.branchAddress);
+			return;
+		}
+
+		Namespace existing = findSwitchOverrideNamespace(function, descriptor.branchAddress);
+		boolean owned = existing != null && hasOwnerMarker(program, existing,
+			descriptor.branchAddress);
+		if (existing != null && !owned) {
+			// A manual/user override takes precedence.  Its namespace is deliberately
+			// not marked by this analyzer and must never be rewritten or revoked here.
+			return;
+		}
+
+		try {
+			if (owned && !HighFunction.clearNamespace(program.getSymbolTable(), existing)) {
+				log.appendMsg(NAME,
+					"could not refresh owned switch namespace at " + descriptor.branchAddress);
+				return;
+			}
+			JumpTable override = new JumpTable(descriptor.branchAddress,
+				new ArrayList<>(descriptor.validatedTargets), true, 0);
+			override.writeOverride(function);
+			Namespace namespace = findSwitchOverrideNamespace(function, descriptor.branchAddress);
+			if (namespace == null) {
+				log.appendMsg(NAME,
+					"failed to find published switch namespace at " + descriptor.branchAddress);
+				return;
+			}
+			try {
+				HighFunction.createLabelSymbol(program.getSymbolTable(), descriptor.branchAddress,
+					OVERRIDE_OWNER_MARKER, namespace, SourceType.ANALYSIS, false);
+			}
+			catch (InvalidInputException exception) {
+				// An unmarked override would be indistinguishable from user state and
+				// therefore could not be safely refreshed or revoked.
+				HighFunction.clearNamespace(program.getSymbolTable(), namespace);
+				throw exception;
+			}
+
+			// Publish edges only after the ownership marker exists.  Thus every
+			// reference this analyzer creates has a durable revocation key even if a
+			// later analysis pass is interrupted.
+			removeAnalysisComputedJumpReferences(program, descriptor.branchAddress);
+			for (Address target : descriptor.validatedTargets) {
+				monitor.checkCancelled();
+				addComputedJumpReferenceIfMissing(program, descriptor.branchAddress, target);
+			}
+			CreateFunctionCmd.fixupFunctionBody(program, function, monitor);
+		}
+		catch (InvalidInputException exception) {
+			log.appendException(exception);
+		}
+	}
+
+	private static Namespace findSwitchOverrideNamespace(Function function, Address branch) {
+		Namespace override = HighFunction.findOverrideSpace(function);
+		if (override == null) {
+			return null;
+		}
+		return HighFunction.findNamespace(function.getProgram().getSymbolTable(), override,
+			"jmp_" + branch);
+	}
+
+	private static boolean hasOwnerMarker(Program program, Namespace namespace, Address branch) {
+		return program.getSymbolTable().getSymbol(OVERRIDE_OWNER_MARKER, branch, namespace) != null;
+	}
+
+	private static void removeAnalysisComputedJumpReferences(Program program, Address branch) {
+		List<Reference> remove = new ArrayList<>();
+		for (Reference reference : program.getReferenceManager().getReferencesFrom(branch)) {
+			if (reference.getReferenceType() == RefType.COMPUTED_JUMP &&
+				reference.getSource() == SourceType.ANALYSIS) {
+				remove.add(reference);
+			}
+		}
+		for (Reference reference : remove) {
+			program.getReferenceManager().delete(reference);
+		}
+	}
+
+	private static void addComputedJumpReferenceIfMissing(Program program, Address branch,
+			Address target) {
+		for (Reference reference : program.getReferenceManager().getReferencesFrom(branch)) {
+			if (reference.getReferenceType() == RefType.COMPUTED_JUMP &&
+				reference.getToAddress().equals(target)) {
+				return;
+			}
+		}
+		program.getReferenceManager().addMemoryReference(branch, target,
+			RefType.COMPUTED_JUMP, SourceType.ANALYSIS, Reference.MNEMONIC);
 	}
 
 	private static SwitchDescriptor recoverSwitchDescriptor(Program program, Instruction branch,
@@ -182,9 +433,12 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		if (targets == null) {
 			return null;
 		}
+		Address provenFunctionEntry = guard.variant == DispatchVariant.NATIVE_AR6_SAVED_STACK
+				? guard.startInstruction.getMinAddress()
+				: null;
 		return new SwitchDescriptor(branch.getMinAddress(), dispatch.tableBase, guard.count,
 			guard.low, guard.defaultPath, guard.canonicalInstruction, dispatch.indexExpression,
-			targets, dispatch.variant);
+			targets, guard.variant, provenFunctionEntry);
 	}
 
 	private static DispatchCandidate recoverDispatch(Instruction branch) {
@@ -301,13 +555,19 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		Instruction selectorCopy = contiguousPrevious(tableInstruction);
 		Scalar tableScalar = immediateTableBase(tableInstruction);
 		Long subtraction = recoverAccImmediateSubtraction(adjustmentInstruction);
+		Long subb = recoverAccImmediateSubb(adjustmentInstruction);
 		String savedRegister;
 		DispatchVariant variant;
 		if (isRegisterMove(selectorCopy, "movl", "ACC", "XAR7")) {
 			savedRegister = "XAR7";
-			variant = DispatchVariant.NATIVE_SAVED_LONG;
+			variant = subb != null
+					? DispatchVariant.NATIVE_SAVED_LONG_SUBB
+					: DispatchVariant.NATIVE_SAVED_LONG;
 		}
 		else if (isRegisterMove(selectorCopy, "movl", "ACC", "P")) {
+			if (subb != null) {
+				return null;
+			}
 			savedRegister = "P";
 			variant = DispatchVariant.NATIVE_SAVED_P;
 		}
@@ -316,14 +576,16 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 		if (!isNativeLongwordLoad(load) ||
 			!isRegisterMove(add, "addl", "XAR7", "ACC") ||
-			!isLslAccByOne(scaleInstruction) || tableScalar == null || subtraction == null) {
+			!isLslAccByOne(scaleInstruction) || tableScalar == null ||
+			(subtraction == null && subb == null)) {
 			return null;
 		}
 
 		Address table = tableAddress(tableInstruction, tableScalar);
+		long adjustment = subtraction != null ? subtraction.longValue() : subb.longValue();
 		IndexExpression expression =
 			new IndexExpression(adjustmentInstruction, savedRegister, TABLE_ENTRY_WORDS,
-				-subtraction.longValue());
+				-adjustment);
 		return new DispatchCandidate(selectorCopy, branch, table, expression, variant);
 	}
 
@@ -386,11 +648,12 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		Instruction setSxm = contiguousPrevious(baseCopy);
 		Instruction tableInstruction = contiguousPrevious(setSxm);
 		Scalar tableScalar = immediateTableBase(tableInstruction);
+		SxmMode sxmMode = recoverSxmMode(setSxm);
 		if (!isNativeLongwordLoad(load) ||
 			!isRegisterMove(finalCopy, "movl", "XAR7", "ACC") ||
 			!isAr6ScaledAdd(indexAdd) ||
 			!isRegisterMove(baseCopy, "movl", "ACC", "XAR7") ||
-			!isSetSxmOnly(setSxm) || tableScalar == null) {
+			sxmMode == null || tableScalar == null) {
 			return null;
 		}
 
@@ -398,7 +661,9 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		IndexExpression expression =
 			new IndexExpression(indexAdd, "AR6", TABLE_ENTRY_WORDS, 0);
 		return new DispatchCandidate(tableInstruction, branch, table, expression,
-			DispatchVariant.NATIVE_AR6_ZERO);
+			sxmMode == SxmMode.SET
+					? DispatchVariant.NATIVE_AR6_ZERO
+					: DispatchVariant.NATIVE_AR6_SAVED_STACK);
 	}
 
 	private static DispatchCandidate recoverNativeDirectDispatch(Instruction branch) {
@@ -550,8 +815,15 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		if (defaultPath == null) {
 			return null;
 		}
+		if (dispatch.variant == DispatchVariant.NATIVE_AR6_SAVED_STACK) {
+			return recoverAr6SavedStackRange(guard, dispatch, defaultPath);
+		}
 		if (dispatch.variant == DispatchVariant.NATIVE_AR6_ZERO) {
-			return recoverAr6ZeroBasedRange(guard, defaultPath);
+			Guard saved = recoverAr6SavedGlobalRange(guard, dispatch, defaultPath);
+			return saved != null ? saved : recoverAr6ZeroBasedRange(guard, defaultPath);
+		}
+		if (dispatch.variant == DispatchVariant.NATIVE_SAVED_LONG_SUBB) {
+			return recoverUnsignedSubbLongRange(guard, dispatch, defaultPath);
 		}
 
 		Instruction compare = contiguousPrevious(guard);
@@ -590,7 +862,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		if (!hasExclusiveStraightLineGuard(guardStart, subtract, compare, guard)) {
 			return null;
 		}
-		return new Guard(guard, guardStart, null, low, (int) count, defaultPath);
+		return new Guard(guard, guardStart, null, low, (int) count, defaultPath,
+			dispatch.variant);
 	}
 
 	private static Guard recoverAr6ZeroBasedRange(Instruction guard, Address defaultPath) {
@@ -611,7 +884,167 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			!hasExclusiveStraightLineGuard(producer, copy, compare, guard)) {
 			return null;
 		}
-		return new Guard(guard, producer, null, 0, (int) count, defaultPath);
+		return new Guard(guard, producer, null, 0, (int) count, defaultPath,
+			DispatchVariant.NATIVE_AR6_ZERO);
+	}
+
+	private static Guard recoverAr6SavedGlobalRange(Instruction guard,
+			DispatchCandidate dispatch, Address defaultPath) {
+		return recoverAr6SavedRange(guard, dispatch, defaultPath, false);
+	}
+
+	private static Guard recoverAr6SavedStackRange(Instruction guard,
+			DispatchCandidate dispatch, Address defaultPath) {
+		return recoverAr6SavedRange(guard, dispatch, defaultPath, true);
+	}
+
+	/**
+	 * Recover only the two proved save/reload schedules.  The unconditional B is
+	 * deliberately part of the proof: it must be the sole direct ingress to the
+	 * compare, while the exact MOVZ reload is the only instruction between CMPB
+	 * and SB and therefore preserves the guard flags.
+	 */
+	private static Guard recoverAr6SavedRange(Instruction guard,
+			DispatchCandidate dispatch, Address defaultPath, boolean stack) {
+		Instruction reload = contiguousPrevious(guard);
+		Instruction compare = contiguousPrevious(reload);
+		Instruction ingress = soleDirectUnconditionalIngress(compare);
+		Instruction save = contiguousPrevious(ingress);
+		if (!isUnsignedConditionalBranch(guard, "HI") ||
+			!isMnemonic(compare, "cmpb") || !isRegisterOperand(compare, 0, "AL") ||
+			!isMovzMemoryToAr6(reload) || ingress == null ||
+			!isMemoryStoreFromAl(save) || !sameOperand(save, 0, reload, 1)) {
+			return null;
+		}
+
+		Scalar highScalar = scalarOperand(compare, 1);
+		if (highScalar == null) {
+			return null;
+		}
+		long count = highScalar.getUnsignedValue() + 1;
+		if (count < 2 || count > MAX_ENTRIES || highScalar.getUnsignedValue() > 0x7fff) {
+			return null;
+		}
+
+		Instruction start;
+		DispatchVariant finalVariant;
+		if (stack) {
+			Instruction stackEntry = recoverStackSelectorEntry(save.getProgram(), save);
+			if (dispatch.variant != DispatchVariant.NATIVE_AR6_SAVED_STACK ||
+				!isExactStackSelectorOperand(save, 0) ||
+				stackEntry == null) {
+				return null;
+			}
+			start = stackEntry;
+			finalVariant = DispatchVariant.NATIVE_AR6_SAVED_STACK;
+		}
+		else {
+			Instruction producer = recoverGlobalSelectorProducer(save);
+			if (dispatch.variant != DispatchVariant.NATIVE_AR6_ZERO ||
+				producer == null) {
+				return null;
+			}
+			start = producer;
+			finalVariant = DispatchVariant.NATIVE_AR6_SAVED_GLOBAL;
+		}
+
+		if (!fallsThroughTo(save, ingress.getMinAddress()) ||
+			!fallsThroughTo(compare, reload.getMinAddress()) ||
+			!fallsThroughTo(reload, guard.getMinAddress()) ||
+			hasExplicitFlowReferenceTo(ingress) ||
+			hasExplicitFlowReferenceTo(reload) ||
+			hasExplicitFlowReferenceTo(guard)) {
+			return null;
+		}
+		return new Guard(guard, start, null, 0, (int) count, defaultPath,
+			finalVariant);
+	}
+
+	/**
+	 * Prove the global selector value saved immediately before the sole
+	 * dispatcher ingress.  The observed firmware changes DP between the load of
+	 * AL and the store to the dedicated save slot, so those two MOV operations
+	 * are not instruction-adjacent.  Admit only that one exact immediate DP load:
+	 * it cannot modify AL, and every instruction after the producer must have a
+	 * unique straight-line predecessor.  This is deliberately not a generic
+	 * memory-alias or stack-reload walk.
+	 */
+	private static Instruction recoverGlobalSelectorProducer(Instruction save) {
+		Instruction next = save;
+		Instruction current = contiguousPrevious(next);
+		boolean skippedDpLoad = false;
+		while (current != null) {
+			if (!fallsThroughTo(current, next.getMinAddress()) ||
+				hasExplicitFlowReferenceTo(next)) {
+				return null;
+			}
+			if (isMovAlFromMemory(current)) {
+				return current;
+			}
+			if (skippedDpLoad || !isImmediateDpLoad(current)) {
+				return null;
+			}
+			skippedDpLoad = true;
+			next = current;
+			current = contiguousPrevious(current);
+		}
+		return null;
+	}
+
+	private static Guard recoverUnsignedSubbLongRange(Instruction guard,
+			DispatchCandidate dispatch, Address defaultPath) {
+		Instruction compare = contiguousPrevious(guard);
+		Instruction subtract = contiguousPrevious(compare);
+		Instruction selectorCopy = contiguousPrevious(subtract);
+		Instruction bound = contiguousPrevious(selectorCopy);
+		Instruction producer = contiguousPrevious(bound);
+		Long lowValue = recoverAccImmediateSubb(subtract);
+		Scalar boundScalar = scalarOperand(bound, 1);
+		if (lowValue == null || boundScalar == null ||
+			!isMnemonic(compare, "cmpl") ||
+			!isRegisterOperand(compare, 0, "ACC") ||
+			!isRegisterOperand(compare, 1, "XAR6") ||
+			!isRegisterMove(selectorCopy, "movl", "ACC", "XAR7") ||
+			!isMnemonic(bound, "movb") || !isRegisterOperand(bound, 0, "XAR6") ||
+			!isMovlMemoryToRegister(producer, "XAR7") ||
+			!hasExclusiveStraightLineGuard(producer, subtract, compare, guard)) {
+			return null;
+		}
+
+		long low = lowValue.longValue();
+		long highOffset = boundScalar.getUnsignedValue();
+		long count = highOffset + 1;
+		long tailSubtraction = -dispatch.indexExpression.adjustmentWords;
+		if (count < 2 || count > MAX_ENTRIES ||
+			!provesSafeSubbDispatch(low, highOffset, tailSubtraction)) {
+			return null;
+		}
+		return new Guard(guard, producer, subtract, low, (int) count, defaultPath,
+			DispatchVariant.NATIVE_SAVED_LONG_SUBB);
+	}
+
+	private static boolean provesSafeSubbDispatch(long low, long highOffset,
+			long tailSubtraction) {
+		if (low < 0 || highOffset < 1 || tailSubtraction != TABLE_ENTRY_WORDS * low) {
+			return false;
+		}
+		long highestSelector;
+		long highestScaled;
+		try {
+			highestSelector = Math.addExact(low, highOffset);
+			highestScaled = Math.multiplyExact(highestSelector, TABLE_ENTRY_WORDS);
+		}
+		catch (ArithmeticException exception) {
+			return false;
+		}
+		// A selector below low wraps the first unsigned SUBB to a value above
+		// the finite bound and is rejected by HI.  On the dispatch path the first
+		// subtraction is therefore [0,highOffset], and the scaled selector is at
+		// least 2*low before the second subtraction.  Keeping the complete range
+		// below signed 32-bit maximum proves no borrow, signed overflow, OVC
+		// update, or OVM saturation at either matched SUBB.
+		return highestSelector <= Integer.MAX_VALUE &&
+			highestScaled <= Integer.MAX_VALUE && tailSubtraction <= Integer.MAX_VALUE;
 	}
 
 	private static Guard recoverUnsignedLongRange(Instruction guard, DispatchCandidate dispatch,
@@ -652,7 +1085,8 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			!hasExclusiveStraightLineGuard(bound.instruction, subtract, compare, guard)) {
 			return null;
 		}
-		return new Guard(guard, bound.instruction, subtract, low, (int) count, defaultPath);
+		return new Guard(guard, bound.instruction, subtract, low, (int) count, defaultPath,
+			dispatch.variant);
 	}
 
 	private static RegisterBound recoverImmediateRegisterBound(Instruction subtract,
@@ -801,11 +1235,13 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 					!targetBlock.isExecute()) {
 					return null;
 				}
-				Function targetFunction = program.getFunctionManager().getFunctionAt(target);
+				Function targetFunction =
+					program.getFunctionManager().getFunctionContaining(target);
 				if (hasCallReferenceTo(program, target) ||
 					(targetFunction != null && targetFunction != branchFunction)) {
 					// Function creation can run after this analyzer. Reject explicit
-					// call destinations as well as already-established function entries.
+					// call destinations and targets already owned by another function,
+					// whether they are entries or interior addresses.
 					return null;
 				}
 				distinctTargets.add(targetOffset);
@@ -851,12 +1287,14 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		if (!isMnemonic(instruction, "movl") || !isRegisterOperand(instruction, 0, "XAR7")) {
 			return null;
 		}
-		return scalarOperand(instruction, 1);
+		Scalar scalar = scalarOperand(instruction, 1);
+		return scalar != null && (scalar.getUnsignedValue() & ~CODE_ADDRESS_MASK) == 0
+				? scalar
+				: null;
 	}
 
 	private static Address tableAddress(Instruction tableInstruction, Scalar scalar) {
-		long tableOffset = scalar.getUnsignedValue() & CODE_ADDRESS_MASK;
-		return wordAddress(tableInstruction.getAddress(), tableOffset);
+		return wordAddress(tableInstruction.getAddress(), scalar.getUnsignedValue());
 	}
 
 	private static String indexSource(Instruction instruction) {
@@ -891,6 +1329,17 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 		long shifted = value.getUnsignedValue() << shiftValue;
 		return shifted <= Integer.MAX_VALUE ? shifted : null;
+	}
+
+	private static Long recoverAccImmediateSubb(Instruction instruction) {
+		if (!isMnemonic(instruction, "subb") ||
+			!isRegisterOperand(instruction, 0, "ACC") || instruction.getNumOperands() != 2) {
+			return null;
+		}
+		Scalar value = scalarOperand(instruction, 1);
+		return value != null && value.getUnsignedValue() <= 0xff
+				? value.getUnsignedValue()
+				: null;
 	}
 
 	private static Long recoverRegisterImmediateAdjustment(Instruction instruction,
@@ -940,10 +1389,153 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 				OperandType.isDynamic(type));
 	}
 
+	private static boolean isMovlMemoryToRegister(Instruction instruction,
+			String registerName) {
+		if (!isMnemonic(instruction, "movl") ||
+			!isRegisterOperand(instruction, 0, registerName) ||
+			instruction.getNumOperands() != 2) {
+			return false;
+		}
+		return isMemoryOperand(instruction, 1);
+	}
+
+	private static boolean isMovAlFromMemory(Instruction instruction) {
+		return isMnemonic(instruction, "mov") &&
+			isRegisterOperand(instruction, 0, "AL") && instruction.getNumOperands() == 2 &&
+			isMemoryOperand(instruction, 1);
+	}
+
+	private static boolean isImmediateDpLoad(Instruction instruction) {
+		return isMnemonic(instruction, "movw") && instruction.getNumOperands() == 2 &&
+			isRegisterOperand(instruction, 0, "DP") && scalarOperand(instruction, 1) != null;
+	}
+
+	private static boolean isMemoryStoreFromAl(Instruction instruction) {
+		return isMnemonic(instruction, "mov") && instruction.getNumOperands() == 2 &&
+			isMemoryOperand(instruction, 0) && isRegisterOperand(instruction, 1, "AL");
+	}
+
+	private static boolean isMemoryOperand(Instruction instruction, int operand) {
+		if (instruction == null || operand >= instruction.getNumOperands()) {
+			return false;
+		}
+		int type = instruction.getOperandType(operand);
+		return !OperandType.isRegister(type) && !OperandType.isScalar(type) &&
+			(OperandType.isAddress(type) || OperandType.isIndirect(type) ||
+				OperandType.isDynamic(type));
+	}
+
+	private static boolean sameOperand(Instruction first, int firstOperand,
+			Instruction second, int secondOperand) {
+		if (first == null || second == null ||
+			firstOperand >= first.getNumOperands() || secondOperand >= second.getNumOperands() ||
+			!normalizeOperand(first, firstOperand).equals(normalizeOperand(second, secondOperand))) {
+			return false;
+		}
+		Object[] firstObjects = first.getOpObjects(firstOperand);
+		Object[] secondObjects = second.getOpObjects(secondOperand);
+		if (firstObjects.length != secondObjects.length) {
+			return false;
+		}
+		for (int index = 0; index < firstObjects.length; index++) {
+			Object left = firstObjects[index];
+			Object right = secondObjects[index];
+			if (left instanceof Register leftRegister && right instanceof Register rightRegister) {
+				if (!leftRegister.getName().equalsIgnoreCase(rightRegister.getName())) {
+					return false;
+				}
+			}
+			else if (left instanceof Scalar leftScalar && right instanceof Scalar rightScalar) {
+				if (leftScalar.bitLength() != rightScalar.bitLength() ||
+					leftScalar.getUnsignedValue() != rightScalar.getUnsignedValue()) {
+					return false;
+				}
+			}
+			else if (!left.equals(right)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static String normalizeOperand(Instruction instruction, int operand) {
+		return operandText(instruction, operand).replaceAll("\\s+", "").toUpperCase();
+	}
+
+	private static boolean isExactStackSelectorOperand(Instruction instruction, int operand) {
+		String rendered = normalizeOperand(instruction, operand);
+		if (!rendered.equals("*-SP[1]") && !rendered.equals("*-SP[0X1]")) {
+			return false;
+		}
+		Object[] objects = instruction.getOpObjects(operand);
+		return objects.length == 2 && objects[0] instanceof Register base &&
+			base.getName().equalsIgnoreCase("SP") && objects[1] instanceof Scalar offset &&
+			offset.getUnsignedValue() == 1;
+	}
+
+	private static Instruction recoverStackSelectorEntry(Program program, Instruction save) {
+		if (isProvedFunctionEntry(program, save)) {
+			return save;
+		}
+
+		Instruction allocation = contiguousPrevious(save);
+		Scalar amount = scalarOperand(allocation, 1);
+		if (!isMnemonic(allocation, "addb") ||
+			!isRegisterOperand(allocation, 0, "SP") || amount == null ||
+			amount.getUnsignedValue() != 2 ||
+			!fallsThroughTo(allocation, save.getMinAddress()) ||
+			hasExplicitFlowReferenceTo(save) ||
+			!isProvedFunctionEntry(program, allocation)) {
+			return null;
+		}
+		return allocation;
+	}
+
+	private static boolean isProvedFunctionEntry(Program program, Instruction instruction) {
+		Address entry = instruction.getMinAddress();
+		Function function = program.getFunctionManager().getFunctionContaining(entry);
+		if (function != null && function.getEntryPoint().equals(entry)) {
+			return true;
+		}
+		if (program.getSymbolTable().isExternalEntryPoint(entry)) {
+			return true;
+		}
+		boolean callIngress = false;
+		ReferenceIterator references = program.getReferenceManager().getReferencesTo(entry);
+		while (references.hasNext()) {
+			Reference reference = references.next();
+			if (!reference.getReferenceType().isFlow()) {
+				continue;
+			}
+			Instruction source = program.getListing().getInstructionAt(reference.getFromAddress());
+			if (!reference.getReferenceType().isCall() || source == null ||
+				!source.getFlowType().isCall() || !flowsTo(source, entry)) {
+				return false;
+			}
+			callIngress = true;
+		}
+		Instruction previous = instruction.getPrevious();
+		return callIngress &&
+			(previous == null || !fallsThroughTo(previous, entry));
+	}
+
 	private static boolean isSetSxmOnly(Instruction instruction) {
 		Scalar mask = scalarOperand(instruction, 0);
 		return isMnemonic(instruction, "setc") && instruction.getNumOperands() == 1 &&
 			mask != null && mask.getUnsignedValue() == 1;
+	}
+
+	private static boolean isClearSxmOnly(Instruction instruction) {
+		Scalar mask = scalarOperand(instruction, 0);
+		return isMnemonic(instruction, "clrc") && instruction.getNumOperands() == 1 &&
+			mask != null && mask.getUnsignedValue() == 1;
+	}
+
+	private static SxmMode recoverSxmMode(Instruction instruction) {
+		if (isSetSxmOnly(instruction)) {
+			return SxmMode.SET;
+		}
+		return isClearSxmOnly(instruction) ? SxmMode.CLEAR : null;
 	}
 
 	private static boolean isAr6ScaledAdd(Instruction instruction) {
@@ -980,6 +1572,62 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		return operandText(instruction, 1).equalsIgnoreCase(condition);
 	}
 
+	/**
+	 * Return the one direct unconditional branch into a saved-selector compare.
+	 * The proved firmware layouts place case bodies between the ingress branch
+	 * and the dispatcher, so instruction adjacency is not part of the proof.
+	 * Reject every second explicit flow edge and any implicit fall-through from
+	 * the physically preceding instruction.
+	 */
+	private static Instruction soleDirectUnconditionalIngress(Instruction compare) {
+		if (compare == null) {
+			return null;
+		}
+		Instruction ingress = null;
+		ReferenceIterator references = compare.getProgram().getReferenceManager()
+			.getReferencesTo(compare.getMinAddress());
+		while (references.hasNext()) {
+			Reference reference = references.next();
+			if (!reference.getReferenceType().isFlow()) {
+				continue;
+			}
+			if (ingress != null) {
+				return null;
+			}
+			Instruction source = compare.getProgram().getListing()
+				.getInstructionAt(reference.getFromAddress());
+			if (!isDirectUnconditionalBranchTo(source, compare.getMinAddress())) {
+				return null;
+			}
+			ingress = source;
+		}
+		if (ingress == null) {
+			return null;
+		}
+
+		Instruction physicalPrevious = compare.getPrevious();
+		if (physicalPrevious != null && !physicalPrevious.equals(ingress) &&
+			fallsThroughTo(physicalPrevious, compare.getMinAddress())) {
+			return null;
+		}
+		return ingress;
+	}
+
+	private static boolean isDirectUnconditionalBranchTo(Instruction instruction,
+			Address destination) {
+		if (!isMnemonic(instruction, "b") || !instruction.getFlowType().isJump() ||
+			instruction.getFlowType().isConditional()) {
+			return false;
+		}
+		int operands = instruction.getNumOperands();
+		if (operands != 1 &&
+			(operands != 2 || !operandText(instruction, 1).equalsIgnoreCase("UNC"))) {
+			return false;
+		}
+		Address[] flows = instruction.getFlows();
+		return flows.length == 1 && flows[0].equals(destination);
+	}
+
 	private static Address unsignedGuardDefaultPath(Instruction guard,
 			DispatchCandidate dispatch) {
 		Address entry = dispatch.entryInstruction.getMinAddress();
@@ -990,8 +1638,10 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 		else if ((dispatch.variant == DispatchVariant.PROGRAM_READ_SAVED_LONG ||
 			dispatch.variant == DispatchVariant.NATIVE_SAVED_LONG ||
+			dispatch.variant == DispatchVariant.NATIVE_SAVED_LONG_SUBB ||
 			dispatch.variant == DispatchVariant.NATIVE_SAVED_P ||
-			dispatch.variant == DispatchVariant.NATIVE_AR6_ZERO) &&
+			dispatch.variant == DispatchVariant.NATIVE_AR6_ZERO ||
+			dispatch.variant == DispatchVariant.NATIVE_AR6_SAVED_STACK) &&
 			isUnsignedConditionalBranch(guard, "HI") &&
 			fallsThroughTo(guard, entry)) {
 			Address[] flows = guard.getFlows();
@@ -1131,19 +1781,32 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 	}
 
 	private enum DispatchVariant {
-		PROGRAM_READ("program-read PREAD"),
-		PROGRAM_READ_SAVED_LONG("saved-selector program-read PREAD"),
-		NATIVE_PL("unified-memory native-load"),
-		NATIVE_SAVED_LONG("saved-selector native-load"),
-		NATIVE_SAVED_P("P-saved fall-through native-load"),
-		NATIVE_AR6_ZERO("zero-based AR6-indexed native-load"),
-		NATIVE_DIRECT("compact native-load");
+		PROGRAM_READ("program-read PREAD", false, false),
+		PROGRAM_READ_SAVED_LONG("saved-selector program-read PREAD", false, false),
+		NATIVE_PL("unified-memory native-load", false, false),
+		NATIVE_SAVED_LONG("saved-selector native-load", false, false),
+		NATIVE_SAVED_LONG_SUBB("SUBB saved-selector native-load", false, false),
+		NATIVE_SAVED_P("P-saved fall-through native-load", false, false),
+		NATIVE_AR6_ZERO("zero-based AR6-indexed native-load", false, false),
+		NATIVE_AR6_SAVED_GLOBAL("global saved-selector AR6 native-load", true, true),
+		NATIVE_AR6_SAVED_STACK("stack saved-selector AR6 native-load", true, true),
+		NATIVE_DIRECT("compact native-load", false, false);
 
 		private final String description;
+		private final boolean requiresPublication;
+		private final boolean requiresOverride;
 
-		DispatchVariant(String description) {
+		DispatchVariant(String description, boolean requiresPublication,
+				boolean requiresOverride) {
 			this.description = description;
+			this.requiresPublication = requiresPublication;
+			this.requiresOverride = requiresOverride;
 		}
+	}
+
+	private enum SxmMode {
+		SET,
+		CLEAR
 	}
 
 	private static final class IndexExpression {
@@ -1186,15 +1849,18 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		private final long low;
 		private final int count;
 		private final Address defaultPath;
+		private final DispatchVariant variant;
 
 		private Guard(Instruction instruction, Instruction startInstruction,
-				Instruction canonicalInstruction, long low, int count, Address defaultPath) {
+				Instruction canonicalInstruction, long low, int count, Address defaultPath,
+				DispatchVariant variant) {
 			this.instruction = instruction;
 			this.startInstruction = startInstruction;
 			this.canonicalInstruction = canonicalInstruction;
 			this.low = low;
 			this.count = count;
 			this.defaultPath = defaultPath;
+			this.variant = variant;
 		}
 	}
 
@@ -1210,11 +1876,12 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		@SuppressWarnings("unused")
 		private final List<Address> validatedTargets;
 		private final DispatchVariant variant;
+		private final Address provenFunctionEntry;
 
 		private SwitchDescriptor(Address branchAddress, Address tableBase, int count,
 				long lowestCase, Address defaultPath, Instruction guardCanonicalInstruction,
 				IndexExpression indexExpression, List<Address> validatedTargets,
-				DispatchVariant variant) {
+				DispatchVariant variant, Address provenFunctionEntry) {
 			this.branchAddress = branchAddress;
 			this.tableBase = tableBase;
 			this.count = count;
@@ -1224,6 +1891,7 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 			this.indexExpression = indexExpression;
 			this.validatedTargets = validatedTargets;
 			this.variant = variant;
+			this.provenFunctionEntry = provenFunctionEntry;
 		}
 	}
 
