@@ -26,6 +26,8 @@ GHIDRA_DIVISION_DIR := ghidra-division-test
 DIVISION_BUILD_DIR := division-build
 GHIDRA_PM_DIR := ghidra-pm-test
 PM_BUILD_DIR := pm-build
+GHIDRA_STATUS_MODE_DIR := ghidra-status-mode-test
+STATUS_MODE_BUILD_DIR := status-mode-build
 PROFILE_GENERATE_DIR := profile-generate-check
 C2000WARE_F2837XS_SUBSET ?=
 ZOO_BUILD_DIR := compiler-zoo-build
@@ -237,6 +239,17 @@ qpcode: tms320c28.sla
 semantic-test: tms320c28.sla semantic_tests.py
 	$(Q)$(PYTHON) semantic_tests.py
 
+# Finite SXM low-half and completed-TI-C-call OVM data-flow regressions.
+.PHONY: status-mode-test
+status-mode-test: tms320c28.sla analyzer semantic_tests.py status_mode_test.py \
+		StatusModeTest.java StatusModeSeedStale.java status_mode_test.c \
+		status_mode_test.cmd status_mode_validation.asm status_mode_validation.cmd
+	$(Q)$(PYTHON) semantic_tests.py --status-mode-only
+	$(Q)$(PYTHON) status_mode_test.py --root $$PWD \
+		--cl2000 $(AS) --dis2000 $(DIS) --strip2000 $(STRIP) \
+		--ghidra-headless $(GHIDRA_HEADLESS) --build $$PWD/$(STATUS_MODE_BUILD_DIR) \
+		--work $$PWD/$(GHIDRA_STATUS_MODE_DIR)
+
 # Assemble instructions from stdin, print along with hex words
 .PHONY: qasm
 qasm:
@@ -447,6 +460,7 @@ clean:
 	@rm -rf $(GHIDRA_PROFILE_DIR) $(GHIDRA_RPC_ABI_DIR) $(RPC_ABI_BUILD_DIR) $(PROFILE_GENERATE_DIR)
 	@rm -rf $(GHIDRA_DIVISION_DIR) $(DIVISION_BUILD_DIR)
 	@rm -rf $(GHIDRA_PM_DIR) $(PM_BUILD_DIR)
+	@rm -rf $(GHIDRA_STATUS_MODE_DIR) $(STATUS_MODE_BUILD_DIR)
 	@rm -rf $(ZOO_BUILD_DIR)
 	@rm -rf $(ANALYZER_BUILD_DIR)
 	@rm -f $(ANALYZER_JAR)

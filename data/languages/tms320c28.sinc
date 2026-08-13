@@ -408,6 +408,27 @@ macro acc_add32(value) {
 	commit_acc_signed(wrapped, old, overflow);
 }
 
+# Exact OVM=0 specialization used only at analyzer-proved TI C states.  It
+# preserves wrapped ACC, carry, sticky V, signed six-bit OVC, N, and Z while
+# omitting only the unreachable saturation select and OVM read.
+macro acc_add32_ovm0(value) {
+	local old:4 = ACC;
+	local wrapped:4 = old + value;
+	local overflow:1 = scarry(old, value);
+	local old_negative:1 = old[31,1];
+	local overflow_mask:1 = 0 - overflow;
+	local count_direction:1 = 1 - (old_negative << 1); # +1 positive, -1 negative
+	local ovc_delta:1 = count_direction & overflow_mask;
+	local ovc_next:1 = OVC + ovc_delta;
+	local ovc_raw:1 = ovc_next & 0x3f;
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+	C = carry(old, value);
+	ACC = wrapped;
+	V = V || overflow;
+	flagnz(ACC);
+}
+
 macro acc_sub32(value) {
 	local old:4 = ACC;
 	local wrapped:4 = old - value;
@@ -2053,7 +2074,15 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.143
-:addu ACC, loc16 is op8_8=0b00001101 & ACC & loc16 {
+# A finite processor analyzer selects this equivalent form only where OVM=0
+# follows from a proved TI C boundary or an explicit CLRC OVM definition.
+:addu ACC, loc16 is ovm_zero=1 & op8_8=0b00001101 & ACC & loc16 {
+	local value:4 = zext(loc16);
+	acc_add32_ovm0(value);
+}
+
+# p.143
+:addu ACC, loc16 is ovm_zero=0 & op8_8=0b00001101 & ACC & loc16 {
 	local value:4 = zext(loc16);
 	acc_add32(value);
 }

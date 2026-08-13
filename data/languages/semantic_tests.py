@@ -9,6 +9,7 @@ register-form arithmetic constructors.  It is not a hardware emulator.
 
 from __future__ import annotations
 
+import argparse
 import math
 import struct
 import sys
@@ -55,6 +56,17 @@ def _translate_pm_store_noshift(words: Iterable[int]) -> list:
     ctx.setVariableDefault("ctx_amode", 0)
     ctx.setVariableDefault("ctx_page0", 0)
     ctx.setVariableDefault("pm_store_noshift", 1)
+    data = b"".join(struct.pack("<H", word) for word in words)
+    return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
+
+
+def _translate_ovm_zero(words: Iterable[int]) -> list:
+    """Translate arithmetic selected by a finite proof that OVM is zero."""
+    ctx = Context("tms320c28:LE:32:default")
+    ctx.setVariableDefault("ctx_objmode", 1)
+    ctx.setVariableDefault("ctx_amode", 0)
+    ctx.setVariableDefault("ctx_page0", 0)
+    ctx.setVariableDefault("ovm_zero", 1)
     data = b"".join(struct.pack("<H", word) for word in words)
     return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
 
@@ -2427,6 +2439,38 @@ def check_addu_standard_width(ops: list) -> None:
     )
 
 
+def check_addu_proved_ovm_zero(_: list) -> None:
+    ops = _translate_ovm_zero((0x0DA6,))
+    _no_internal_cfg(ops)
+    _no_nonstandard_arithmetic_widths(ops)
+    touched = {
+        _reg(node)
+        for op in ops
+        for node in (*op.inputs, op.output)
+        if node is not None and _reg(node) is not None
+    }
+    assert "OVM" not in touched, f"proved OVM=0 ADDU still references OVM: {touched}"
+    assert not any(
+        op.opcode == OpCode.INT_XOR and any(_is_const(value, 0x7FFFFFFF) for value in op.inputs)
+        for op in ops
+    ), "proved OVM=0 ADDU retained saturation-value construction"
+    _find(ops, lambda op: _reg(op.output) == "OVC", "signed OVC update")
+    _find(ops, lambda op: _reg(op.output) == "V", "sticky V update")
+    vectors = (
+        ({"ACC": 0xFFFFFFFF, "AR6": 1, "V": 0, "OVC": 0},
+         {"ACC": 0, "C": 1, "V": 0, "OVC": 0, "N": 0, "Z": 1},
+         "unsigned carry without signed overflow"),
+        ({"ACC": 0x7FFFFFFF, "AR6": 1, "V": 0, "OVC": 0},
+         {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+         "positive overflow increments OVC"),
+        ({"ACC": 0x80000000, "AR6": 0xFFFF, "V": 1, "OVC": 0},
+         {"ACC": 0x8000FFFF, "C": 0, "V": 1, "OVC": 0, "N": 1, "Z": 0},
+         "zero-extended source and sticky V"),
+    )
+    for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
 def check_addul_acc(ops: list) -> None:
     _check_unsigned_ovcu(ops, destination="ACC")
     _check_addul_execution(ops, destination="ACC")
@@ -3409,6 +3453,7 @@ CASES = (
     Case("SUBB uses ordinary widths with exact no-borrow", (0x1901,), check_subb_standard_width),
     Case("proved switch SUBB uses bounded no-borrow arithmetic", (0x1901,), check_subb_switch_canonical),
     Case("ADDU uses ordinary widths with zero-extended source", (0x0DA6,), check_addu_standard_width),
+    Case("status mode: proved OVM-zero ADDU omits only saturation", (0x0DA6,), check_addu_proved_ovm_zero),
     Case("ADDCL includes carry in signed status", (0x5640, 0x00A6), check_addcl_status),
     Case("ADDCL snapshots an aliased ACC source", (0x5640, 0x00A9), check_addcl_alias_safe),
     Case("ADDCU includes carry in signed status", (0x0CAC,), check_addcu_status),
@@ -3510,8 +3555,31 @@ CASES = (
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--status-mode-only",
+        action="store_true",
+        help="run only the focused SXM/OVM status-mode semantic cases",
+    )
+    args = parser.parse_args()
+
+    selected = CASES
+    if args.status_mode_only:
+        selected = tuple(
+            case
+            for case in CASES
+            if case.name.startswith("status mode:")
+            or case.name in {
+                "ADD uses ordinary widths and preserves SXM",
+                "SUB uses ordinary widths and preserves SXM",
+                "ADDU uses ordinary widths with zero-extended source",
+                "ordinary MOV loc16,P retains generic PM shift semantics",
+                "proved decoded-PM-zero MOV loc16,P is an alias-safe low-half copy",
+            }
+        )
+
     failures: list[str] = []
-    for case in CASES:
+    for case in selected:
         try:
             case.check(_translate(case.words))
         except Exception as exc:  # Keep the full suite running to report all regressions.
@@ -3523,7 +3591,7 @@ def main() -> int:
         print("\n".join(failures), file=sys.stderr)
         return 1
 
-    print(f"SEMANTIC_TESTS={len(CASES)}")
+    print(f"SEMANTIC_TESTS={len(selected)}")
     print("INTERNAL_CFG_VECTOR_PASS=all")
     return 0
 
