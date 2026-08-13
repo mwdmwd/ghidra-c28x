@@ -256,7 +256,8 @@ qasm:
 rpc-abi-test: tms320c28.sla analyzer rpc_abi_test.py RpcAbiTest.java rpc_abi_test.c \
 		rpc_abi_test.cmd rpc_flow_validation.asm rpc_flow_validation.cmd
 	$(Q)$(PYTHON) rpc_abi_test.py --root $$PWD --cl2000 "$(AS)" \
-		--dis2000 "$(DIS)" --ghidra-headless "$(GHIDRA_HEADLESS)" \
+		--dis2000 "$(DIS)" --strip2000 "$(STRIP)" \
+		--ghidra-headless "$(GHIDRA_HEADLESS)" \
 		--build $$PWD/$(RPC_ABI_BUILD_DIR) --work $$PWD/$(GHIDRA_RPC_ABI_DIR)
 
 .PHONY: division-test

@@ -54,6 +54,20 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
          count that architectural two-word transition a second time. -->
     <prototype name="__stdcall" extrapop="0" stackshift="0">
       <input>
+        <!-- Integer class: AL and AH are independent 16-bit resources,
+             while the containing ACC entry consumes both for a 32-bit value.
+             Size-directed rules below select this class before the remaining
+             general XAR4/XAR5 fallbacks. -->
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AH"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" storage="class4">
+          <register name="ACC"/>
+        </pentry>
+
         <!-- Class 3: Hidden return pointer (structure returns) -->
         <!-- Placed in XAR6 (manual sec 7.3.2) -->
         <pentry minsize="1" maxsize="4" storage="hiddenret">
@@ -83,12 +97,7 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="R3H"/>
         </pentry>
 
-        <!-- Class 0: General: ACC covers both 16-bit and 32-bit integer args
-            (AL/AH are sub-registers of ACC; listing them separately
-              causes the physical-overlap error) -->
-        <pentry minsize="1" maxsize="4">
-          <register name="ACC"/>
-        </pentry>
+        <!-- The accumulator resources are class4 entries above. -->
 
         <!-- XAR4/XAR5 are also the next general-purpose argument slots when
              their type-specific pointer pools were not consumed.  Keeping
@@ -107,6 +116,22 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <pentry minsize="1" maxsize="500" align="2">
           <addr offset="0x1fffffe08" space="stack"/>
         </pentry>
+        <rule>
+          <datatype name="int" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="int" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
       </input>
 
       <output>
@@ -116,10 +141,36 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <pentry minsize="1" maxsize="4" metatype="float">
           <register name="R0H"/>
         </pentry>
-        <!-- ACC covers both 32-bit and 16-bit integer returns (subsumes AL) -->
-        <pentry minsize="1" maxsize="4">
+        <pentry minsize="1" maxsize="2">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
           <register name="ACC"/>
         </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="P"/>
+        </pentry>
+        <!-- The joined value is ordered most-significant first: ACC carries
+             bits 63:32 and P carries bits 31:0. -->
+        <pentry minsize="8" maxsize="8">
+          <addr space="join" piece1="ACC" piece2="P"/>
+        </pentry>
+        <rule>
+          <datatype name="float" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="struct" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="union" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="array" minsize="5"/>
+          <hidden_return/>
+        </rule>
       </output>
 
       <returnaddress>
@@ -180,6 +231,20 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
        upon-return model pops it; keep the completed call SP-balanced. -->
   <prototype name="__lc" extrapop="0" stackshift="0">
       <input>
+        <!-- Integer class: AL and AH are independent 16-bit resources,
+             while the containing ACC entry consumes both for a 32-bit value.
+             Size-directed rules below select this class before the remaining
+             general XAR4/XAR5 fallbacks. -->
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AH"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" storage="class4">
+          <register name="ACC"/>
+        </pentry>
+
         <!-- Class 3: Hidden return pointer (structure returns) -->
         <!-- Placed in XAR6 (manual sec 7.3.2) -->
         <pentry minsize="1" maxsize="4" storage="hiddenret">
@@ -209,12 +274,7 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="R3H"/>
         </pentry>
 
-        <!-- Class 0: General: ACC covers both 16-bit and 32-bit integer args
-            (AL/AH are sub-registers of ACC; listing them separately
-              causes the physical-overlap error) -->
-        <pentry minsize="1" maxsize="4">
-          <register name="ACC"/>
-        </pentry>
+        <!-- The accumulator resources are class4 entries above. -->
 
         <!-- XAR4/XAR5 are also the next general-purpose argument slots when
              their type-specific pointer pools were not consumed.  Keeping
@@ -233,6 +293,22 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <pentry minsize="1" maxsize="500" align="2">
           <addr offset="0x1fffffe08" space="stack"/>
         </pentry>
+        <rule>
+          <datatype name="int" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="int" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
       </input>
 
       <output>
@@ -242,10 +318,36 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <pentry minsize="1" maxsize="4" metatype="float">
           <register name="R0H"/>
         </pentry>
-        <!-- ACC covers both 32-bit and 16-bit integer returns (subsumes AL) -->
-        <pentry minsize="1" maxsize="4">
+        <pentry minsize="1" maxsize="2">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
           <register name="ACC"/>
         </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="P"/>
+        </pentry>
+        <!-- The joined value is ordered most-significant first: ACC carries
+             bits 63:32 and P carries bits 31:0. -->
+        <pentry minsize="8" maxsize="8">
+          <addr space="join" piece1="ACC" piece2="P"/>
+        </pentry>
+        <rule>
+          <datatype name="float" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="struct" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="union" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="array" minsize="5"/>
+          <hidden_return/>
+        </rule>
       </output>
 
       <unaffected>
@@ -296,6 +398,20 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
 
   <prototype name="__ffc" extrapop="0" stackshift="0">
       <input>
+        <!-- Integer class: AL and AH are independent 16-bit resources,
+             while the containing ACC entry consumes both for a 32-bit value.
+             Size-directed rules below select this class before the remaining
+             general XAR4/XAR5 fallbacks. -->
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AH"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" storage="class4">
+          <register name="ACC"/>
+        </pentry>
+
         <!-- Class 3: Hidden return pointer (structure returns) -->
         <!-- Placed in XAR6 (manual sec 7.3.2) -->
         <pentry minsize="1" maxsize="4" storage="hiddenret">
@@ -325,12 +441,7 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="R3H"/>
         </pentry>
 
-        <!-- Class 0: General: ACC covers both 16-bit and 32-bit integer args
-            (AL/AH are sub-registers of ACC; listing them separately
-              causes the physical-overlap error) -->
-        <pentry minsize="1" maxsize="4">
-          <register name="ACC"/>
-        </pentry>
+        <!-- The accumulator resources are class4 entries above. -->
 
         <!-- XAR4/XAR5 are also the next general-purpose argument slots when
              their type-specific pointer pools were not consumed.  Keeping
@@ -348,6 +459,22 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <pentry minsize="1" maxsize="500" align="2">
           <addr offset="0x1fffffe0a" space="stack"/>
         </pentry>
+        <rule>
+          <datatype name="int" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="int" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
       </input>
 
       <output>
@@ -357,10 +484,36 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
         <pentry minsize="1" maxsize="4" metatype="float">
           <register name="R0H"/>
         </pentry>
-        <!-- ACC covers both 32-bit and 16-bit integer returns (subsumes AL) -->
-        <pentry minsize="1" maxsize="4">
+        <pentry minsize="1" maxsize="2">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
           <register name="ACC"/>
         </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="P"/>
+        </pentry>
+        <!-- The joined value is ordered most-significant first: ACC carries
+             bits 63:32 and P carries bits 31:0. -->
+        <pentry minsize="8" maxsize="8">
+          <addr space="join" piece1="ACC" piece2="P"/>
+        </pentry>
+        <rule>
+          <datatype name="float" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="struct" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="union" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="array" minsize="5"/>
+          <hidden_return/>
+        </rule>
       </output>
 
       <returnaddress>

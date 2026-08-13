@@ -1,5 +1,19 @@
+typedef signed int rpc_s16;
+typedef unsigned int rpc_u16;
+typedef signed long rpc_s32;
+typedef unsigned long rpc_u32;
+typedef signed long long rpc_s64;
+typedef unsigned long long rpc_u64;
+
 typedef long (*rpc_binary_fn)(long, long);
+
 volatile long rpc_branch_sink;
+volatile rpc_s16 rpc_scalar_sink_s16;
+volatile rpc_u16 rpc_scalar_sink_u16;
+volatile rpc_s32 rpc_scalar_sink_s32;
+volatile rpc_u32 rpc_scalar_sink_u32;
+volatile rpc_s64 rpc_scalar_sink_s64;
+volatile rpc_u64 rpc_scalar_sink_u64;
 
 #pragma FUNC_CANNOT_INLINE(rpc_void_a)
 void rpc_void_a(long value) { rpc_branch_sink += value; }
@@ -68,6 +82,129 @@ long rpc_preserve_older(long value) {
     long nested = rpc_nested_inner(before);
     return before + nested + rpc_multi_return(value - 4L);
 }
+
+/*
+ * Scalar-register subjects.  The one-argument callees force a direct 16-bit
+ * save from AL; no operation reads AH as an extension of the incoming value.
+ */
+#pragma FUNC_CANNOT_INLINE(rpc_one_s16)
+rpc_s16 rpc_one_s16(rpc_s16 value) {
+    volatile rpc_s16 saved = value;
+    return (rpc_s16)((rpc_s32)saved + 1L);
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_one_u16)
+rpc_u16 rpc_one_u16(rpc_u16 value) {
+    volatile rpc_u16 saved = value;
+    return (rpc_u16)((rpc_u32)saved + 1UL);
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_four_s16)
+rpc_s16 rpc_four_s16(rpc_s16 a, rpc_s16 b, rpc_s16 c, rpc_s16 d) {
+    rpc_s32 total = (rpc_s32)a + 3L * (rpc_s32)b +
+                    5L * (rpc_s32)c + 7L * (rpc_s32)d;
+    return (rpc_s16)total;
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_one_s32)
+rpc_s32 rpc_one_s32(rpc_s32 value) {
+    rpc_scalar_sink_s32 = value;
+    return value ^ 0x12345678L;
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_id_s64)
+rpc_s64 rpc_id_s64(rpc_s64 value) { return value; }
+
+#pragma FUNC_CANNOT_INLINE(rpc_arith_s64)
+rpc_s64 rpc_arith_s64(rpc_s64 value) {
+    return (rpc_s64)((rpc_u64)value + 0x1122334455667788ULL);
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_arith_u64)
+rpc_u64 rpc_arith_u64(rpc_u64 value) {
+    return value + 0x8877665544332211ULL;
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_two_s64)
+rpc_s64 rpc_two_s64(rpc_s64 first, rpc_s64 second) {
+    return first ^ second;
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_two_u64)
+rpc_u64 rpc_two_u64(rpc_u64 first, rpc_u64 second) {
+    return first + second;
+}
+
+/* Exact SPRU514Z mixed-order example: stack, ACC:P, XAR5, XAR4. */
+#pragma FUNC_CANNOT_INLINE(rpc_mixed_s64)
+rpc_s64 rpc_mixed_s64(rpc_s32 a, rpc_s64 b, rpc_s16 c, rpc_s16 *d) {
+    rpc_u64 total = (rpc_u64)b + (rpc_u64)(rpc_s64)a +
+                    (rpc_u64)(rpc_s64)c + (rpc_u64)(rpc_s64)*d;
+    return (rpc_s64)total;
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_div_s64)
+rpc_s64 rpc_div_s64(rpc_s64 dividend, rpc_s64 divisor) {
+    const rpc_s64 minimum = -9223372036854775807LL - 1LL;
+    if (divisor == 0LL) return 0LL;
+    if (dividend == minimum && divisor == -1LL) return minimum;
+    return dividend / divisor;
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_div_u64)
+rpc_u64 rpc_div_u64(rpc_u64 dividend, rpc_u64 divisor) {
+    return divisor == 0ULL ? 0ULL : dividend / divisor;
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_calls16)
+rpc_s16 rpc_calls16(rpc_s16 choose) {
+    volatile rpc_s16 branch_choice = choose;
+    rpc_s16 total = rpc_one_s16(6);
+    total = (rpc_s16)(total + rpc_one_s16(1));
+    total = (rpc_s16)(total + rpc_one_s16(10));
+    total = (rpc_s16)(total + rpc_one_s16(0));
+    total = (rpc_s16)(total + rpc_one_s16(-7));
+    total = (rpc_s16)(total + (rpc_s16)rpc_one_u16(0xfff0U));
+
+    /* Constant AL loads leave unrelated AH state stale at the call sites. */
+    if (branch_choice != 0) {
+        rpc_scalar_sink_u16 = 0x55aaU;
+        total = (rpc_s16)(total + rpc_four_s16(1, 2, 3, 4));
+    }
+    else {
+        rpc_scalar_sink_u16 = 0xaa55U;
+        total = (rpc_s16)(total + rpc_one_s16(rpc_four_s16(5, 6, 7, 8)));
+    }
+    rpc_scalar_sink_s16 = total;
+    return (rpc_s16)(total + (rpc_s16)rpc_scalar_sink_u16);
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_calls64)
+rpc_s64 rpc_calls64(rpc_s64 x, rpc_s64 y, rpc_s16 c, rpc_s16 *pointer) {
+    rpc_s64 identity = rpc_id_s64(x);
+    rpc_s64 signed_value = rpc_arith_s64(identity);
+    rpc_u64 unsigned_value = rpc_arith_u64((rpc_u64)y);
+    rpc_s64 pair_signed = rpc_two_s64(signed_value, y);
+    rpc_u64 pair_unsigned = rpc_two_u64(unsigned_value, (rpc_u64)x);
+    rpc_s64 mixed = rpc_mixed_s64(0x12345678L, pair_signed, c, pointer);
+    rpc_s64 signed_quotient = rpc_div_s64(mixed, y | 1LL);
+    rpc_u64 unsigned_quotient = rpc_div_u64(pair_unsigned, ((rpc_u64)y) | 1ULL);
+    rpc_scalar_sink_s64 = signed_quotient;
+    rpc_scalar_sink_u64 = unsigned_quotient;
+    rpc_scalar_sink_u32 = (rpc_u32)rpc_one_s32((rpc_s32)c);
+    return (rpc_s64)((rpc_u64)signed_quotient + unsigned_quotient +
+                     (rpc_u64)rpc_scalar_sink_u32);
+}
+
+#pragma FUNC_CANNOT_INLINE(rpc_scalar_fixture_entry)
+rpc_s64 rpc_scalar_fixture_entry(rpc_s16 choose) {
+    rpc_s16 pointed = -11;
+    rpc_s16 narrow = rpc_calls16(choose);
+    return rpc_calls64(0x1122334455667788LL,
+                       -0x0102030405060708LL,
+                       narrow, &pointed);
+}
+
 #pragma FUNC_CANNOT_INLINE(rpc_fixture_entry)
 long rpc_fixture_entry(long value) {
     long direct = rpc_nested_outer(value);
@@ -76,5 +213,7 @@ long rpc_fixture_entry(long value) {
     long branch = rpc_branch_rejoin(value & 1L,value+1L,value+2L,value+3L,
                                     value+4L,value+5L,value+6L,value+7L,
                                     value+8L,value+9L);
-    return direct + indirect + stack + branch + rpc_preserve_older(value);
+    rpc_s64 scalar = rpc_scalar_fixture_entry((rpc_s16)value);
+    rpc_s32 scalar_fold = (rpc_s32)((rpc_u64)scalar ^ ((rpc_u64)scalar >> 32));
+    return direct + indirect + stack + branch + rpc_preserve_older(value) + scalar_fold;
 }
