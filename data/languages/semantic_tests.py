@@ -971,6 +971,208 @@ def _assert_execution(
     assert not mismatches, f"{description}: actual/expected {mismatches}"
 
 
+def _mov_acc_mext_expected(value: int, sxm: int, shift: int) -> dict[str, int]:
+    value &= 0xFFFF
+    extended = value
+    if sxm and value & 0x8000:
+        extended |= 0xFFFF0000
+    result = (extended << shift) & 0xFFFFFFFF
+    return {
+        "ACC": result,
+        "AL": result & 0xFFFF,
+        "N": (result >> 31) & 1,
+        "Z": int(result == 0),
+    }
+
+
+def _mov_acc_writes(ops: list):
+    acc_write = _find(
+        ops, lambda op: _reg(op.output) == "ACC", "complete MOV ACC destination write"
+    )
+    al_write = _find(
+        ops, lambda op: _reg(op.output) == "AL", "explicit MOV ACC low-half write"
+    )
+    assert ops.index(acc_write) < ops.index(al_write), (acc_write, al_write)
+    assert any(_depends_on_register(ops, value, "SXM") for value in acc_write.inputs), (
+        "complete MOV ACC result must retain SXM dependence"
+    )
+    assert not _depends_on_register(ops, al_write.inputs[0], "SXM"), (
+        "exact low half must not depend on SXM"
+    )
+    for flag in ("N", "Z"):
+        flag_write = _find(
+            ops, lambda op, flag=flag: _reg(op.output) == flag, f"MOV ACC {flag} write"
+        )
+        assert ops.index(al_write) < ops.index(flag_write)
+        assert any(
+            _depends_on_register(ops, value, "ACC") for value in flag_write.inputs
+        ), f"MOV ACC {flag} must be computed from the complete result"
+    return acc_write, al_write
+
+
+def _check_mov_acc_mext_register(ops: list, shift: int, source: str = "AR6") -> None:
+    _no_internal_cfg(ops)
+    acc_write, al_write = _mov_acc_writes(ops)
+    snapshots = [
+        op
+        for op in ops
+        if op.opcode == OpCode.COPY
+        and op.output is not None
+        and op.output.space.name == "unique"
+        and op.inputs
+        and _reg(op.inputs[0]) == source
+    ]
+    assert len(snapshots) == 1, f"expected one {source} snapshot, got {len(snapshots)}"
+    snapshot = snapshots[0]
+    assert ops.index(snapshot) < ops.index(acc_write)
+    assert _depends_on_varnode(ops, acc_write.inputs[0], snapshot.output)
+    assert _depends_on_varnode(ops, al_write.inputs[0], snapshot.output)
+
+    for value in (0x0000, 0x7FFF, 0x8000, 0xFFFF):
+        for sxm in (0, 1):
+            initial = {source: value, "SXM": sxm}
+            expected = _mov_acc_mext_expected(value, sxm, shift)
+            actual = _execute_integer_pcode(ops, initial)
+            for name, wanted in expected.items():
+                got = actual.get(name)
+                assert got == wanted, (
+                    f"MOV ACC,{source} << {shift}, value=0x{value:04x}, SXM={sxm}: "
+                    f"{name}=0x{got:x} expected 0x{wanted:x}"
+                )
+            assert (actual["ACC"] >> 16) == (expected["ACC"] >> 16), (
+                "AH overlap mismatch", value, sxm, shift, actual, expected
+            )
+
+
+def check_mov_acc_mext_shift0(ops: list) -> None:
+    _check_mov_acc_mext_register(ops, 0)
+
+
+def check_mov_acc_mext_shift1(ops: list) -> None:
+    _check_mov_acc_mext_register(ops, 1)
+
+
+def check_mov_acc_mext_shift8(ops: list) -> None:
+    _check_mov_acc_mext_register(ops, 8)
+
+
+def check_mov_acc_mext_shift15(ops: list) -> None:
+    _check_mov_acc_mext_register(ops, 15)
+
+
+def check_mov_acc_mext_alias_al(ops: list) -> None:
+    _check_mov_acc_mext_register(ops, 8, "AL")
+    snapshot = _find(
+        ops,
+        lambda op: op.opcode == OpCode.COPY
+        and op.output is not None
+        and op.output.space.name == "unique"
+        and op.inputs
+        and _reg(op.inputs[0]) == "AL",
+        "old AL snapshot",
+    )
+    first_acc_overlap = _find_index(
+        ops,
+        lambda op: op.output is not None and _reg(op.output) in {"ACC", "AL"},
+        "first ACC/AL write",
+    )
+    assert ops.index(snapshot) < first_acc_overlap, (
+        "aliased AL source must be snapshotted before either overlapping destination write"
+    )
+
+
+def _check_mov_acc_mext_memory(ops: list, *, expect_xar6_update: bool = False) -> None:
+    _no_internal_cfg(ops)
+    acc_write, al_write = _mov_acc_writes(ops)
+    loads = [op for op in ops if op.opcode == OpCode.LOAD and op.output.size == 2]
+    assert len(loads) == 1, f"one architectural loc16 operand emitted {len(loads)} LOADs"
+    load = loads[0]
+    snapshots = [
+        op
+        for op in ops
+        if op.opcode == OpCode.COPY
+        and op.output is not None
+        and op.output.space.name == "unique"
+        and op.inputs
+        and _key(op.inputs[0]) == _key(load.output)
+    ]
+    assert len(snapshots) == 1, f"memory source needs one reusable snapshot, got {len(snapshots)}"
+    snapshot = snapshots[0]
+    assert ops.index(load) < ops.index(snapshot) < ops.index(acc_write)
+    assert _depends_on_varnode(ops, acc_write.inputs[0], snapshot.output)
+    assert _depends_on_varnode(ops, al_write.inputs[0], snapshot.output)
+    xar_writes = [op for op in ops if _reg(op.output) == "XAR6"]
+    if expect_xar6_update:
+        assert len(xar_writes) == 1, f"postincrement source updated XAR6 {len(xar_writes)} times"
+        address_snapshots = [
+            op
+            for op in ops
+            if op.opcode == OpCode.COPY
+            and op.output is not None
+            and op.output.space.name == "unique"
+            and op.inputs
+            and _reg(op.inputs[0]) == "XAR6"
+            and _depends_on_varnode(ops, load.inputs[1], op.output)
+        ]
+        assert len(address_snapshots) == 1, (
+            "postincrement must snapshot the old XAR6 once for the LOAD address"
+        )
+        assert ops.index(address_snapshots[0]) < ops.index(xar_writes[0])
+        assert ops.index(address_snapshots[0]) < ops.index(load)
+    else:
+        assert not xar_writes, f"non-updating memory source unexpectedly changed XAR6: {xar_writes}"
+
+
+def check_mov_acc_mext_memory(ops: list) -> None:
+    _check_mov_acc_mext_memory(ops)
+
+
+def check_mov_acc_mext_memory_postincrement(ops: list) -> None:
+    _check_mov_acc_mext_memory(ops, expect_xar6_update=True)
+
+
+def check_mov_acc_mext_dynamic(ops: list) -> None:
+    _no_internal_cfg(ops)
+    acc_write, al_write = _mov_acc_writes(ops)
+    assert any(_depends_on_register(ops, value, "T") for value in acc_write.inputs)
+    assert any(_depends_on_register(ops, value, "T") for value in al_write.inputs)
+    snapshots = [
+        op
+        for op in ops
+        if op.opcode == OpCode.COPY
+        and op.output is not None
+        and op.output.space.name == "unique"
+        and op.inputs
+        and _reg(op.inputs[0]) == "AR6"
+    ]
+    assert len(snapshots) == 1
+    for shift in (0, 1, 8, 15):
+        for value in (0x7FFF, 0x8000, 0xFFFF):
+            for sxm in (0, 1):
+                expected = _mov_acc_mext_expected(value, sxm, shift)
+                actual = _execute_integer_pcode(
+                    ops, {"AR6": value, "T": shift, "SXM": sxm}
+                )
+                for name, wanted in expected.items():
+                    assert actual.get(name) == wanted, (shift, value, sxm, name, actual, expected)
+
+
+def check_mov_acc_mext_setc_sxm(ops: list) -> None:
+    _no_internal_cfg(ops)
+    actual = _execute_integer_pcode(ops, {"AR6": 0x8000, "SXM": 0})
+    expected = _mov_acc_mext_expected(0x8000, 1, 8)
+    for name, wanted in {**expected, "SXM": 1}.items():
+        assert actual.get(name) == wanted, (name, actual, expected)
+
+
+def check_mov_acc_mext_clrc_sxm(ops: list) -> None:
+    _no_internal_cfg(ops)
+    actual = _execute_integer_pcode(ops, {"AR6": 0x8000, "SXM": 1})
+    expected = _mov_acc_mext_expected(0x8000, 0, 8)
+    for name, wanted in {**expected, "SXM": 0}.items():
+        assert actual.get(name) == wanted, (name, actual, expected)
+
+
 
 def check_abs_eventual_state(ops: list) -> None:
     _no_internal_cfg(ops)
@@ -3185,6 +3387,19 @@ CASES = (
         (0xA68C,),
         check_xar_predecrement32,
     ),
+    Case("status mode: MOV ACC,AR6 shift 0 exposes exact low half", (0x85A6,), check_mov_acc_mext_shift0),
+    Case("status mode: MOV ACC,AR6 shift 1 exposes exact low half", (0x5603, 0x01A6), check_mov_acc_mext_shift1),
+    Case("status mode: MOV ACC,AR6 shift 8 exposes exact low half", (0x5603, 0x08A6), check_mov_acc_mext_shift8),
+    Case("status mode: MOV ACC,AR6 shift 15 exposes exact low half", (0x5603, 0x0FA6), check_mov_acc_mext_shift15),
+    Case("status mode: MOV ACC,AL snapshots an overlapping source", (0x5603, 0x08A9), check_mov_acc_mext_alias_al),
+    Case("status mode: MOV ACC,memory shift 0 performs one LOAD", (0x85C6,), check_mov_acc_mext_memory),
+    Case("status mode: MOV ACC,memory shift 1 performs one LOAD", (0x5603, 0x01C6), check_mov_acc_mext_memory),
+    Case("status mode: MOV ACC,memory shift 8 performs one LOAD", (0x5603, 0x08C6), check_mov_acc_mext_memory),
+    Case("status mode: MOV ACC,memory shift 15 performs one LOAD", (0x5603, 0x0FC6), check_mov_acc_mext_memory),
+    Case("status mode: MOV ACC,*XAR6++ performs one LOAD and one update", (0x5603, 0x0886), check_mov_acc_mext_memory_postincrement),
+    Case("status mode: MOV ACC,AR6 dynamic T remains exact", (0x5606, 0x00A6), check_mov_acc_mext_dynamic),
+    Case("status mode: SETC SXM changes full MOV ACC result", (0x3B01, 0x5603, 0x08A6), check_mov_acc_mext_setc_sxm),
+    Case("status mode: CLRC SXM changes full MOV ACC result", (0x2901, 0x5603, 0x08A6), check_mov_acc_mext_clrc_sxm),
     Case("SUBL models V, signed OVC, and OVM branch-free", (0x11AC,), check_signed_acc_status),
     Case("ADD uses ordinary widths and preserves SXM", (0x81A6,), check_add_standard_width),
     Case("SUB uses ordinary widths and preserves SXM", (0xAEA6,), check_sub_standard_width),

@@ -123,13 +123,32 @@ define pcodeop iack;
 define pcodeop intr_emu;
 define pcodeop cospu_f32;
 
-macro mext(out, in) {
+# Extend one already-snapshotted 16-bit value according to SXM.
+macro mext_value(out, source) {
 	local sxm_mask:4 = 0 - zext(SXM);
-	local zval:4 = zext(in);
-	local sval:4 = sext(in);
-	# Sign extension only contributes upper bits, the low 16 bits are identical in both forms.
-	# This equivalent expression is easier for the decompiler to fold when the sign bit is known.
+	local zval:4 = zext(source);
+	local sval:4 = sext(source);
+	# Sign extension only contributes upper bits; the low 16 bits are identical.
 	out = zval | (sval & sxm_mask);
+}
+
+# Every architectural operand is evaluated exactly once.  This matters for
+# memory loc16 forms, including volatile and side-effecting addressing modes.
+macro mext(out, in) {
+	local source:2 = in;
+	mext_value(out, source);
+}
+
+# MOV ACC,loc16 << shift has an SXM-dependent upper half but an exact
+# SXM-independent low half.  Snapshot before any overlapping ACC/AL write,
+# commit the complete architectural result, then restate its identical low
+# half so ordinary 16-bit consumers can see that invariant directly.
+macro mov_acc_mext_shift(in, shift) {
+	local source:2 = in;
+	local full:4;
+	mext_value(full, source);
+	ACC = full << shift;
+	AL = source << shift;
 }
 
 # Keep stack changes as ordinary pointer-width deltas.  SP16 preserves the
@@ -2968,29 +2987,25 @@ with : ctx_objmode=1 {
 
 # p.253
 :mov ACC, #imm16 << #shift0_4 is op4_12=0b111111110010 & shift0_4; ACC & imm16 {
-	local tmp:4;
-	mext(tmp, imm16:2);
-	ACC = tmp << shift0_4;
+	mov_acc_mext_shift(imm16:2, shift0_4);
 	flagnz(ACC);
 }
 
 # p.254
 :mov ACC, loc16 << T is ctx_objmode=1 & op0_16=0b0101011000000110; op8_8=0b00000000 & ACC & loc16 & T {
-	local tmp:4;
-	mext(tmp, loc16);
-	ACC = tmp << T[0,4];
+	mov_acc_mext_shift(loc16, T[0,4]);
 	flagnz(ACC);
 }
 
 # p.255
 :mov ACC, loc16 is ctx_objmode=1 & op8_8=0b10000101 & ACC & loc16 {
-	mext(ACC, loc16);
+	mov_acc_mext_shift(loc16, 0);
 	flagnz(ACC);
 }
 
 # p.255
 :mov ACC, loc16 is ctx_objmode=0 & op8_8=0b11100000 & ACC & loc16 {
-	mext(ACC, loc16);
+	mov_acc_mext_shift(loc16, 0);
 	flagnz(ACC);
 }
 
@@ -3007,25 +3022,19 @@ with : ctx_objmode=1 {
 
 # p.255
 :mov ACC, loc16 << #shift8_4 is switch_canonical=0 & ctx_objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {
-	local tmp:4;
-	mext(tmp, loc16);
-	ACC = tmp << shift8_4;
+	mov_acc_mext_shift(loc16, shift8_4);
 	flagnz(ACC);
 }
 
 # p.255
 :mov ACC, loc16 << #shift8_4 is ctx_objmode=0 & op12_4=0b1110 & ACC & shift8_4 & loc16 {
-	local tmp:4;
-	mext(tmp, loc16);
-	ACC = tmp << shift8_4;
+	mov_acc_mext_shift(loc16, shift8_4);
 	flagnz(ACC);
 }
 
 # p.255
 :mov ACC, loc16 << #16 is op8_8=0b00100101 & ACC & loc16 {
-	local tmp:4;
-	mext(tmp, loc16);
-	ACC = tmp << 16;
+	mov_acc_mext_shift(loc16, 16);
 	flagnz(ACC);
 }
 
