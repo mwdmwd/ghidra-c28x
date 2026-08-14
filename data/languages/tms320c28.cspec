@@ -454,10 +454,11 @@ https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0
           <register name="XAR5"/>
         </pentry>
 
-        <!-- FFC has no two-word call save.  This reverse allocation range
-             puts the first 32-bit stack argument at architectural *-SP[2]. -->
+        <!-- FFC has no two-word call save.  The reverse-allocation range ends
+             one past entry SP (PrototypeModel reports boundary zero), putting
+             the first 32-bit stack argument at architectural *-SP[2]. -->
         <pentry minsize="1" maxsize="500" align="2">
-          <addr offset="0x1fffffe0a" space="stack"/>
+          <addr offset="0x1fffffe0c" space="stack"/>
         </pentry>
         <rule>
           <datatype name="int" minsize="1" maxsize="2"/>

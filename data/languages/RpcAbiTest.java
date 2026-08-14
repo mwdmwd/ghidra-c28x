@@ -131,8 +131,14 @@ public class RpcAbiTest extends GhidraScript {
         require(lcModel.getReturnAddress().length == 0,
             "__lc must not invent an RPC return address");
         require(ffcModel.getStackshift() == 0, "__ffc must not shift the stack");
-        require(Long.valueOf(-2).equals(ffcModel.getStackParameterOffset()),
-            "__ffc first stack parameter must be -2 words, got " +
+        /*
+         * PrototypeModel reports the one-past reverse-allocation boundary,
+         * not a typed argument's first byte.  FFC has no two-word call save,
+         * so its boundary is entry SP (zero); concrete 16/32/64-bit stack
+         * arguments are checked by the focused stack-argument regression test.
+         */
+        require(Long.valueOf(0).equals(ffcModel.getStackParameterOffset()),
+            "__ffc reverse stack boundary must be entry SP, got " +
                 ffcModel.getStackParameterOffset());
         Varnode[] ffcRa = ffcModel.getReturnAddress();
         require(ffcRa.length == 1 && isRegister(ffcRa[0], "XAR7"),
@@ -143,7 +149,7 @@ public class RpcAbiTest extends GhidraScript {
         println("RPC_ABI_FIRST_STACK_PARAMETER_WORD_OFFSET=-4");
         println("RPC_ABI_LC_STACK_SHIFT_WORDS=0");
         println("RPC_ABI_FFC_STACK_SHIFT_WORDS=0");
-        println("RPC_ABI_FFC_FIRST_STACK_PARAMETER_WORD_OFFSET=-2");
+        println("RPC_ABI_FFC_REVERSE_STACK_BOUNDARY_WORD_OFFSET=0");
         println("RPC_ABI_CALL_MECHANISM_MODELS=3");
     }
 

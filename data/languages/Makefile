@@ -22,6 +22,8 @@ GHIDRA_ZOO_DIR := ghidra-zoo-test
 GHIDRA_PROFILE_DIR := ghidra-profile-test
 GHIDRA_RPC_ABI_DIR := ghidra-rpc-abi-test
 RPC_ABI_BUILD_DIR := rpc-abi-build
+GHIDRA_STACK_ARGUMENT_DIR := ghidra-stack-argument-test
+STACK_ARGUMENT_BUILD_DIR := stack-argument-build
 GHIDRA_DIVISION_DIR := ghidra-division-test
 DIVISION_BUILD_DIR := division-build
 GHIDRA_PM_DIR := ghidra-pm-test
@@ -279,6 +281,16 @@ rpc-abi-test: tms320c28.sla analyzer rpc_abi_test.py RpcAbiTest.java rpc_abi_tes
 		--ghidra-headless "$(GHIDRA_HEADLESS)" \
 		--build $$PWD/$(RPC_ABI_BUILD_DIR) --work $$PWD/$(GHIDRA_RPC_ABI_DIR)
 
+.PHONY: stack-argument-test
+stack-argument-test: tms320c28.sla analyzer stack_argument_test.py \
+		StackArgumentTest.java stack_argument_test.c stack_argument_ffc.asm \
+		stack_argument_test.cmd
+	$(Q)$(PYTHON) stack_argument_test.py --root $$PWD --cl2000 "$(AS)" \
+		--dis2000 "$(DIS)" --strip2000 "$(STRIP)" \
+		--ghidra-headless "$(GHIDRA_HEADLESS)" \
+		--build $$PWD/$(STACK_ARGUMENT_BUILD_DIR) \
+		--work $$PWD/$(GHIDRA_STACK_ARGUMENT_DIR)
+
 .PHONY: division-test
 division-test: tms320c28.sla analyzer division_idiom_test.py DivisionIdiomTest.java \
 		division_idiom_test.c division_idiom_test.cmd division_validation.asm \
@@ -464,6 +476,7 @@ zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 clean:
 	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR) $(GHIDRA_ZOO_DIR)
 	@rm -rf $(GHIDRA_PROFILE_DIR) $(GHIDRA_RPC_ABI_DIR) $(RPC_ABI_BUILD_DIR) $(PROFILE_GENERATE_DIR)
+	@rm -rf $(GHIDRA_STACK_ARGUMENT_DIR) $(STACK_ARGUMENT_BUILD_DIR)
 	@rm -rf $(GHIDRA_DIVISION_DIR) $(DIVISION_BUILD_DIR)
 	@rm -rf $(GHIDRA_PM_DIR) $(PM_BUILD_DIR)
 	@rm -rf $(GHIDRA_STATUS_MODE_DIR) $(STATUS_MODE_BUILD_DIR)
