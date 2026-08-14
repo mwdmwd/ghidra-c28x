@@ -1863,6 +1863,155 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 ################################################################
 # SPRU430F - August 2001 - Revised April 2015
 
+# Repeated program-space transfers use an instruction-local hardware shadow for
+# their program pointer.  The ordinary RPT wrapper below cannot express that by
+# rebuilding the instruction at inst_start: each rebuild would snapshot XAR7,
+# AL, or the immediate address again.  These exact special cases instead keep
+# the shadow in a SLEIGH unique varnode and loop over the addressing operand's
+# P-Code explicitly.  Thus loc16 pre/post updates still execute once per
+# transfer, while the architectural program pointer remains independent.
+
+# SPRU430F p.368: repeated PREAD shadows *XAR7 and postincrements the shadow.
+:pread loc16, *XAR7 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100100 & loc16 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pread>
+    build loc16;
+    local value:2 = *:2 program_shadow;
+    loc16 = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pread>;
+    RPTC = RPTC - 1;
+    goto <repeat_pread>;
+<done_pread>
+}
+:pread regax, *XAR7 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100100 & regax & regax=8 & op4_4=0b1010 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pread_ah>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pread_ah>;
+    RPTC = RPTC - 1;
+    goto <repeat_pread_ah>;
+<done_pread_ah>
+}
+:pread regax, *XAR7 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100100 & regax & regax=9 & op4_4=0b1010 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pread_al>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pread_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_pread_al>;
+<done_pread_al>
+}
+
+# SPRU430F p.384: repeated PWRITE shadows its *XAR7 destination.
+:pwrite *XAR7, loc16 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100110 & loc16 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pwrite>
+    build loc16;
+    local value:2 = loc16;
+    *:2 program_shadow = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pwrite>;
+    RPTC = RPTC - 1;
+    goto <repeat_pwrite>;
+<done_pwrite>
+}
+
+# SPRU430F pp.464-466: XPREAD/XPWRITE use the same rule for the
+# high-program-page immediate or AL pointer, with AL itself left unchanged by
+# the program-side progression.  The @AX forms also refresh N and Z after
+# every transfer, as the instruction pages require.
+:xpread regax, *(imm16) is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op8_8=0b10101100 & regax & regax=8 & op4_4=0b1010; imm16 {
+    local program_shadow:4 = 0x3f0000 | imm16;
+<repeat_xpread_imm_ah>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_imm_ah>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_imm_ah>;
+<done_xpread_imm_ah>
+}
+:xpread regax, *(imm16) is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op8_8=0b10101100 & regax & regax=9 & op4_4=0b1010; imm16 {
+    local program_shadow:4 = 0x3f0000 | imm16;
+<repeat_xpread_imm_al>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_imm_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_imm_al>;
+<done_xpread_imm_al>
+}
+:xpread loc16, *(imm16) is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op8_8=0b10101100 & loc16; imm16 {
+    local program_shadow:4 = 0x3f0000 | imm16;
+<repeat_xpread_imm>
+    build loc16;
+    local value:2 = *:2 program_shadow;
+    loc16 = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_imm>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_imm>;
+<done_xpread_imm>
+}
+:xpread regax, *AL is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=8 & op4_4=0b1010 & AL {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpread_al_ah>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_al_ah>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_al_ah>;
+<done_xpread_al_ah>
+}
+:xpread regax, *AL is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=9 & op4_4=0b1010 & AL {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpread_al_al>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_al_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_al_al>;
+<done_xpread_al_al>
+}
+:xpread loc16, *AL is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & loc16 & AL {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpread_al>
+    build loc16;
+    local value:2 = *:2 program_shadow;
+    loc16 = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_al>;
+<done_xpread_al>
+}
+:xpwrite *AL, loc16 is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111101; op8_8=0b00000000 & AL & loc16 {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpwrite_al>
+    build loc16;
+    local value:2 = loc16;
+    *:2 program_shadow = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpwrite_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpwrite_al>;
+<done_xpwrite_al>
+}
+
 # RPT repeat wrapper: when an instruction follows RPT, execute it N+1 times.
 # rpt_active is set (with noflow) by RPT on inst_next; rpt_phase prevents recursion.
 # A separately proved full-width SUBCUL division has already summarized all
@@ -4928,12 +5077,32 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.464
+:xpread regax, *(imm16) is ctx_objmode=1 & op8_8=0b10101100 & regax & regax=8 & op4_4=0b1010; imm16 {
+    local ptr:4 = 0x3F0000 | imm16;
+    regax = *:2 ptr;
+    flagnz(regax);
+}
+:xpread regax, *(imm16) is ctx_objmode=1 & op8_8=0b10101100 & regax & regax=9 & op4_4=0b1010; imm16 {
+    local ptr:4 = 0x3F0000 | imm16;
+    regax = *:2 ptr;
+    flagnz(regax);
+}
 :xpread loc16, *(imm16) is ctx_objmode=1 & op8_8=0b10101100 & loc16; imm16 {
 	local ptr:4 = 0x3F0000 | imm16;
 	loc16 = *:2 ptr;
 }
 
 # p.465
+:xpread regax, *AL is ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=8 & op4_4=0b1010 & AL {
+    local ptr:4 = 0x3F0000 | zext(AL);
+    regax = *:2 ptr;
+    flagnz(regax);
+}
+:xpread regax, *AL is ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=9 & op4_4=0b1010 & AL {
+    local ptr:4 = 0x3F0000 | zext(AL);
+    regax = *:2 ptr;
+    flagnz(regax);
+}
 :xpread loc16, *AL is ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & loc16 & AL {
 	local ptr:4 = 0x3F0000 | zext(AL);
 	loc16 = *:2 ptr;

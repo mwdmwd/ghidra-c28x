@@ -239,6 +239,12 @@ qpcode: tms320c28.sla
 semantic-test: tms320c28.sla semantic_tests.py
 	$(Q)$(PYTHON) semantic_tests.py
 
+# Exact instruction-local shadows for repeated program-space transfers and a
+# generic repeated-instruction near miss.
+.PHONY: repeat-transfer-test
+repeat-transfer-test: tms320c28.sla repeat_transfer_test.py
+	$(Q)$(PYTHON) repeat_transfer_test.py
+
 # Finite SXM low-half and completed-TI-C-call OVM data-flow regressions.
 .PHONY: status-mode-test
 status-mode-test: tms320c28.sla analyzer semantic_tests.py status_mode_test.py \
