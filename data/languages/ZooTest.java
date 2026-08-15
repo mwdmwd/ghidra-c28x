@@ -311,9 +311,11 @@ public class ZooTest extends GhidraScript {
             "fallthrough family unexpectedly contains PREAD");
         String c = decompile(function);
         requireNoIndirectJumpWarning(c);
+        // Compiler-spec improvements may renumber anonymous parameters; the
+        // observable output indices and fallthrough results must stay stable.
         require(c.contains("return 7;") && c.contains("return -1;") &&
-                c.contains("return 0xb;") && c.contains("param_1[7]") &&
-                c.contains("param_1[1]"),
+                c.contains("return 0xb;") && c.contains("[7] = ") &&
+                c.contains("[1] = "),
             "fallthrough/default/multi-exit behavior was not preserved\n" + c);
         require(c.contains("+ 2") && c.contains("+ 6"),
             "fallthrough accumulation was not preserved\n" + c);
@@ -462,7 +464,10 @@ public class ZooTest extends GhidraScript {
             "decompiler consumed stale incoming Z after MOVL-to-ACC\n" + c);
         require(!containsTypeToken(c, "int5") && !containsTypeToken(c, "uint3"),
             "common compare arithmetic exposed a nonstandard-width type\n" + c);
-        require(c.contains("param_1 == 0") && c.contains("0x55aa"),
+        // XAR4's pointer may acquire a different anonymous parameter number as
+        // ABI storage becomes more precise; require a parameter null check.
+        require(c.matches("(?s).*\\bparam_[0-9]+ == 0\\b.*") &&
+                c.contains("0x55aa"),
             "null check or reverse-loop sentinel was lost\n" + c);
         require(c.contains("while") || c.contains("for ("),
             "control-flow loops were not reconstructed\n" + c);
