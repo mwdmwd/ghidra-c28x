@@ -138,9 +138,11 @@ def build(
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     subjects: list[Path] = []
-    rts = root / "tools/ti-cgt/lib/rts2800_fpu32_eabi.lib"
+    rts = cc.resolve().parent.parent / "lib/rts2800_fpu32_eabi.lib"
     if not rts.is_file():
-        raise RuntimeError(f"missing TI EABI RTS library: {rts}")
+        raise RuntimeError(
+            f"missing TI EABI RTS library beside compiler {cc}: {rts}"
+        )
 
     for opt in ("o0", "o2"):
         obj = out / f"rpc_abi_{opt}.obj"
