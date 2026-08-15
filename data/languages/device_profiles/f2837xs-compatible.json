@@ -1605,10 +1605,1166 @@
       "write": false
     }
   ],
+  "codeVectors": [
+    {
+      "address": 3328,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE1_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3330,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE2_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3332,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE3_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3334,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE4_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3336,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE5_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3338,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE6_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3340,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE7_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3342,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE8_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3344,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE9_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3346,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE10_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3348,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE11_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3350,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE12_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3352,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE13_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3354,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "CPU Timer 1 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "TIMER1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3356,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "CPU Timer 2 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "TIMER2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3358,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Datalogging Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "DATALOG_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3360,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "RTOS Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "RTOS_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3362,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Emulation Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EMU_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3364,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Non-Maskable Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "NMI_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3366,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "Illegal Operation Trap",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ILLEGAL_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3368,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3370,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 2",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3372,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 3",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3374,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 4",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3376,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 5",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER5_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3378,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 6",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER6_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3380,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 7",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER7_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3382,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 8",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER8_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3384,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 9",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER9_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3386,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 10",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER10_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3388,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 11",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER11_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3390,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "User Defined Trap 12",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "USER12_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3392,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.1 - ADCA Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCA1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3394,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.2 - ADCB Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCB1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3396,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.3 - ADCC Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCC1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3398,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.4 - XINT1 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "XINT1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3400,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.5 - XINT2 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "XINT2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3402,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.6 - ADCD Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCD1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3404,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.7 - Timer 0 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "TIMER0_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3406,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "1.8 - Standby and Halt Wakeup Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "WAKE_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3408,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.1 - ePWM1 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM1_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3410,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.2 - ePWM2 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM2_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3412,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.3 - ePWM3 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM3_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3414,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.4 - ePWM4 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM4_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3416,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.5 - ePWM5 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM5_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3418,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.6 - ePWM6 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM6_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3420,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.7 - ePWM7 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM7_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3422,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "2.8 - ePWM8 Trip Zone Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM8_TZ_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3424,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.1 - ePWM1 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3426,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.2 - ePWM2 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3428,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.3 - ePWM3 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3430,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.4 - ePWM4 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3432,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.5 - ePWM5 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM5_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3434,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.6 - ePWM6 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM6_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3436,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.7 - ePWM7 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM7_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3438,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "3.8 - ePWM8 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EPWM8_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3440,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.1 - eCAP1 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ECAP1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3442,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.2 - eCAP2 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ECAP2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3444,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.3 - eCAP3 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ECAP3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3446,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.4 - eCAP4 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ECAP4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3448,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.5 - eCAP5 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ECAP5_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3450,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.6 - eCAP6 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ECAP6_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3452,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.7 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE14_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3454,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "4.8 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE15_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3456,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.1 - eQEP1 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EQEP1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3458,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.2 - eQEP2 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EQEP2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3460,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.3 - eQEP3 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "EQEP3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3462,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.4 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE16_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3464,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.5 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE17_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3466,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.6 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE18_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3468,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.7 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE19_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3470,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "5.8 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE20_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3472,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.1 - SPIA Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SPIA_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3474,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.2 - SPIA Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SPIA_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3476,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.3 - SPIB Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SPIB_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3478,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.4 - SPIB Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SPIB_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3480,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.5 - McBSPA Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "MCBSPA_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3482,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.6 - McBSPA Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "MCBSPA_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3484,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.7 - McBSPB Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "MCBSPB_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3486,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "6.8 - McBSPB Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "MCBSPB_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3488,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.1 - DMA Channel 1 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "DMA_CH1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3490,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.2 - DMA Channel 2 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "DMA_CH2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3492,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.3 - DMA Channel 3 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "DMA_CH3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3494,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.4 - DMA Channel 4 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "DMA_CH4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3496,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.5 - DMA Channel 5 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "DMA_CH5_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3498,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.6 - DMA Channel 6 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "DMA_CH6_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3500,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.7 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE21_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3502,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "7.8 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE22_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3504,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.1 - I2CA Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "I2CA_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3506,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.2 - I2CA Interrupt 2",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "I2CA_FIFO_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3508,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.3 - I2CB Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "I2CB_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3510,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.4 - I2CB Interrupt 2",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "I2CB_FIFO_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3512,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.5 - SCIC Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCIC_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3514,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.6 - SCIC Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCIC_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3516,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.7 - SCID Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCID_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3518,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "8.8 - SCID Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCID_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3520,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.1 - SCIA Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCIA_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3522,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.2 - SCIA Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCIA_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3524,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.3 - SCIB Receive Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCIB_RX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3526,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.4 - SCIB Transmit Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "SCIB_TX_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3528,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.5 - CANA Interrupt 0",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CANA0_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3530,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.6 - CANA Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CANA1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3532,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.7 - CANB Interrupt 0",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CANB0_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3534,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "9.8 - CANB Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CANB1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3536,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.1 - ADCA Event Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCA_EVT_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3538,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.2 - ADCA Interrupt 2",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCA2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3540,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.3 - ADCA Interrupt 3",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCA3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3542,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.4 - ADCA Interrupt 4",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCA4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3544,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.5 - ADCB Event Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCB_EVT_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3546,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.6 - ADCB Interrupt 2",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCB2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3548,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.7 - ADCB Interrupt 3",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCB3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3550,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "10.8 - ADCB Interrupt 4",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "ADCB4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3552,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.1 - CLA1 Interrupt 1",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_1_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3554,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.2 - CLA1 Interrupt 2",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_2_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3556,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.3 - CLA1 Interrupt 3",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3558,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.4 - CLA1 Interrupt 4",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3560,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.5 - CLA1 Interrupt 5",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_5_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3562,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.6 - CLA1 Interrupt 6",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_6_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3564,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.7 - CLA1 Interrupt 7",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_7_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3566,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "11.8 - CLA1 Interrupt 8",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "CLA1_8_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3568,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.1 - XINT3 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "XINT3_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3570,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.2 - XINT4 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "XINT4_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3572,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.3 - XINT5 Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "XINT5_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3574,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.4 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE23_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3576,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.5 - Reserved",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIE24_RESERVED_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3578,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.6 - VCU Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "VCU_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3580,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.7 - FPU Overflow Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "FPU_OVERFLOW_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    },
+    {
+      "address": 3582,
+      "baseSymbol": "PIEVECTTABLE_BASE",
+      "description": "12.8 - FPU Underflow Interrupt",
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "FPU_UNDERFLOW_INT",
+      "namespace": "PIEVECTTABLE",
+      "widthBits": 32
+    }
+  ],
   "profileName": "F2837xS-compatible",
   "provenance": {
     "generatedBy": "tools/generate_f2837xs_profile.py",
     "inputFilesSha256": {
+      "device-headers/F2837xS_piectrl.h": "d9c45905a5b218099aa442d74e7ef99b22741a18d4a803877e55597da7bd7c47",
+      "device-headers/F2837xS_pievect.h": "843af0fdbd28d8ff4e5d77490ebaf0874fb7f957b045a368bc2e9f1be63c1ef1",
       "sysconfig-registers/f2837xs_adc_registers.js": "b264200cb6fb51b58fc7faab8433b7a7f287d1be6869786d22e4786584328195",
       "sysconfig-registers/f2837xs_asysctl_registers.js": "f487272bdf77b3d191d9b8125f97a635aec144621ff7cc790e0e40a6df8a0062",
       "sysconfig-registers/f2837xs_can_registers.js": "e6e5f726a073f7a8d84074dcc2aed9a88222361580539490a08544232c303cc9",
@@ -1638,7 +2794,7 @@
       "sysconfig-registers/f2837xs_upp_registers.js": "aca70053bf3ffd94cb6800abd6ca97cd1149074aabcf767d4632d19ed8581731",
       "sysconfig-registers/f2837xs_xbar_registers.js": "523aad260da41a503bdebbc076342d115404a908270eb72bcb6619584534a6db"
     },
-    "inputsAggregateSha256": "d4e67aeefda04b1d593bc4b9a5b8e39c6f6cc93909fd40f178b793ab5a1c616a",
+    "inputsAggregateSha256": "ee401eaf357f78d21bf93ad7b440cdab44ea2086b5a716c890d963ce6887cf75",
     "memoryMapSha256": "c67f3032a2c295dad461016325fb25834e459b1d00a6531184600eb754f88baa",
     "subsetLicense": "TI BSD-3-Clause terms in device_profiles/UPSTREAM_LICENSE.md"
   },
@@ -3114,6 +4270,26 @@
       "widthBits": 16
     },
     {
+      "address": 3296,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "ePIE Control Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIECTRL",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3297,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Acknowledge Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEACK",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
       "address": 3298,
       "baseSymbol": "CLA1_SOFTINT_BASE",
       "description": "CLA Software Interrupt Force Register",
@@ -3177,6 +4353,246 @@
       ],
       "name": "SOFTINTFRC",
       "namespace": "CLA1_SOFTINT",
+      "widthBits": 16
+    },
+    {
+      "address": 3298,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 1 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER1",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3299,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 1 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR1",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3300,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 2 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER2",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3301,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 2 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR2",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3302,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 3 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER3",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3303,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 3 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR3",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3304,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 4 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER4",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3305,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 4 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR4",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3306,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 5 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER5",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3307,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 5 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR5",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3308,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 6 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER6",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3309,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 6 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR6",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3310,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 7 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER7",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3311,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 7 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR7",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3312,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 8 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER8",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3313,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 8 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR8",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3314,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 9 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER9",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3315,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 9 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR9",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3316,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 10 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER10",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3317,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 10 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR10",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3318,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 11 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER11",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3319,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 11 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR11",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3320,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 12 Enable Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIER12",
+      "namespace": "PIECTRL",
+      "widthBits": 16
+    },
+    {
+      "address": 3321,
+      "baseSymbol": "PIECTRL_BASE",
+      "description": "Interrupt Group 12 Flag Register",
+      "fields": [],
+      "metadataSource": "TI F2837xS bit-field header",
+      "name": "PIEIFR12",
+      "namespace": "PIECTRL",
       "widthBits": 16
     },
     {

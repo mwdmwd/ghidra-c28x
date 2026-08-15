@@ -133,6 +133,24 @@ def base_profile() -> dict:
                 ],
             },
         ],
+        "codeVectors": [
+            {
+                "namespace": "TESTVECT",
+                "baseSymbol": "TEST_VECTOR_BASE",
+                "name": "SYNTH_VECTOR0",
+                "address": 0x2080,
+                "widthBits": 32,
+                "description": "Synthetic code-vector slot 0",
+            },
+            {
+                "namespace": "TESTVECT",
+                "baseSymbol": "TEST_VECTOR_BASE",
+                "name": "SYNTH_VECTOR1",
+                "address": 0x2082,
+                "widthBits": 32,
+                "description": "Synthetic code-vector slot 1",
+            },
+        ],
         "romEvidence": {
             "default": "uninitialized",
             "rawDumpSupported": True,
@@ -416,6 +434,12 @@ def main() -> int:
     reused_labels = marker_values(marker_output, "DEVICE_PROFILE_LABELS_REUSED")
     require(len(reused_labels) == 2 and reused_labels[1] > reused_labels[0],
         f"profile symbols were not reused on the second pass: {reused_labels}", output)
+    vector_created = marker_values(marker_output, "DEVICE_PROFILE_CODE_VECTOR_DATA_CREATED")
+    require(vector_created == [2, 0],
+        f"code-vector creation was not idempotent: {vector_created}", output)
+    vector_skipped = marker_values(marker_output, "DEVICE_PROFILE_CODE_VECTOR_DATA_SKIPPED")
+    require(vector_skipped == [0, 2],
+        f"code-vector reuse metrics are wrong: {vector_skipped}", output)
     require(marker_output.count("ROM_EVIDENCE_PASS=") == 2,
         "positive ROM evidence was not applied twice", output)
     rom_initialized = marker_values(marker_output, "ROM_EVIDENCE_BLOCKS_INITIALIZED")
@@ -423,6 +447,7 @@ def main() -> int:
         f"ROM idempotence initialized counts are wrong: {rom_initialized}", output)
     require("PROFILE_TEST_PASS=positive" in marker_output, "positive validator did not pass", output)
     print("PROFILE_TEST_IDEMPOTENCE=PASS")
+    print("PROFILE_TEST_CODE_VECTORS=2")
     print("ROM_EVIDENCE_IDEMPOTENCE=PASS")
 
     negatives = 0

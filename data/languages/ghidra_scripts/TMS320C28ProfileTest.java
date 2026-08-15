@@ -5,6 +5,10 @@ import ghidra.app.script.GhidraScript;
 import ghidra.framework.options.Options;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSpace;
+import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.FunctionDefinition;
+import ghidra.program.model.data.Pointer;
+import ghidra.program.model.data.TypeDef;
 import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.mem.Memory;
@@ -13,8 +17,10 @@ import ghidra.program.model.symbol.Symbol;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class TMS320C28ProfileTest extends GhidraScript {
     private AddressSpace space;
@@ -55,6 +61,10 @@ public class TMS320C28ProfileTest extends GhidraScript {
             "missing 16-bit register symbol");
         require(hasSymbol(0x3006, "F2837xS_COMPAT::PERIPHERALS::TESTPERIPH::REG32"),
             "missing 32-bit register symbol");
+        require(hasSymbol(0x2080, "F2837xS_COMPAT::VECTORS::TESTVECT::SYNTH_VECTOR0"),
+            "missing first code-vector symbol");
+        require(hasSymbol(0x2082, "F2837xS_COMPAT::VECTORS::TESTVECT::SYNTH_VECTOR1"),
+            "missing second code-vector symbol");
         require(hasSymbol(0x2040, "F2837xS_COMPAT::RECOVERED::TEST_CODE"),
             "missing recovered-copy symbol");
         require(hasSymbol(0x4010, "F2837xS_COMPAT::ROM_EVIDENCE::RAW_ROM_004010_BASE"),
@@ -64,6 +74,10 @@ public class TMS320C28ProfileTest extends GhidraScript {
         Data d32 = currentProgram.getListing().getDefinedDataAt(wordAddress(0x3006));
         require(d16 != null && d16.getLength() == 2, "REG16 data type is not two bytes");
         require(d32 != null && d32.getLength() == 4, "REG32 data type is not four bytes");
+        Data vector0 = currentProgram.getListing().getDefinedDataAt(wordAddress(0x2080));
+        Data vector1 = currentProgram.getListing().getDefinedDataAt(wordAddress(0x2082));
+        require(isFunctionPointer(vector0), "first code-vector slot is not a function pointer");
+        require(isFunctionPointer(vector1), "second code-vector slot is not a function pointer");
 
         Function copiedFunction = currentProgram.getFunctionManager().getFunctionAt(wordAddress(0x2040));
         require(copiedFunction != null, "executable copy was not seeded as a function");
@@ -73,6 +87,10 @@ public class TMS320C28ProfileTest extends GhidraScript {
         Options profile = currentProgram.getOptions("TMS320C28 Device Profile");
         require("Synthetic-profile-test".equals(profile.getString("Profile Name", "")),
             "profile program options were not recorded");
+        require(profile.getInt("Code Vector Data Created", -1) == 0,
+            "second profile pass should reuse both code-vector types");
+        require(profile.getInt("Code Vector Data Skipped", -1) == 2,
+            "second profile pass did not report two reused code-vector types");
         Options workspace = currentProgram.getOptions("TMS320C28 Firmware Workspace");
         require("Synthetic-workspace-test".equals(workspace.getString("Workspace Name", "")),
             "firmware workspace program options were not recorded");
@@ -94,6 +112,7 @@ public class TMS320C28ProfileTest extends GhidraScript {
         println("PROFILE_TEST_ADDRESS_UNIT_BYTES=2");
         println("PROFILE_TEST_RECOVERED_WORDS=7");
         println("PROFILE_TEST_REGISTER_WIDTHS=16,32");
+        println("PROFILE_TEST_CODE_VECTOR_FUNCTION_POINTERS=2");
         println("PROFILE_TEST_PASS=positive");
     }
 
@@ -126,6 +145,25 @@ public class TMS320C28ProfileTest extends GhidraScript {
         require(source != null && (source.startsWith("TMS320C28_FIRMWARE_WORKSPACE:") ||
             source.startsWith("TMS320C28_ROM_EVIDENCE:")),
             description + " lacks auditable source provenance");
+    }
+
+    private boolean isFunctionPointer(Data data) {
+        if (data == null || data.getLength() != 4) {
+            return false;
+        }
+        DataType type = unwrap(data.getDataType());
+        if (!(type instanceof Pointer pointer) || pointer.getLength() != 4) {
+            return false;
+        }
+        return unwrap(pointer.getDataType()) instanceof FunctionDefinition;
+    }
+
+    private DataType unwrap(DataType type) {
+        Set<DataType> seen = new HashSet<>();
+        while (type instanceof TypeDef typedef && seen.add(type)) {
+            type = typedef.getBaseDataType();
+        }
+        return type;
     }
 
     private boolean hasSymbol(long word, String qualifiedName) {

@@ -11,9 +11,15 @@ import ghidra.app.script.GhidraScript;
 import ghidra.framework.options.Options;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSpace;
+import ghidra.program.model.data.CategoryPath;
 import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeConflictHandler;
+import ghidra.program.model.data.DataTypeManager;
 import ghidra.program.model.data.DWordDataType;
+import ghidra.program.model.data.FunctionDefinitionDataType;
+import ghidra.program.model.data.PointerDataType;
 import ghidra.program.model.data.UnsignedShortDataType;
+import ghidra.program.model.data.VoidDataType;
 import ghidra.program.model.listing.CodeUnit;
 import ghidra.program.model.listing.CommentType;
 import ghidra.program.model.listing.Data;
@@ -50,6 +56,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
     private static final String WORKSPACE_SOURCE_PREFIX = "TMS320C28_FIRMWARE_WORKSPACE:";
     private static final String ROM_SOURCE_PREFIX = "TMS320C28_ROM_EVIDENCE:";
     private static final String COMMENT_PREFIX = "[TMS320C28 device profile]";
+    private static final CategoryPath PROFILE_TYPES =
+        new CategoryPath("/TMS320C28/DeviceProfile");
     private static final int COPY_CHUNK_BYTES = 64 * 1024;
 
     private JsonObject profile;
@@ -71,6 +79,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
     private int labelsPromoted;
     private int dataCreated;
     private int dataSkipped;
+    private int codeVectorDataCreated;
+    private int codeVectorDataSkipped;
     private int explicitCopies;
     private int cinitRecords;
     private long recoveredWords;
@@ -160,6 +170,7 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         createMemoryLabels();
         createBaseLabels();
         createRegisterLabelsAndTypes(applyRegisterTypes);
+        createCodeVectorLabelsAndTypes(applyRegisterTypes);
 
         if (workspace != null) {
             applyFirmwareIdentity(strictFirmware);
@@ -455,6 +466,94 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         catch (Exception ex) {
             dataSkipped++;
         }
+    }
+
+    private void createCodeVectorLabelsAndTypes(boolean applyTypes) throws Exception {
+        if (!profile.has("codeVectors")) {
+            return;
+        }
+        Namespace vectorRoot = childNamespace("VECTORS");
+        DataType functionPointer = applyTypes ? codeVectorDataType() : null;
+        Set<Long> occupied = new HashSet<>();
+        for (JsonElement e : profile.getAsJsonArray("codeVectors")) {
+            monitor.checkCancelled();
+            JsonObject vector = e.getAsJsonObject();
+            int widthBits = requiredInt(vector, "widthBits");
+            if (widthBits != 32) {
+                fail("code-vector slot must be 32 bits: " + requiredString(vector, "name"));
+            }
+            long word = requiredLong(vector, "address");
+            if ((word & 1) != 0 || !occupied.add(word)) {
+                fail("unaligned or duplicate code-vector slot at word 0x" +
+                    Long.toHexString(word));
+            }
+            Address address = wordAddress(word);
+            Address end = address.add(3);
+            MemoryBlock block = memory.getBlock(address);
+            if (block == null || memory.getBlock(end) != block) {
+                fail("code-vector slot is outside one mapped block: " + address);
+            }
+
+            String module = sanitizeSymbol(requiredString(vector, "namespace"));
+            Namespace ns = symbols.getOrCreateNameSpace(vectorRoot, module, SourceType.ANALYSIS);
+            String name = sanitizeSymbol(requiredString(vector, "name"));
+            createStableLabel(address, name, ns, true);
+            appendComment(address, formatCodeVectorComment(module, name, vector));
+            if (applyTypes) {
+                applyCodeVectorType(address, functionPointer);
+            }
+        }
+    }
+
+    private DataType codeVectorDataType() {
+        DataTypeManager dtm = currentProgram.getDataTypeManager();
+        FunctionDefinitionDataType signature = new FunctionDefinitionDataType(
+            PROFILE_TYPES, "C28xInterruptHandler", dtm);
+        signature.setReturnType(new VoidDataType(dtm));
+        signature.setArguments();
+        DataType resolved = dtm.addDataType(signature, DataTypeConflictHandler.REPLACE_HANDLER);
+        return new PointerDataType(resolved, 4, dtm);
+    }
+
+    private void applyCodeVectorType(Address address, DataType type) {
+        Data existing = listing.getDefinedDataAt(address);
+        if (existing != null) {
+            if (existing.getLength() == type.getLength() &&
+                    existing.getDataType().isEquivalent(type)) {
+                codeVectorDataSkipped++;
+                return;
+            }
+            codeVectorDataSkipped++;
+            return;
+        }
+        Address end = address.add(type.getLength() - 1L);
+        if (!listing.isUndefined(address, end)) {
+            codeVectorDataSkipped++;
+            return;
+        }
+        try {
+            Data created = listing.createData(address, type);
+            if (created != null && created.getLength() == type.getLength()) {
+                codeVectorDataCreated++;
+            }
+            else {
+                codeVectorDataSkipped++;
+            }
+        }
+        catch (Exception ex) {
+            codeVectorDataSkipped++;
+        }
+    }
+
+    private String formatCodeVectorComment(String module, String name, JsonObject vector) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(COMMENT_PREFIX).append(' ').append(module).append("::").append(name)
+            .append("; 32-bit C28x code-vector function pointer");
+        String description = getString(vector, "description", "");
+        if (!description.isBlank()) {
+            sb.append(" — ").append(description);
+        }
+        return sb.toString();
     }
 
     private String formatRegisterComment(String module, String registerName, JsonObject r) {
@@ -1077,6 +1176,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         options.setString("Profile Name", profileName);
         options.setInt("Profile Version", requiredInt(profile, "version"));
         options.setString("Profile File", file.getAbsolutePath());
+        options.setInt("Code Vector Data Created", codeVectorDataCreated);
+        options.setInt("Code Vector Data Skipped", codeVectorDataSkipped);
         if (workspace != null) {
             Options workspaceOptions = currentProgram.getOptions("TMS320C28 Firmware Workspace");
             workspaceOptions.setString("Workspace Name", workspaceName);
@@ -1099,6 +1200,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         println("DEVICE_PROFILE_LABELS_PROMOTED=" + labelsPromoted);
         println("DEVICE_PROFILE_REGISTER_DATA_CREATED=" + dataCreated);
         println("DEVICE_PROFILE_REGISTER_DATA_SKIPPED=" + dataSkipped);
+        println("DEVICE_PROFILE_CODE_VECTOR_DATA_CREATED=" + codeVectorDataCreated);
+        println("DEVICE_PROFILE_CODE_VECTOR_DATA_SKIPPED=" + codeVectorDataSkipped);
         println("DEVICE_PROFILE_PASS=" + profileName);
         if (workspace != null) {
             println("FIRMWARE_WORKSPACE_EXPLICIT_COPIES=" + explicitCopies);

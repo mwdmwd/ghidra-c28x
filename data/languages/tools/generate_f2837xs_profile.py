@@ -10,6 +10,7 @@ curated here.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -18,6 +19,10 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 PROFILE_VERSION = 1
+PIECTRL_HEADER = Path("device-headers/F2837xS_piectrl.h")
+PIEVECT_HEADER = Path("device-headers/F2837xS_pievect.h")
+PIE_METADATA_SOURCE = "TI F2837xS bit-field header"
+
 
 
 def parse_int(text: str) -> int:
@@ -157,6 +162,82 @@ def parse_memory_map(path: Path) -> tuple[dict[str, int], dict[str, str]]:
         bases[name] = parse_int(field(block, "baseAddress"))
         display[name] = field(block, "displayName", required=False) or name
     return bases, display
+
+
+def extract_c_struct(text: str, name: str) -> str:
+    match = re.search(rf"\bstruct\s+{re.escape(name)}\s*\{{(.*?)\n\}}\s*;", text, re.S)
+    if not match:
+        raise ValueError(f"C structure not found: {name}")
+    return match.group(1)
+
+
+def parse_pie_control_registers(path: Path, base: int) -> list[dict]:
+    """Parse the ordered 16-bit PIE control register aggregate."""
+    body = extract_c_struct(path.read_text(encoding="utf-8"), "PIE_CTRL_REGS")
+    result: list[dict] = []
+    member_re = re.compile(
+        r"^\s*union\s+\w+\s+(\w+)\s*;\s*(?://\s*(.*?))?\s*$"
+    )
+    for line in body.splitlines():
+        match = member_re.match(line)
+        if match is None:
+            if line.strip():
+                raise ValueError(f"unparsed PIE control member: {line!r}")
+            continue
+        name, description = match.groups()
+        result.append(
+            {
+                "namespace": "PIECTRL",
+                "baseSymbol": "PIECTRL_BASE",
+                "name": name,
+                "address": base + len(result),
+                "widthBits": 16,
+                "description": description or "",
+                "fields": [],
+                "metadataSource": PIE_METADATA_SOURCE,
+            }
+        )
+    if not result:
+        raise ValueError(f"no PIE control registers parsed from {path}")
+    return result
+
+
+def parse_pie_vectors(path: Path, base: int, mapped_words: int) -> list[dict]:
+    """Parse only the function-pointer entries backed by PIE vector RAM."""
+    body = extract_c_struct(path.read_text(encoding="utf-8"), "PIE_VECT_TABLE")
+    result: list[dict] = []
+    member_re = re.compile(r"^\s*PINT\s+(\w+)\s*;\s*(?://\s*(.*?))?\s*$")
+    for line in body.splitlines():
+        match = member_re.match(line)
+        if match is None:
+            if line.strip():
+                raise ValueError(f"unparsed PIE vector member: {line!r}")
+            continue
+        address = base + len(result) * 2
+        if address + 2 > base + mapped_words:
+            break
+        name, description = match.groups()
+        result.append(
+            {
+                "namespace": "PIEVECTTABLE",
+                "baseSymbol": "PIEVECTTABLE_BASE",
+                "name": name,
+                "address": address,
+                "widthBits": 32,
+                "description": description or "",
+                "metadataSource": PIE_METADATA_SOURCE,
+            }
+        )
+    if not result:
+        raise ValueError(f"no mapped PIE vector entries parsed from {path}")
+    return result
+
+
+def find_block_words(profile: dict, address: int, expected_name: str) -> int:
+    for block in profile["blocks"]:
+        if block["start"] == address and block["name"] == expected_name:
+            return block["words"]
+    raise ValueError(f"missing {expected_name} block at {address:#x}")
 
 
 def add_instance(
@@ -466,31 +547,93 @@ def validate_profile(profile: dict) -> None:
             if (a[0], a[1]) != (b[0], b[1]):
                 raise ValueError(f"partially overlapping register spans: {a[2]} and {b[2]}")
 
-def input_provenance(root: Path) -> tuple[dict[str, str], str]:
-    files = sorted((root / "sysconfig-registers").glob("f2837xs_*_registers.js"))
-    files.append(root / "sysconfig-registers" / "f2837xs_memmap.js")
-    unique = sorted(set(files))
-    hashes = {str(path.relative_to(root)): sha256(path) for path in unique}
+    vector_names: set[tuple[str, str]] = set()
+    vector_spans: list[tuple[int, int, str]] = []
+    for vector in profile.get("codeVectors", []):
+        key = (vector["namespace"], vector["name"])
+        if key in vector_names:
+            raise ValueError(f"duplicate code-vector symbol: {key[0]}::{key[1]}")
+        vector_names.add(key)
+        if vector.get("widthBits") != 32:
+            raise ValueError(f"code-vector width is not 32 bits: {key[0]}::{key[1]}")
+        address = vector["address"]
+        if address & 1:
+            raise ValueError(f"unaligned code-vector slot: {key[0]}::{key[1]}")
+        end = checked_end(address, 2, f"code vector {key[0]}::{key[1]}")
+        if containing_region(profile, address, 2) is None:
+            raise ValueError(f"code-vector slot is outside mapped profile memory: {key[0]}::{key[1]}")
+        vector_spans.append((address, end, f"{key[0]}::{key[1]}"))
+    vector_spans.sort()
+    for first, second in zip(vector_spans, vector_spans[1:]):
+        if first[1] > second[0]:
+            raise ValueError(f"overlapping code-vector slots: {first[2]} and {second[2]}")
+
+def aggregate_hashes(hashes: dict[str, str]) -> str:
     aggregate = hashlib.sha256()
-    for name, digest in hashes.items():
+    for name, digest in sorted(hashes.items()):
         aggregate.update(name.encode("utf-8"))
         aggregate.update(b"\0")
         aggregate.update(digest.encode("ascii"))
         aggregate.update(b"\n")
-    return hashes, aggregate.hexdigest()
+    return aggregate.hexdigest()
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--inputs", type=Path, required=True, help="c2000ware-f2837xs subset")
-    ap.add_argument("--output", type=Path, required=True)
-    args = ap.parse_args()
-    root = args.inputs.resolve()
+def input_provenance(root: Path) -> tuple[dict[str, str], str]:
+    files = sorted((root / "sysconfig-registers").glob("f2837xs_*_registers.js"))
+    files.append(root / "sysconfig-registers" / "f2837xs_memmap.js")
+    files.extend((root / relative) for relative in (PIECTRL_HEADER, PIEVECT_HEADER))
+    unique = sorted(set(files))
+    missing = [path for path in unique if not path.is_file()]
+    if missing:
+        raise ValueError("missing profile input(s): " + ", ".join(str(path) for path in missing))
+    hashes = {str(path.relative_to(root)): sha256(path) for path in unique}
+    return hashes, aggregate_hashes(hashes)
+
+
+def supplemental_provenance(profile: dict, root: Path) -> tuple[dict[str, str], str]:
+    provenance = profile.get("provenance", {})
+    hashes = dict(provenance.get("inputFilesSha256", {}))
+    for relative in (PIECTRL_HEADER, PIEVECT_HEADER):
+        path = root / relative
+        if not path.is_file():
+            raise ValueError(f"missing profile input: {path}")
+        hashes[str(relative)] = sha256(path)
+    return dict(sorted(hashes.items())), aggregate_hashes(hashes)
+
+
+def add_pie_metadata(profile: dict, root: Path, bases: dict[str, int]) -> None:
+    control_path = root / PIECTRL_HEADER
+    vector_path = root / PIEVECT_HEADER
+    if not control_path.is_file() or not vector_path.is_file():
+        raise ValueError(
+            "PIE metadata requires device-headers/F2837xS_piectrl.h and "
+            "device-headers/F2837xS_pievect.h"
+        )
+
+    # Rebuild, rather than append, so supplemental regeneration is idempotent.
+    profile["registers"] = [
+        register for register in profile["registers"]
+        if register.get("metadataSource") != PIE_METADATA_SOURCE
+    ]
+    profile["registers"].extend(
+        parse_pie_control_registers(control_path, bases["PIECTRL_BASE"])
+    )
+    profile["registers"].sort(
+        key=lambda register: (register["address"], register["namespace"], register["name"])
+    )
+
+    vector_base = bases["PIEVECTTABLE_BASE"]
+    mapped_words = find_block_words(profile, vector_base, "PIE_VECTOR_RAM")
+    profile["codeVectors"] = parse_pie_vectors(vector_path, vector_base, mapped_words)
+
+
+def build_full_profile(root: Path) -> dict:
     memmap_file = root / "sysconfig-registers" / "f2837xs_memmap.js"
     bases, display = parse_memory_map(memmap_file)
     registers = build_registers(root, bases)
     base_labels = [
-        {"name": name.removesuffix("_BASE"), "symbol": name, "address": address, "displayName": display[name]}
+        {"name": name.removesuffix("_BASE"), "symbol": name, "address": address,
+         "displayName": display[name]}
         for name, address in sorted(bases.items(), key=lambda item: (item[1], item[0]))
     ]
     profile = {
@@ -513,15 +656,51 @@ def main() -> None:
             "generatedBy": "tools/generate_f2837xs_profile.py",
         },
     }
+    add_pie_metadata(profile, root, bases)
     input_hashes, aggregate_hash = input_provenance(root)
     profile["provenance"]["inputFilesSha256"] = input_hashes
     profile["provenance"]["inputsAggregateSha256"] = aggregate_hash
+    return profile
+
+
+def build_supplemented_profile(root: Path, base_profile: Path) -> dict:
+    profile = copy.deepcopy(json.loads(base_profile.read_text(encoding="utf-8")))
+    if profile.get("schema") != "tms320c28-device-profile":
+        raise ValueError(f"unsupported base profile: {base_profile}")
+    bases = {label["symbol"]: label["address"] for label in profile["baseLabels"]}
+    add_pie_metadata(profile, root, bases)
+    input_hashes, aggregate_hash = supplemental_provenance(profile, root)
+    profile.setdefault("provenance", {})["inputFilesSha256"] = input_hashes
+    profile["provenance"]["inputsAggregateSha256"] = aggregate_hash
+    profile["provenance"]["generatedBy"] = "tools/generate_f2837xs_profile.py"
+    return profile
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--inputs", type=Path, required=True, help="c2000ware-f2837xs subset")
+    ap.add_argument("--base-profile", type=Path,
+                    help="checked generated profile used only when SysConfig inputs are absent")
+    ap.add_argument("--output", type=Path, required=True)
+    args = ap.parse_args()
+    root = args.inputs.resolve()
+    memmap_file = root / "sysconfig-registers" / "f2837xs_memmap.js"
+    if memmap_file.is_file():
+        profile = build_full_profile(root)
+    else:
+        if args.base_profile is None:
+            raise ValueError(
+                "SysConfig inputs are absent; pass --base-profile for authoritative PIE-only regeneration"
+            )
+        profile = build_supplemented_profile(root, args.base_profile.resolve())
+
     validate_profile(profile)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(profile, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"PROFILE_BLOCKS={len(profile['blocks'])}")
-    print(f"PROFILE_BASE_LABELS={len(base_labels)}")
-    print(f"PROFILE_REGISTERS={len(registers)}")
+    print(f"PROFILE_BASE_LABELS={len(profile['baseLabels'])}")
+    print(f"PROFILE_REGISTERS={len(profile['registers'])}")
+    print(f"PROFILE_CODE_VECTORS={len(profile.get('codeVectors', []))}")
     print(f"PROFILE_OUTPUT={args.output}")
 
 

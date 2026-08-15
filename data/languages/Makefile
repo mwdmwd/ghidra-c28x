@@ -420,6 +420,7 @@ profile-generate-check: tools/generate_f2837xs_profile.py device_profiles/f2837x
 	@mkdir -p $(PROFILE_GENERATE_DIR)
 	$(Q)$(PYTHON) tools/generate_f2837xs_profile.py \
 		--inputs "$(C2000WARE_F2837XS_SUBSET)" \
+		--base-profile device_profiles/f2837xs-compatible.json \
 		--output $(PROFILE_GENERATE_DIR)/f2837xs-compatible.json
 	$(Q)cmp -s device_profiles/f2837xs-compatible.json \
 		$(PROFILE_GENERATE_DIR)/f2837xs-compatible.json || { \
