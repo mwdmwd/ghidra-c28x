@@ -26,3 +26,7 @@ ghidra-pm-test/
 shift-idiom-build/
 ghidra-shift-idiom-test/
 ghidra-shift-firmware-audit/
+
+code-pointer-build/
+ghidra-code-pointer-test/
+

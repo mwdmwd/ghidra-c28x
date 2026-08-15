@@ -32,6 +32,8 @@ GHIDRA_STATUS_MODE_DIR := ghidra-status-mode-test
 STATUS_MODE_BUILD_DIR := status-mode-build
 GHIDRA_SHIFT_IDIOM_DIR := ghidra-shift-idiom-test
 SHIFT_IDIOM_BUILD_DIR := shift-idiom-build
+GHIDRA_CODE_POINTER_DIR := ghidra-code-pointer-test
+CODE_POINTER_BUILD_DIR := code-pointer-build
 PROFILE_GENERATE_DIR := profile-generate-check
 C2000WARE_F2837XS_SUBSET ?=
 ZOO_BUILD_DIR := compiler-zoo-build
@@ -320,6 +322,16 @@ pm-test: tms320c28.sla analyzer pm_product_store_test.py PmProductStoreTest.java
 		--dis2000 "$(DIS)" --strip2000 "$(STRIP)" --ghidra-headless "$(GHIDRA_HEADLESS)" \
 		--build $$PWD/$(PM_BUILD_DIR) --work $$PWD/$(GHIDRA_PM_DIR)
 
+.PHONY: code-pointer-test
+code-pointer-test: tms320c28.sla analyzer code_pointer_test.py \
+		CodePointerTest.java CodePointerTestSetup.java \
+		code_pointer_validation.asm code_pointer_validation.cmd
+	$(Q)$(PYTHON) code_pointer_test.py --root $$PWD --cl2000 "$(AS)" \
+		--dis2000 "$(DIS)" --strip2000 "$(STRIP)" \
+		--ghidra-headless "$(GHIDRA_HEADLESS)" \
+		--build $$PWD/$(CODE_POINTER_BUILD_DIR) \
+		--work $$PWD/$(GHIDRA_CODE_POINTER_DIR)
+
 .PHONY: decompile
 decompile: tms320c28.sla $(DECOMPILE_OBJECT) Decompile.java
 	@mkdir -p $(GHIDRA_DECOMP_DIR)/home $(GHIDRA_DECOMP_DIR)/config $(GHIDRA_DECOMP_DIR)/project $(GHIDRA_DECOMP_DIR)/tmp $(GHIDRA_DECOMP_DIR)/cache $(GHIDRA_DECOMP_DIR)/scripts
@@ -494,6 +506,7 @@ clean:
 	@rm -rf $(GHIDRA_PM_DIR) $(PM_BUILD_DIR)
 	@rm -rf $(GHIDRA_STATUS_MODE_DIR) $(STATUS_MODE_BUILD_DIR)
 	@rm -rf $(GHIDRA_SHIFT_IDIOM_DIR) $(SHIFT_IDIOM_BUILD_DIR)
+	@rm -rf $(GHIDRA_CODE_POINTER_DIR) $(CODE_POINTER_BUILD_DIR)
 	@rm -rf $(ZOO_BUILD_DIR)
 	@rm -rf $(ANALYZER_BUILD_DIR)
 	@rm -f $(ANALYZER_JAR)
