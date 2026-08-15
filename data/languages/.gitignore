@@ -11,6 +11,7 @@ compiler-zoo-build/
 __pycache__/
 old/
 ghidra-profile-test/
+ghidra-copy-source-test*/
 profile-generate-check/
 rpc-abi-build/
 ghidra-rpc-abi-test/

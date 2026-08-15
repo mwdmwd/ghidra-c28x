@@ -25,6 +25,58 @@ TMS320C28ImportRomEvidence.java path=/absolute/path/rom.bin base=0x... expectedW
 All JSON addresses and script `base` values are C28x word addresses.
 Run auto-analysis last.
 
+
+## Explicit inert copy sources
+
+An individual record under `copyRecovery.explicit` may opt into source
+retirement with exactly:
+
+```json
+{
+  "name": "RAM_RUN_SECTION",
+  "source": 65536,
+  "destination": 8192,
+  "words": 256,
+  "executable": true,
+  "sourceDisposition": "inert-storage",
+  "evidence": "workspace-owned exact copy proof"
+}
+```
+
+The field is optional.  Its absence preserves ordinary copy recovery, and the
+only accepted value is the exact string `inert-storage`.  The option is
+record-local: it is never inferred from equal bytes, an executable destination,
+`.cinit`, or another copy record.
+
+Destination materialization still runs first.  Source cleanup then requires the
+complete explicit record, positive bounded initialized non-overlapping ranges,
+full source/destination byte equality, matching destination execute permission,
+one isolatable initialized source block, no function entry or intersecting
+function body, no external entry point, no workspace analysis seed, no flow
+reference or fall-through from outside the exact source span, no conflicting
+executable-copy destination, and no code/data unit crossing an isolation
+boundary.  A failed premise emits a deterministic source-cleanup diagnostic and
+does not revoke otherwise valid destination recovery.
+
+A proved source is split out exactly, retains its bytes and initialized/read/
+write/volatile state, loses only execute permission, and has decoded
+instructions plus their outgoing references cleared in one transaction.
+Defined data, user/evidence labels and namespaces, listing comments, bookmarks,
+and external non-flow references are retained.  The exact block receives a
+workspace-owned provenance marker, so reapplying the same workspace is
+idempotent and later auto-analysis cannot decode it again.
+
+This transformation is monotonic.  Removing the field later does not
+implicitly restore execute permission or deleted analysis state; automatic
+restoration would require original split ownership, permissions, and listing
+state that the workspace does not claim to reconstruct.
+
+Run the finite migration and near-miss corpus whenever this contract changes:
+
+```sh
+make copy-source-test
+```
+
 ## Regenerating the profile
 
 Use TI's public `c2000ware-core-sdk` at commit `e5698c666d9ff587940d249213cbbb328a3bcd66`: https://github.com/TexasInstruments/c2000ware-core-sdk

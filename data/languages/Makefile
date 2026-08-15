@@ -20,6 +20,7 @@ GHIDRA_DECOMP_DIR := ghidra-decomp
 GHIDRA_SWITCH_DIR := ghidra-switch-test
 GHIDRA_ZOO_DIR := ghidra-zoo-test
 GHIDRA_PROFILE_DIR := ghidra-profile-test
+GHIDRA_COPY_SOURCE_DIR := ghidra-copy-source-test
 GHIDRA_RPC_ABI_DIR := ghidra-rpc-abi-test
 RPC_ABI_BUILD_DIR := rpc-abi-build
 GHIDRA_STACK_ARGUMENT_DIR := ghidra-stack-argument-test
@@ -440,6 +441,18 @@ profile-test: tms320c28.sla profile_tests.py \
 	$(Q)$(PYTHON) profile_tests.py --root $$PWD \
 		--ghidra-headless "$(GHIDRA_HEADLESS)" --work $$PWD/$(GHIDRA_PROFILE_DIR)
 
+# Fresh-project coverage for the explicit inert-storage copy-source policy.
+# The positive migration fixture begins with decoded source code and proves
+# exact isolation, metadata preservation, idempotence, and post-analysis
+# non-recreation.  One-condition negatives keep destination recovery intact.
+.PHONY: copy-source-test
+copy-source-test: tms320c28.sla copy_source_test.py \
+		ghidra_scripts/TMS320C28DeviceProfile.java \
+		ghidra_scripts/TMS320C28CopySourceTest.java
+	$(Q)$(PYTHON) copy_source_test.py --root $$PWD \
+		--ghidra-headless "$(GHIDRA_HEADLESS)" \
+		--work $$PWD/$(GHIDRA_COPY_SOURCE_DIR)
+
 # Build a deterministic, bounded matrix of TI compiler output.  Distinct
 # object names are mandatory: cl2000/make must never satisfy one option set
 # with an object produced for another.
@@ -501,7 +514,8 @@ zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 .PHONY: clean
 clean:
 	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR) $(GHIDRA_ZOO_DIR)
-	@rm -rf $(GHIDRA_PROFILE_DIR) $(GHIDRA_RPC_ABI_DIR) $(RPC_ABI_BUILD_DIR) $(PROFILE_GENERATE_DIR)
+	@rm -rf $(GHIDRA_PROFILE_DIR) $(GHIDRA_COPY_SOURCE_DIR)
+	@rm -rf $(GHIDRA_RPC_ABI_DIR) $(RPC_ABI_BUILD_DIR) $(PROFILE_GENERATE_DIR)
 	@rm -rf $(GHIDRA_STACK_ARGUMENT_DIR) $(STACK_ARGUMENT_BUILD_DIR)
 	@rm -rf $(GHIDRA_DIVISION_DIR) $(DIVISION_BUILD_DIR)
 	@rm -rf $(GHIDRA_PM_DIR) $(PM_BUILD_DIR)
