@@ -72,6 +72,18 @@ def _translate_lsrl_count(words: Iterable[int], count: int) -> list:
     return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
 
 
+def _translate_asr64_pair_phase(words: Iterable[int], phase: int) -> list:
+    """Translate one phase of an analyzer-proven adjacent ASR64 #16 pair."""
+    assert phase in (0, 1, 2)
+    ctx = Context("tms320c28:LE:32:default")
+    ctx.setVariableDefault("ctx_objmode", 1)
+    ctx.setVariableDefault("ctx_amode", 0)
+    ctx.setVariableDefault("ctx_page0", 0)
+    ctx.setVariableDefault("asr64_pair_phase", phase)
+    data = b"".join(struct.pack("<H", word) for word in words)
+    return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
+
+
 def _translate_ovm_zero(words: Iterable[int]) -> list:
     """Translate arithmetic selected by a finite proof that OVM is zero."""
     ctx = Context("tms320c28:LE:32:default")
@@ -1322,6 +1334,61 @@ def check_lsrl_t_proved_counts(_: list) -> None:
         }
         assert "T" not in touched, f"proved count {count} still reads T: {touched}"
         _assert_execution(ops, initial, expected, description)
+
+
+def check_asr64_immediate_standalone(ops: list) -> None:
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 0x00000001, "P": 0x80018000, "C": 0},
+         {"ACC": 0x00000000, "P": 0x00018001, "C": 1, "N": 0, "Z": 0},
+         "positive value and final carry"),
+        ({"ACC": 0xFFFFFFFF, "P": 0x00000000, "C": 0},
+         {"ACC": 0xFFFFFFFF, "P": 0xFFFF0000, "C": 0, "N": 1, "Z": 0},
+         "negative sign extension"),
+        ({"ACC": 0x00000000, "P": 0x00000000, "C": 1},
+         {"ACC": 0, "P": 0, "C": 0, "N": 0, "Z": 1},
+         "zero"),
+    )
+    for initial, expected, description in vectors:
+        actual = _execute_tmu_pcode(ops, initial)
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+
+def check_asr64_pair_first_phase(_: list) -> None:
+    ops = _translate_asr64_pair_phase((0x568F,), 1)
+    assert ops == [], f"first paired ASR64 must be inert, got {ops}"
+
+
+def check_asr64_pair_second_phase(_: list) -> None:
+    ops = _translate_asr64_pair_phase((0x568F,), 2)
+    _no_internal_cfg(ops)
+    vectors = (
+        ({"ACC": 0x00000000, "P": 0x80000000, "C": 0},
+         {"ACC": 0, "P": 0, "C": 1, "N": 0, "Z": 1},
+         "zero extension with carry from original P bit 31"),
+        ({"ACC": 0x00000001, "P": 0x00000000, "C": 1},
+         {"ACC": 0, "P": 1, "C": 0, "N": 0, "Z": 0},
+         "positive sign extension"),
+        ({"ACC": 0x80000000, "P": 0x7FFFFFFF, "C": 0},
+         {"ACC": 0xFFFFFFFF, "P": 0x80000000, "C": 0, "N": 1, "Z": 0},
+         "negative minimum"),
+        ({"ACC": 0xFFFFFFFF, "P": 0xFFFFFFFF, "C": 0},
+         {"ACC": 0xFFFFFFFF, "P": 0xFFFFFFFF, "C": 1, "N": 1, "Z": 0},
+         "all ones snapshots aliased sources"),
+    )
+    for initial, expected, description in vectors:
+        actual = _execute_tmu_pcode(ops, initial)
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
 
 
 def check_lsl64_t_eventual_state(ops: list) -> None:
@@ -3556,6 +3623,9 @@ CASES = (
     Case("NEGTC is branch-free and preserves inactive C", (0x5632,), check_negtc_eventual_state),
     Case("LSRL ACC,T retains exact unknown and masked-zero semantics", (0x5622,), check_lsrl_t_generic_state),
     Case("proved LSRL ACC,T uses direct exact nonzero shifts", (0x5622,), check_lsrl_t_proved_counts),
+    Case("paired ASR64 control retains standalone #16 semantics", (0x568f,), check_asr64_immediate_standalone),
+    Case("paired ASR64 first phase is semantically inert", (0x568f,), check_asr64_pair_first_phase),
+    Case("paired ASR64 second phase publishes exact net shift by 32", (0x568f,), check_asr64_pair_second_phase),
     Case("LSL64 ACC:P,T is branch-free for zero and maximum shifts", (0x5652,), check_lsl64_t_eventual_state),
     Case("SFR ACC,#5 is branch-free with SXM and carry", (0xFF44,), check_sfr_immediate_eventual_state),
     Case("SFR ACC,T is branch-free for zero and maximum shifts", (0xFF51,), check_sfr_t_eventual_state),

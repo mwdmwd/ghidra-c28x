@@ -16,7 +16,13 @@ import time
 
 COMMON = ("--float_support=fpu32", "--abi=eabi")
 COMPILER_FUNCTIONS = (
-    "shift_t_div2", "shift_t_div4", "shift_t_compiler_entry",
+    "shift_t_div2", "shift_t_div4",
+    "shift_sign_extend_value", "shift_sign_extend_multiply",
+    "shift_add_sign_extended_product", "shift_t_compiler_entry",
+)
+PAIR_COMPILER_FUNCTIONS = (
+    "shift_sign_extend_value", "shift_sign_extend_multiply",
+    "shift_add_sign_extended_product",
 )
 MANUAL_FUNCTIONS = (
     "shift_t_direct_one", "shift_t_direct_max", "shift_t_direct_sixteen",
@@ -25,10 +31,19 @@ MANUAL_FUNCTIONS = (
     "shift_t_near_zero", "shift_t_near_masked_zero", "shift_t_near_dynamic",
     "shift_t_near_partial_write", "shift_t_near_value_clobber",
     "shift_t_near_alternate_ingress", "shift_t_alternate_source",
-    "shift_t_contract_callee", "shift_validation_entry",
+    "shift_t_contract_callee",
+    "shift_pair_direct", "shift_pair_after_impy",
+    "shift_pair_near_standalone", "shift_pair_near_first_count",
+    "shift_pair_near_second_count", "shift_pair_near_separated",
+    "shift_pair_near_second_ingress", "shift_pair_second_ingress_source",
+    "shift_pair_near_first_ingress", "shift_pair_first_ingress_source",
+    "shift_pair_near_flag_observer", "shift_pair_near_conflicting_rejoin",
+    "shift_validation_entry",
 )
 VALIDATION_LABELS = (
     "shift_t_stale_zero", "shift_t_stale_nonshift", "shift_t_alternate_target",
+    "shift_pair_alternate_second", "shift_pair_alternate_first",
+    "shift_pair_stale_first", "shift_pair_stale_second",
 )
 
 
@@ -117,6 +132,14 @@ def build(root: Path, out: Path, compiler: Path, disassembler: Path,
                 raise RuntimeError(
                     f"{optimization} {name} lost MOV T,#{count:#x}"
                 )
+        for name in PAIR_COMPILER_FUNCTIONS:
+            body = function_text(text, name)
+            if body.count("ASR64        ACC:P, 16") != 2:
+                raise RuntimeError(
+                    f"{optimization} {name} lost adjacent ASR64 #16 pair"
+                )
+            if "ASR64        ACC:P, 16\n" not in body:
+                raise RuntimeError(f"{optimization} {name} pair text changed")
         addresses = symbol_addresses(text, COMPILER_FUNCTIONS)
         run([str(stripper), "--postlink", str(linked)], root)
         subjects.append(Subject(linked, "compiler", addresses))
@@ -141,6 +164,9 @@ def build(root: Path, out: Path, compiler: Path, disassembler: Path,
             raise RuntimeError(f"validation disassembly lost {name}")
     if text.count("LSRL         ACC, T") != 13:
         raise RuntimeError("validation fixture must contain thirteen LSRL ACC,T sites")
+    if text.count("ASR64        ACC:P, 16") != 17 or \
+            text.count("ASR64        ACC:P, 15") != 2:
+        raise RuntimeError("validation fixture lost its nineteen ASR64 sites")
     addresses = symbol_addresses(
         text, tuple(dict.fromkeys(MANUAL_FUNCTIONS + VALIDATION_LABELS)),
     )
@@ -279,14 +305,19 @@ def main() -> int:
         "SHIFT_COMPILER_UNREACHABLE_BLOCKS=0": 2,
         "SHIFT_MANUAL_DIRECT_SITES=5": 1,
         "SHIFT_MANUAL_NEAR_MISSES=8": 1,
+        "SHIFT_PAIR_COMPILER_PAIRS=3": 2,
+        "SHIFT_PAIR_SIGN_EXTENSION_DECOMPILATIONS=3": 2,
+        "SHIFT_PAIR_MANUAL_PAIRS=2": 1,
+        "SHIFT_PAIR_MANUAL_NEAR_MISSES=8": 1,
         "SHIFT_STALE_CONTEXT_REVOKED=2": 1,
+        "SHIFT_PAIR_STALE_CONTEXT_REVOKED=2": 1,
     }
     for marker, count in required.items():
         actual = aggregate.count(marker)
         if actual != count:
             raise RuntimeError(f"expected {count} occurrences of {marker}, got {actual}")
     print(f"SHIFT_GHIDRA_PROGRAMS={len(subjects)}")
-    print("SHIFT_IDIOM_TEST_PASS=constant-t")
+    print("SHIFT_IDIOM_TEST_PASS=all")
     return 0
 
 

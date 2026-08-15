@@ -59,6 +59,7 @@ define context contextreg
 	pm_store_noshift = (8,8) noflow	# analyzer-proven decoded PM=0 MOV loc16,P
 	ovm_zero       = (9,9) noflow	# analyzer-proven OVM=0 at this arithmetic site
 	lsrl_t_count   = (10,14) noflow	# analyzer-proven nonzero T(4:0) count
+	asr64_pair_phase = (15,16) noflow	# analyzer-proven adjacent ASR64 #16 pair
 	rptb_flag  = (3,3) noflow	# set by RPTB on the last instruction of its block
 	rpt_phase  = (31,31)		# internal: prevents recursive ^instruction matching
 ;

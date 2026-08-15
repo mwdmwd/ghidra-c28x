@@ -18,6 +18,22 @@
     .global shift_t_stale_zero
     .global shift_t_stale_nonshift
     .global shift_t_alternate_target
+    .global shift_pair_direct
+    .global shift_pair_after_impy
+    .global shift_pair_near_standalone
+    .global shift_pair_near_first_count
+    .global shift_pair_near_second_count
+    .global shift_pair_near_separated
+    .global shift_pair_near_second_ingress
+    .global shift_pair_second_ingress_source
+    .global shift_pair_near_first_ingress
+    .global shift_pair_first_ingress_source
+    .global shift_pair_near_flag_observer
+    .global shift_pair_near_conflicting_rejoin
+    .global shift_pair_alternate_second
+    .global shift_pair_alternate_first
+    .global shift_pair_stale_first
+    .global shift_pair_stale_second
 
 ; Exact nonzero definitions select branch-free LSRL semantics.
 shift_t_direct_one:
@@ -150,6 +166,107 @@ shift_t_contract_callee:
     LRETR
     .endasmfunc
 
+
+; Adjacent immediate #16,#16 is an exact net arithmetic shift by 32.
+shift_pair_direct:
+    .asmfunc
+    ASR64   ACC:P,#16
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
+; A normal straight-line producer may precede the pair.
+shift_pair_after_impy:
+    .asmfunc
+    IMPYL   ACC,XT,ACC
+    ASR64   ACC:P,#16
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
+shift_pair_near_standalone:
+    .asmfunc
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
+shift_pair_near_first_count:
+    .asmfunc
+    ASR64   ACC:P,#15
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
+shift_pair_near_second_count:
+    .asmfunc
+shift_pair_stale_first:
+    ASR64   ACC:P,#16
+shift_pair_stale_second:
+    ASR64   ACC:P,#15
+    LRETR
+    .endasmfunc
+
+shift_pair_near_separated:
+    .asmfunc
+    ASR64   ACC:P,#16
+    NOP
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
+; A second function can enter the second instruction directly.
+shift_pair_near_second_ingress:
+    .asmfunc
+    ASR64   ACC:P,#16
+shift_pair_alternate_second:
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
+shift_pair_second_ingress_source:
+    .asmfunc
+    B       shift_pair_alternate_second,UNC
+    .endasmfunc
+
+; A non-call branch to a function entry is not an ordinary call ingress.
+shift_pair_near_first_ingress:
+    .asmfunc
+shift_pair_alternate_first:
+    ASR64   ACC:P,#16
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
+shift_pair_first_ingress_source:
+    .asmfunc
+    B       shift_pair_alternate_first,UNC
+    .endasmfunc
+
+; An observer between the shifts prevents the bounded pair form.
+shift_pair_near_flag_observer:
+    .asmfunc
+    ASR64   ACC:P,#16
+    SB      shift_pair_flag_done,C
+    ASR64   ACC:P,#16
+shift_pair_flag_done:
+    LRETR
+    .endasmfunc
+
+; Two predecessor paths enter the first #16 instruction.
+shift_pair_near_conflicting_rejoin:
+    .asmfunc
+    CMPB    AL,#0
+    SB      shift_pair_rejoin_high,NEQ
+    NOP
+    B       shift_pair_rejoin_join,UNC
+shift_pair_rejoin_high:
+    NOP
+shift_pair_rejoin_join:
+    ASR64   ACC:P,#16
+    ASR64   ACC:P,#16
+    LRETR
+    .endasmfunc
+
 shift_validation_entry:
     .asmfunc
     LCR     shift_t_direct_one
@@ -166,5 +283,17 @@ shift_validation_entry:
     LCR     shift_t_near_value_clobber
     LCR     shift_t_near_alternate_ingress
     LCR     shift_t_alternate_source
+    LCR     shift_pair_direct
+    LCR     shift_pair_after_impy
+    LCR     shift_pair_near_standalone
+    LCR     shift_pair_near_first_count
+    LCR     shift_pair_near_second_count
+    LCR     shift_pair_near_separated
+    LCR     shift_pair_near_second_ingress
+    LCR     shift_pair_second_ingress_source
+    LCR     shift_pair_near_first_ingress
+    LCR     shift_pair_first_ingress_source
+    LCR     shift_pair_near_flag_observer
+    LCR     shift_pair_near_conflicting_rejoin
     LRETR
     .endasmfunc

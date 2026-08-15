@@ -20,7 +20,13 @@ public class ShiftIdiomSeedStale extends GhidraScript {
         seed(context, addresses, "shift_t_stale_zero", 7);
         seed(context, addresses, "shift_t_stale_nonshift", 7);
         seedUncalledFunction(addresses, "shift_t_alternate_source");
+        Register pairContext = currentProgram.getProgramContext()
+            .getRegister("asr64_pair_phase");
+        require(pairContext != null, "missing asr64_pair_phase context register");
+        seed(pairContext, addresses, "shift_pair_stale_first", 1);
+        seed(pairContext, addresses, "shift_pair_stale_second", 2);
         println("SHIFT_STALE_CONTEXT_SEEDED=2");
+        println("SHIFT_PAIR_STALE_CONTEXT_SEEDED=2");
     }
 
     private Map<String, Address> parseAddresses() {

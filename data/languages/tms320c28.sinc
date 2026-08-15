@@ -2338,7 +2338,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.159
-:asr64 ACC:P, shift0_4_1 is ctx_objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
+:asr64 ACC:P, shift0_4_1 is asr64_pair_phase=0 & ctx_objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
 	local lo:8 = zext(P);
 	local hi:8 = zext(ACC);
 	local val:8 = (hi << 32) | lo;
@@ -2349,6 +2349,23 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	P = val[0, 32];
 	N = val[63, 1];
 	Z = val == 0;
+}
+
+# Analyzer-selected first half of an exact adjacent #16,#16 pair.  The pair
+# proof guarantees that this intermediate ACC:P and its flags are unobserved.
+:asr64 ACC:P, shift0_4_1 is asr64_pair_phase=1 & ctx_objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
+}
+
+# Analyzer-selected second half publishes the exact net arithmetic shift by
+# 32 from the original pair input retained by the inert first constructor.
+:asr64 ACC:P, shift0_4_1 is asr64_pair_phase=2 & ctx_objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
+	local original_acc:4 = ACC;
+	local original_p:4 = P;
+	C = original_p[31, 1];
+	P = original_acc;
+	ACC = original_acc s>> 31;
+	N = original_acc[31, 1];
+	Z = original_acc == 0;
 }
 
 # p.160
