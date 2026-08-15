@@ -58,9 +58,11 @@ define context contextreg
 	subcul_div32   = (7,7) noflow	# analyzer-proven 32-step unsigned division
 	pm_store_noshift = (8,8) noflow	# analyzer-proven decoded PM=0 MOV loc16,P
 	ovm_zero       = (9,9) noflow	# analyzer-proven OVM=0 at this arithmetic site
+	lsrl_t_count   = (10,14) noflow	# analyzer-proven nonzero T(4:0) count
 	rptb_flag  = (3,3) noflow	# set by RPTB on the last instruction of its block
 	rpt_phase  = (31,31)		# internal: prevents recursive ^instruction matching
 ;
+
 
 # Include contents of tms320c28.sinc file
 @include "tms320c28.sinc"

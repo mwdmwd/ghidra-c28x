@@ -30,6 +30,8 @@ GHIDRA_PM_DIR := ghidra-pm-test
 PM_BUILD_DIR := pm-build
 GHIDRA_STATUS_MODE_DIR := ghidra-status-mode-test
 STATUS_MODE_BUILD_DIR := status-mode-build
+GHIDRA_SHIFT_IDIOM_DIR := ghidra-shift-idiom-test
+SHIFT_IDIOM_BUILD_DIR := shift-idiom-build
 PROFILE_GENERATE_DIR := profile-generate-check
 C2000WARE_F2837XS_SUBSET ?=
 ZOO_BUILD_DIR := compiler-zoo-build
@@ -257,6 +259,17 @@ status-mode-test: tms320c28.sla analyzer semantic_tests.py status_mode_test.py \
 		--cl2000 $(AS) --dis2000 $(DIS) --strip2000 $(STRIP) \
 		--ghidra-headless $(GHIDRA_HEADLESS) --build $$PWD/$(STATUS_MODE_BUILD_DIR) \
 		--work $$PWD/$(GHIDRA_STATUS_MODE_DIR)
+
+# Finite proved-shift data-flow and adjacent 64-bit shift regressions.
+.PHONY: shift-idiom-test
+shift-idiom-test: tms320c28.sla analyzer semantic_tests.py shift_idiom_test.py \
+		ShiftIdiomTest.java ShiftIdiomSeedStale.java shift_idiom_test.c \
+		shift_idiom_test.cmd shift_idiom_validation.asm shift_idiom_validation.cmd
+	$(Q)$(PYTHON) semantic_tests.py --shift-idiom-only
+	$(Q)$(PYTHON) shift_idiom_test.py --root $$PWD \
+		--cl2000 $(AS) --dis2000 $(DIS) --strip2000 $(STRIP) \
+		--ghidra-headless $(GHIDRA_HEADLESS) --build $$PWD/$(SHIFT_IDIOM_BUILD_DIR) \
+		--work $$PWD/$(GHIDRA_SHIFT_IDIOM_DIR)
 
 # Assemble instructions from stdin, print along with hex words
 .PHONY: qasm

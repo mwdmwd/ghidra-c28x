@@ -60,6 +60,18 @@ def _translate_pm_store_noshift(words: Iterable[int]) -> list:
     return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
 
 
+def _translate_lsrl_count(words: Iterable[int], count: int) -> list:
+    """Translate LSRL selected by an exact nonzero T(4:0) proof."""
+    assert 0 < count <= 31
+    ctx = Context("tms320c28:LE:32:default")
+    ctx.setVariableDefault("ctx_objmode", 1)
+    ctx.setVariableDefault("ctx_amode", 0)
+    ctx.setVariableDefault("ctx_page0", 0)
+    ctx.setVariableDefault("lsrl_t_count", count)
+    data = b"".join(struct.pack("<H", word) for word in words)
+    return [op for op in ctx.translate(data).ops if op.opcode != OpCode.IMARK]
+
+
 def _translate_ovm_zero(words: Iterable[int]) -> list:
     """Translate arithmetic selected by a finite proof that OVM is zero."""
     ctx = Context("tms320c28:LE:32:default")
@@ -1259,6 +1271,56 @@ def check_negtc_eventual_state(ops: list) -> None:
         ({"ACC": 0x80000000, "TC": 1, "OVM": 1, "V": 0, "C": 1}, {"ACC": 0x7FFFFFFF, "TC": 1, "V": 1, "C": 0, "N": 0, "Z": 0}, "active minimum saturates"),
     )
     for initial, expected, description in vectors:
+        _assert_execution(ops, initial, expected, description)
+
+
+def check_lsrl_t_generic_state(ops: list) -> None:
+    # Unknown T must retain the architectural count-zero split.
+    branches = [op.opcode for op in ops if op.opcode in (OpCode.BRANCH, OpCode.CBRANCH)]
+    assert branches == [OpCode.CBRANCH, OpCode.BRANCH], branches
+    vectors = (
+        ({"ACC": 0x80000001, "T": 0, "C": 1},
+         {"ACC": 0x80000001, "C": 0, "N": 1, "Z": 0},
+         "zero count"),
+        ({"ACC": 0x80000001, "T": 32, "C": 1},
+         {"ACC": 0x80000001, "C": 0, "N": 1, "Z": 0},
+         "width count masks to zero"),
+        ({"ACC": 0x80000001, "T": 1, "C": 0},
+         {"ACC": 0x40000000, "C": 1, "N": 0, "Z": 0},
+         "one-bit runtime count"),
+    )
+    for initial, expected, description in vectors:
+        actual = _execute_tmu_pcode(ops, initial)
+        mismatches = {
+            name: (actual.get(name), value)
+            for name, value in expected.items()
+            if actual.get(name) != value
+        }
+        assert not mismatches, f"{description}: actual/expected {mismatches}"
+
+
+def check_lsrl_t_proved_counts(_: list) -> None:
+    vectors = (
+        (1, {"ACC": 0x80000001, "C": 0},
+         {"ACC": 0x40000000, "C": 1, "N": 0, "Z": 0},
+         "count one"),
+        (31, {"ACC": 0x80000000, "C": 0},
+         {"ACC": 1, "C": 0, "N": 0, "Z": 0},
+         "width minus one"),
+        (31, {"ACC": 0x40000000, "C": 0},
+         {"ACC": 0, "C": 1, "N": 0, "Z": 1},
+         "largest legal count carry and zero"),
+    )
+    for count, initial, expected, description in vectors:
+        ops = _translate_lsrl_count((0x5622,), count)
+        _no_internal_cfg(ops)
+        touched = {
+            _reg(node)
+            for op in ops
+            for node in (*op.inputs, op.output)
+            if node is not None and _reg(node) is not None
+        }
+        assert "T" not in touched, f"proved count {count} still reads T: {touched}"
         _assert_execution(ops, initial, expected, description)
 
 
@@ -3492,6 +3554,8 @@ CASES = (
     Case("NEG AH is branch-free with 16-bit minimum behavior", (0xFF5D,), check_neg_ax_eventual_state),
     Case("NEG64 is branch-free with complete eventual state", (0x5658,), check_neg64_eventual_state),
     Case("NEGTC is branch-free and preserves inactive C", (0x5632,), check_negtc_eventual_state),
+    Case("LSRL ACC,T retains exact unknown and masked-zero semantics", (0x5622,), check_lsrl_t_generic_state),
+    Case("proved LSRL ACC,T uses direct exact nonzero shifts", (0x5622,), check_lsrl_t_proved_counts),
     Case("LSL64 ACC:P,T is branch-free for zero and maximum shifts", (0x5652,), check_lsl64_t_eventual_state),
     Case("SFR ACC,#5 is branch-free with SXM and carry", (0xFF44,), check_sfr_immediate_eventual_state),
     Case("SFR ACC,T is branch-free for zero and maximum shifts", (0xFF51,), check_sfr_t_eventual_state),
@@ -3561,6 +3625,11 @@ def main() -> int:
         action="store_true",
         help="run only the focused SXM/OVM status-mode semantic cases",
     )
+    parser.add_argument(
+        "--shift-idiom-only",
+        action="store_true",
+        help="run only the focused proved-shift semantic cases",
+    )
     args = parser.parse_args()
 
     selected = CASES
@@ -3576,6 +3645,16 @@ def main() -> int:
                 "ordinary MOV loc16,P retains generic PM shift semantics",
                 "proved decoded-PM-zero MOV loc16,P is an alias-safe low-half copy",
             }
+        )
+    elif args.shift_idiom_only:
+        selected = tuple(
+            case
+            for case in CASES
+            if case.name in {
+                "LSRL ACC,T retains exact unknown and masked-zero semantics",
+                "proved LSRL ACC,T uses direct exact nonzero shifts",
+            }
+            or case.name.startswith("paired ASR64")
         )
 
     failures: list[str] = []

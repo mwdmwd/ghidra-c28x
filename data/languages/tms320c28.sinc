@@ -3041,7 +3041,10 @@ with : ctx_objmode=1 {
 }
 
 # p.241
-:lsrl ACC, T is ctx_objmode=1 & op0_16=0b0101011000100010 & ACC & T {
+# The ordinary form remains exact for unknown and masked-zero T.  A finite
+# analyzer may select the second constructor only after proving one nonzero
+# T(4:0) count on every ingress.
+:lsrl ACC, T is lsrl_t_count=0 & ctx_objmode=1 & op0_16=0b0101011000100010 & ACC & T {
 	local shift:4 = zext(T[0,5]);
 	if (shift != 0) goto <shifted>;
 	C = 0;
@@ -3051,6 +3054,14 @@ with : ctx_objmode=1 {
 	C = tmp[0, 1];
 	ACC = tmp >> 1;
 	<done>
+	flagnz(ACC);
+}
+
+:lsrl ACC, T is lsrl_t_count & ctx_objmode=1 & op0_16=0b0101011000100010 & ACC & T {
+	local shift:4 = lsrl_t_count;
+	local tmp:4 = ACC >> (shift - 1);
+	C = tmp[0, 1];
+	ACC = tmp >> 1;
 	flagnz(ACC);
 }
 

@@ -22,3 +22,6 @@ ghidra-division-test/
 
 pm-build/
 ghidra-pm-test/
+
+shift-idiom-build/
+ghidra-shift-idiom-test/
