@@ -1,4 +1,4 @@
-// Focused SXM low-half and TI C OVM-return data-flow regression.
+// Focused SXM low-half and finite TI C OVM arithmetic regression.
 //@category TMS320C28
 
 import ghidra.app.decompiler.DecompInterface;
@@ -27,8 +27,11 @@ import ghidra.program.model.listing.Variable;
 import ghidra.program.model.listing.VariableStorage;
 import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.pcode.Varnode;
+import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.SourceType;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -64,6 +67,22 @@ public class StatusModeTest extends GhidraScript {
         "status_ffc_wrong_model", "status_non_c_entry",
         "status_unproved_entry", "status_stale_function"
     };
+    private static final String[] VALIDATION_ADDCL_ZERO = {
+        "status_addcl_boundary_zero",
+        "status_addcl_setc_sxm_preserve",
+        "status_addcl_clrc_sxm_preserve",
+        "status_addcl_setc_multibit_preserve",
+        "status_addcl_clrc_multibit_preserve",
+        "status_addcl_clrc_includes_ovm"
+    };
+    private static final String[] VALIDATION_ADDCL_GENERIC = {
+        "status_addcl_setc_includes_ovm",
+        "status_addcl_conflict_rejoin",
+        "status_addcl_ambiguous_call",
+        "status_addcl_st0_write",
+        "status_addcl_unproved_entry",
+        "status_stale_addcl_function"
+    };
 
     private Listing listing;
     private FunctionManager functions;
@@ -71,6 +90,7 @@ public class StatusModeTest extends GhidraScript {
     private Register sxm;
     private Register ovm;
     private Register ovc;
+    private Register carry;
     private Register v;
     private Register n;
     private Register z;
@@ -86,12 +106,14 @@ public class StatusModeTest extends GhidraScript {
         sxm = currentProgram.getLanguage().getRegister("SXM");
         ovm = currentProgram.getLanguage().getRegister("OVM");
         ovc = currentProgram.getLanguage().getRegister("OVC");
+        carry = currentProgram.getLanguage().getRegister("C");
         v = currentProgram.getLanguage().getRegister("V");
         n = currentProgram.getLanguage().getRegister("N");
         z = currentProgram.getLanguage().getRegister("Z");
         acc = currentProgram.getLanguage().getRegister("ACC");
         al = currentProgram.getLanguage().getRegister("AL");
         require(ovmContext != null && sxm != null && ovm != null && ovc != null &&
+            carry != null &&
             v != null && n != null && z != null && acc != null && al != null,
             "missing status/accumulator registers");
 
@@ -198,6 +220,88 @@ public class StatusModeTest extends GhidraScript {
             "full volatile fixture lost CLRC SXM");
     }
 
+    private void requireModeMask(Function function, String mnemonic, int expectedMask,
+            String expectedText) throws Exception {
+        Instruction instruction = onlyMnemonic(function, mnemonic);
+        Scalar scalar = instruction.getScalar(0);
+        require(scalar != null && scalar.getUnsignedValue() == expectedMask,
+            function.getName() + " lost exact eight-bit " + mnemonic + " mask 0x" +
+                Integer.toHexString(expectedMask) + ": " + instruction);
+        require(expectedText.endsWith(classifyModeMask(expectedMask)),
+            function.getName() + " expected classification changed: " + expectedText);
+    }
+
+    private String classifyModeMask(int mask) {
+        String[] names = { "SXM", "OVM", "TC", "C", "INTM", "DBGM", "PAGE0", "VMAP" };
+        StringBuilder result = new StringBuilder();
+        for (int bit = 0; bit < names.length; bit++) {
+            if ((mask & (1 << bit)) == 0) {
+                continue;
+            }
+            if (result.length() != 0) result.append('|');
+            result.append(names[bit]);
+        }
+        return result.toString();
+    }
+
+    /**
+     * Exercise the evidence boundary independently from attractive decoded text.
+     * These one-condition near misses ensure aliases cannot manufacture a mask,
+     * contradict an exact scalar, or admit a value wider than the architectural
+     * eight-bit Mode operand.
+     */
+    private void auditExactMaskTransferPremises() throws Exception {
+        require(maskTransfer("SETC", new Scalar(8, 0x01),
+            new Object[] { new Scalar(8, 0x01) }, "SXM").equals("PRESERVE"),
+            "exact SETC SXM did not preserve OVM");
+        require(maskTransfer("CLRC", new Scalar(8, 0x05),
+            new Object[] { new Scalar(8, 0x05) }, "SXM|TC").equals("PRESERVE"),
+            "exact CLRC SXM|TC did not preserve OVM");
+        require(maskTransfer("SETC", new Scalar(8, 0x03),
+            new Object[] { new Scalar(8, 0x03) }, "SXM|OVM").equals("SET_ONE"),
+            "SETC mask containing OVM did not produce one");
+        require(maskTransfer("CLRC", new Scalar(8, 0x03),
+            new Object[] { new Scalar(8, 0x03) }, "SXM|OVM").equals("SET_ZERO"),
+            "CLRC mask containing OVM did not produce zero");
+
+        require(maskTransfer("SETC", null, new Object[0], "OVM").equals(
+            "NOT_APPLICABLE"),
+            "free-form OVM text widened missing scalar evidence");
+        require(maskTransfer("SETC", new Scalar(16, 0x100),
+            new Object[] { new Scalar(16, 0x100) }, "0x100").equals("NOT_APPLICABLE"),
+            "out-of-range Mode scalar was accepted");
+        require(maskTransfer("SETC", new Scalar(8, 0x01),
+            new Object[] { new Scalar(8, 0x01) }, "OVM").equals("NOT_APPLICABLE"),
+            "contradictory alias text widened exact scalar evidence");
+        require(maskTransfer("SETC", new Scalar(8, 0x01),
+            new Object[] { new Scalar(8, 0x02) }, "SXM").equals("NOT_APPLICABLE"),
+            "contradictory operand scalar was accepted");
+    }
+
+    private String maskTransfer(String mnemonic, Scalar scalar, Object[] objects,
+            String representation) throws Exception {
+        Instruction proxy = (Instruction) Proxy.newProxyInstance(
+            Instruction.class.getClassLoader(), new Class<?>[] { Instruction.class },
+            (instance, method, arguments) -> {
+                return switch (method.getName()) {
+                    case "getMnemonicString" -> mnemonic;
+                    case "getNumOperands" -> 1;
+                    case "getScalar" -> scalar;
+                    case "getOpObjects" -> objects;
+                    case "getDefaultOperandRepresentation" -> representation;
+                    case "toString" -> mnemonic + " " + representation;
+                    case "hashCode" -> System.identityHashCode(instance);
+                    case "equals" -> instance == arguments[0];
+                    default -> throw new AssertionError(
+                        "unexpected fake-instruction method " + method.getName());
+                };
+            });
+        Method transfer = TMS320C28OvmReturnAnalyzer.class.getDeclaredMethod(
+            "explicitOvmTransfer", Instruction.class);
+        transfer.setAccessible(true);
+        return transfer.invoke(null, proxy).toString();
+    }
+
     private void auditValidation() throws Exception {
         // FFC carries the C boundary contract only after its selected prototype
         // model has actually been established.
@@ -228,9 +332,41 @@ public class StatusModeTest extends GhidraScript {
         require(!tagged(alternate), "alternate ingress was unsafely proved OVM=0");
         requireGenericOvmPcode(alternate, "status_alternate_ingress");
 
+        for (String name : VALIDATION_ADDCL_ZERO) {
+            Instruction addcl = onlyAddcl(function(name));
+            require(tagged(addcl), name + " was not proved OVM=0");
+            requireOvmZeroAddclPcode(addcl, name);
+            expected.add(addcl.getMinAddress());
+        }
+        for (String name : VALIDATION_ADDCL_GENERIC) {
+            Instruction addcl = onlyAddcl(function(name));
+            require(!tagged(addcl), name + " was unsafely proved OVM=0");
+            requireGenericAddclPcode(addcl, name);
+        }
+        Instruction alternateAddcl = instruction("status_addcl_alternate_site");
+        require(isAddcl(alternateAddcl),
+            "ADDCL alternate-ingress label no longer identifies ADDCL");
+        require(!tagged(alternateAddcl),
+            "ADDCL alternate ingress was unsafely proved OVM=0");
+        requireGenericAddclPcode(alternateAddcl, "status_addcl_alternate_ingress");
+
         require(!tagged(instruction("status_stale_nonaddu")),
-            "stale OVM context survived on a non-ADDU instruction");
+            "stale OVM context survived on a non-candidate instruction");
         requireContextOnlyOn(expected);
+
+        requireModeMask(function("status_addcl_setc_sxm_preserve"), "SETC", 0x01,
+            "SETC SXM");
+        requireModeMask(function("status_addcl_clrc_sxm_preserve"), "CLRC", 0x01,
+            "CLRC SXM");
+        requireModeMask(function("status_addcl_setc_multibit_preserve"), "SETC", 0x05,
+            "SETC SXM|TC");
+        requireModeMask(function("status_addcl_clrc_multibit_preserve"), "CLRC", 0x05,
+            "CLRC SXM|TC");
+        requireModeMask(function("status_addcl_setc_includes_ovm"), "SETC", 0x03,
+            "SETC SXM|OVM");
+        requireModeMask(function("status_addcl_clrc_includes_ovm"), "CLRC", 0x03,
+            "CLRC SXM|OVM");
+        auditExactMaskTransferPremises();
 
         Function setAdd = function("status_ovm_set_add");
         require(containsMnemonic(setAdd, "SETC"), "explicit SETC OVM fixture changed");
@@ -242,10 +378,22 @@ public class StatusModeTest extends GhidraScript {
         require(unknownC.contains("in_SXM"),
             "full-width unknown-SXM consumer hid architectural SXM:\n" + unknownC);
 
+        Set<Address> beforeRerun = contextSites();
+        rerunOvmAnalyzer();
+        require(contextSites().equals(beforeRerun),
+            "OVM analyzer rerun changed exact context ownership");
+
         println("STATUS_MODE_VALIDATION_OVM_CANONICAL_SITES=" + expected.size());
         println("STATUS_MODE_VALIDATION_OVM_NEAR_MISSES=" +
             (VALIDATION_GENERIC_OVM.length + 1));
-        println("STATUS_MODE_VALIDATION_STALE_CONTEXT_REVOKED=2");
+        println("STATUS_MODE_VALIDATION_ADDCL_ZERO_SITES=" +
+            VALIDATION_ADDCL_ZERO.length);
+        println("STATUS_MODE_VALIDATION_ADDCL_NEAR_MISSES=" +
+            (VALIDATION_ADDCL_GENERIC.length + 1));
+        println("STATUS_MODE_VALIDATION_MASK_PRESERVES=4");
+        println("STATUS_MODE_VALIDATION_MASK_EVIDENCE_NEAR_MISSES=4");
+        println("STATUS_MODE_VALIDATION_STALE_CONTEXT_REVOKED=3");
+        println("STATUS_MODE_VALIDATION_IDEMPOTENT=true");
         println("STATUS_MODE_VALIDATION_SXM_UNKNOWN_VISIBLE=true");
     }
 
@@ -352,6 +500,39 @@ public class StatusModeTest extends GhidraScript {
             where + " lost architectural saturation construction");
     }
 
+    private void requireOvmZeroAddclPcode(Instruction instruction, String where)
+            throws Exception {
+        requireAddclEncoding(instruction, where);
+        PcodeOp[] ops = instruction.getPcode();
+        require(!referencesRegister(ops, ovm), where + " still references OVM");
+        require(!containsConstant(ops, 0x7fffffffL) &&
+            !containsConstant(ops, 0x80000000L),
+            where + " retained a saturation constant/select");
+        require(readsRegister(ops, carry), where + " does not read incoming C");
+        require(outputWrite(ops, acc) != null, where + " does not write ACC");
+        require(outputWrite(ops, carry) != null, where + " does not write C");
+        require(outputWrite(ops, ovc) != null, where + " does not write OVC");
+        require(outputWrite(ops, v) != null, where + " does not write sticky V");
+        require(outputWrite(ops, n) != null && outputWrite(ops, z) != null,
+            where + " does not write N/Z");
+        require(!hasInternalPcodeFlow(ops),
+            where + " manufactured instruction-local control flow");
+    }
+
+    private void requireGenericAddclPcode(Instruction instruction, String where)
+            throws Exception {
+        requireAddclEncoding(instruction, where);
+        PcodeOp[] ops = instruction.getPcode();
+        require(referencesRegister(ops, ovm), where + " lost architectural OVM input");
+        require(containsConstant(ops, 0x7fffffffL),
+            where + " lost architectural saturation construction");
+        require(readsRegister(ops, carry), where + " lost incoming C");
+        require(outputWrite(ops, acc) != null && outputWrite(ops, carry) != null &&
+            outputWrite(ops, ovc) != null && outputWrite(ops, v) != null &&
+            outputWrite(ops, n) != null && outputWrite(ops, z) != null,
+            where + " lost an architectural ADDCL status effect");
+    }
+
     private void requireAdduEncoding(Instruction instruction, String where) throws Exception {
         require(instruction.getMnemonicString().equalsIgnoreCase("ADDU"),
             where + " mnemonic changed: " + instruction);
@@ -370,6 +551,20 @@ public class StatusModeTest extends GhidraScript {
             where + " ADDU bytes/operands changed: " + instruction + " [" + hex(bytes) + "]");
     }
 
+    private void requireAddclEncoding(Instruction instruction, String where) throws Exception {
+        require(instruction.getMnemonicString().equalsIgnoreCase("ADDCL"),
+            where + " mnemonic changed: " + instruction);
+        require(instruction.getNumOperands() == 2 &&
+            normalize(instruction.getDefaultOperandRepresentation(0)).equals("ACC") &&
+            normalize(instruction.getDefaultOperandRepresentation(1)).equals("XAR6"),
+            where + " operands changed: " + instruction);
+        byte[] bytes = instruction.getBytes();
+        require(bytes.length == 4 && (bytes[0] & 0xff) == 0x40 &&
+            (bytes[1] & 0xff) == 0x56 && (bytes[2] & 0xff) == 0xa6 &&
+            (bytes[3] & 0xff) == 0x00,
+            where + " ADDCL bytes changed: " + instruction + " [" + hex(bytes) + "]");
+    }
+
     private void requireLowWidthC(String c, String where) {
         String lower = c.toLowerCase(Locale.ROOT);
         require(!c.contains("in_SXM"), where + " still exposes incoming SXM:\n" + c);
@@ -380,7 +575,7 @@ public class StatusModeTest extends GhidraScript {
 
     private void requireContextOnlyOn(Set<Address> expected) throws Exception {
         Set<Address> actual = new HashSet<>();
-        int nonAddu = 0;
+        int nonConsumer = 0;
         InstructionIterator iterator = listing.getInstructions(true);
         while (iterator.hasNext()) {
             monitor.checkCancelled();
@@ -389,14 +584,28 @@ public class StatusModeTest extends GhidraScript {
                 continue;
             }
             actual.add(instruction.getMinAddress());
-            if (!isAddu(instruction)) {
-                nonAddu++;
+            if (!isAddu(instruction) && !isAddcl(instruction)) {
+                nonConsumer++;
             }
         }
         require(actual.equals(expected),
             "unexpected OVM context sites: expected=" + expected + " actual=" + actual);
-        require(nonAddu == 0, "OVM context leaked onto non-ADDU instructions");
-        println("STATUS_MODE_CONTEXT_ON_NON_ADDU=" + nonAddu);
+        require(nonConsumer == 0,
+            "OVM context leaked onto SETC/CLRC, ADDUL, or another non-consumer");
+        println("STATUS_MODE_CONTEXT_ON_NON_CONSUMER=" + nonConsumer);
+    }
+
+    private Set<Address> contextSites() throws Exception {
+        Set<Address> result = new HashSet<>();
+        InstructionIterator iterator = listing.getInstructions(true);
+        while (iterator.hasNext()) {
+            monitor.checkCancelled();
+            Instruction instruction = iterator.next();
+            if (tagged(instruction)) {
+                result.add(instruction.getMinAddress());
+            }
+        }
+        return result;
     }
 
     private void rerunOvmAnalyzer() throws Exception {
@@ -485,6 +694,26 @@ public class StatusModeTest extends GhidraScript {
         return false;
     }
 
+    private boolean readsRegister(PcodeOp[] ops, Register target) {
+        for (PcodeOp op : ops) {
+            for (Varnode input : op.getInputs()) {
+                if (overlapsRegister(input, target)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean hasInternalPcodeFlow(PcodeOp[] ops) {
+        for (PcodeOp op : ops) {
+            if (op.getOpcode() == PcodeOp.BRANCH || op.getOpcode() == PcodeOp.CBRANCH) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean containsConstant(PcodeOp[] ops, long value) {
         for (PcodeOp op : ops) {
             for (Varnode input : op.getInputs()) {
@@ -554,6 +783,21 @@ public class StatusModeTest extends GhidraScript {
         return matches.get(0);
     }
 
+    private Instruction onlyAddcl(Function function) throws Exception {
+        List<Instruction> matches = new ArrayList<>();
+        InstructionIterator iterator = listing.getInstructions(function.getBody(), true);
+        while (iterator.hasNext()) {
+            monitor.checkCancelled();
+            Instruction instruction = iterator.next();
+            if (isAddcl(instruction)) {
+                matches.add(instruction);
+            }
+        }
+        require(matches.size() == 1,
+            function.getName() + " contains " + matches.size() + " ADDCL instructions");
+        return matches.get(0);
+    }
+
     private Instruction onlyCall(Function function) throws Exception {
         List<Instruction> calls = new ArrayList<>();
         InstructionIterator iterator = listing.getInstructions(function.getBody(), true);
@@ -603,9 +847,31 @@ public class StatusModeTest extends GhidraScript {
         return false;
     }
 
+    private Instruction onlyMnemonic(Function function, String mnemonic) throws Exception {
+        List<Instruction> matches = new ArrayList<>();
+        InstructionIterator iterator = listing.getInstructions(function.getBody(), true);
+        while (iterator.hasNext()) {
+            monitor.checkCancelled();
+            Instruction instruction = iterator.next();
+            if (instruction.getMnemonicString().equalsIgnoreCase(mnemonic)) {
+                matches.add(instruction);
+            }
+        }
+        require(matches.size() == 1,
+            function.getName() + " contains " + matches.size() + " " + mnemonic +
+                " instructions");
+        return matches.get(0);
+    }
+
     private boolean isAddu(Instruction instruction) {
         return instruction != null && instruction.getMnemonicString().equalsIgnoreCase("ADDU") &&
             instruction.getNumOperands() == 2 &&
+            normalize(instruction.getDefaultOperandRepresentation(0)).equals("ACC");
+    }
+
+    private boolean isAddcl(Instruction instruction) {
+        return instruction != null && instruction.getMnemonicString().equalsIgnoreCase("ADDCL") &&
+            instruction.getNumOperands() == 2 && instruction.getLength() == 4 &&
             normalize(instruction.getDefaultOperandRepresentation(0)).equals("ACC");
     }
 

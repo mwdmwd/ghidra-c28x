@@ -2509,6 +2509,141 @@ def check_addcl_alias_safe(ops: list) -> None:
     )
 
 
+def check_addcl_proved_ovm_zero(_: list) -> None:
+    selected = _translate_ovm_zero((0x5640, 0x00A6))
+    generic = _translate((0x5640, 0x00A6))
+    _no_internal_cfg(selected)
+    _no_nonstandard_arithmetic_widths(selected)
+
+    touched = {
+        _reg(node)
+        for op in selected
+        for node in (*op.inputs, op.output)
+        if node is not None and _reg(node) is not None
+    }
+    assert "OVM" not in touched, f"proved OVM=0 ADDCL still references OVM: {touched}"
+    assert not any(
+        any(_is_const(value, constant) for value in op.inputs)
+        for op in selected
+        for constant in (0x7FFFFFFF, 0x80000000)
+    ), "proved OVM=0 ADDCL retained saturation constants"
+
+    carry_extend = _find(
+        selected,
+        lambda op: op.opcode == OpCode.INT_ZEXT
+        and op.output.size == 4
+        and op.inputs
+        and _reg(op.inputs[0]) == "C",
+        "selected ADDCL incoming carry snapshot",
+    )
+    carries = [op for op in selected if op.opcode == OpCode.INT_CARRY]
+    overflows = [op for op in selected if op.opcode == OpCode.INT_SCARRY]
+    assert len(carries) == 2 and len(overflows) == 2, (
+        "selected ADDCL must retain both addition stages"
+    )
+    c_write = _find(selected, lambda op: _reg(op.output) == "C", "selected C write")
+    assert c_write.opcode == OpCode.BOOL_OR
+    assert {_key(value) for value in c_write.inputs} == {
+        _key(op.output) for op in carries
+    }
+    eventual_overflow = _find(
+        selected,
+        lambda op: op.opcode == OpCode.INT_NOTEQUAL
+        and {_key(value) for value in op.inputs} == {
+            _key(op.output) for op in overflows
+        },
+        "selected complete three-input signed overflow",
+    )
+    assert any(
+        op.opcode == OpCode.INT_ADD
+        and op.output.size == 4
+        and _key(carry_extend.output) in {_key(value) for value in op.inputs}
+        for op in selected
+    ), "selected ADDCL omitted carry-in from wrapped ACC"
+    assert _key(
+        _find(selected, lambda op: _reg(op.output) == "V", "selected sticky V").inputs[1]
+    ) == _key(eventual_overflow.output)
+    for register in ("ACC", "C", "V", "OVC", "N", "Z"):
+        _find(selected, lambda op, register=register: _reg(op.output) == register,
+              f"selected ADDCL {register} write")
+    assert any(
+        op.opcode == OpCode.INT_AND and any(_is_const(value, 0x3F) for value in op.inputs)
+        for op in selected
+    ), "selected ADDCL OVC update must wrap as a signed six-bit counter"
+
+    vectors = (
+        (
+            {"ACC": 1, "XAR6": 2, "C": 1, "V": 1, "OVC": 7},
+            {"ACC": 4, "C": 0, "V": 1, "OVC": 7, "N": 0, "Z": 0},
+            "selected ADDCL no overflow with carry-in and sticky V",
+        ),
+        (
+            {"ACC": 0xFFFFFFFF, "XAR6": 0, "C": 1, "V": 0, "OVC": 0},
+            {"ACC": 0, "C": 1, "V": 0, "OVC": 0, "N": 0, "Z": 1},
+            "selected ADDCL second-stage carry-out and zero",
+        ),
+        (
+            {"ACC": 0x80000000, "XAR6": 0xFFFFFFFF, "C": 1,
+             "V": 0, "OVC": 5},
+            {"ACC": 0x80000000, "C": 1, "V": 0, "OVC": 5,
+             "N": 1, "Z": 0},
+            "selected ADDCL cancels two staged signed overflows",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "XAR6": 0, "C": 1, "V": 0, "OVC": 0},
+            {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+            "selected ADDCL positive overflow increments OVC",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "XAR6": 0, "C": 1, "V": 0, "OVC": 0x1F},
+            {"ACC": 0x80000000, "C": 0, "V": 1, "OVC": 0xE0, "N": 1, "Z": 0},
+            "selected ADDCL positive OVC wrap 31 to -32",
+        ),
+        (
+            {"ACC": 0x80000000, "XAR6": 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0},
+            {"ACC": 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 0xFF, "N": 0, "Z": 0},
+            "selected ADDCL negative overflow decrements OVC",
+        ),
+        (
+            {"ACC": 0x80000000, "XAR6": 0xFFFFFFFF, "C": 0, "V": 0, "OVC": 0xE0},
+            {"ACC": 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 0x1F, "N": 0, "Z": 0},
+            "selected ADDCL negative OVC wrap -32 to 31",
+        ),
+    )
+    compared_registers = ("ACC", "C", "V", "OVC", "N", "Z")
+    for initial, expected, description in vectors:
+        _assert_execution(selected, initial, expected, description)
+        generic_initial = dict(initial)
+        generic_initial["OVM"] = 0
+        selected_state = _execute_integer_pcode(selected, initial)
+        generic_state = _execute_integer_pcode(generic, generic_initial)
+        mismatches = {
+            register: (selected_state[register], generic_state[register])
+            for register in compared_registers
+            if selected_state[register] != generic_state[register]
+        }
+        assert not mismatches, f"{description} differs from generic OVM=0: {mismatches}"
+
+    selected_alias = _translate_ovm_zero((0x5640, 0x00A9))
+    generic_alias = _translate((0x5640, 0x00A9))
+    alias_initial = {"ACC": 0x7FFFFFFF, "C": 1, "V": 0, "OVC": 0}
+    alias_expected = {
+        "ACC": 0xFFFFFFFF, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0
+    }
+    _assert_execution(
+        selected_alias, alias_initial, alias_expected,
+        "selected ADDCL snapshots an aliased ACC source",
+    )
+    generic_alias_initial = dict(alias_initial)
+    generic_alias_initial["OVM"] = 0
+    selected_alias_state = _execute_integer_pcode(selected_alias, alias_initial)
+    generic_alias_state = _execute_integer_pcode(generic_alias, generic_alias_initial)
+    assert all(
+        selected_alias_state[register] == generic_alias_state[register]
+        for register in compared_registers
+    ), "selected aliased ADDCL differs from generic OVM=0"
+
+
 def check_subbl_alias_safe(ops: list) -> None:
     check_signed_borrow_acc_status(ops)
     _assert_execution(
@@ -3583,6 +3718,11 @@ CASES = (
     Case("proved switch SUBB uses bounded no-borrow arithmetic", (0x1901,), check_subb_switch_canonical),
     Case("ADDU uses ordinary widths with zero-extended source", (0x0DA6,), check_addu_standard_width),
     Case("status mode: proved OVM-zero ADDU omits only saturation", (0x0DA6,), check_addu_proved_ovm_zero),
+    Case(
+        "status mode: proved OVM-zero ADDCL preserves carry and signed status",
+        (0x5640, 0x00A6),
+        check_addcl_proved_ovm_zero,
+    ),
     Case("ADDCL includes carry in signed status", (0x5640, 0x00A6), check_addcl_status),
     Case("ADDCL snapshots an aliased ACC source", (0x5640, 0x00A9), check_addcl_alias_safe),
     Case("ADDCU includes carry in signed status", (0x0CAC,), check_addcu_status),

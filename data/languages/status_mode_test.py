@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and audit SXM low-half and TI C OVM-return fixtures."""
+"""Build and audit SXM low-half plus finite OVM arithmetic fixtures."""
 
 from __future__ import annotations
 
@@ -62,6 +62,22 @@ VALIDATION_NAMES = (
     "status_stale_function",
     "status_stale_addu",
     "status_stale_nonaddu",
+    "status_addcl_boundary_zero",
+    "status_addcl_setc_sxm_preserve",
+    "status_addcl_clrc_sxm_preserve",
+    "status_addcl_setc_multibit_preserve",
+    "status_addcl_clrc_multibit_preserve",
+    "status_addcl_setc_includes_ovm",
+    "status_addcl_clrc_includes_ovm",
+    "status_addcl_conflict_rejoin",
+    "status_addcl_ambiguous_call",
+    "status_addcl_st0_write",
+    "status_addcl_alternate_ingress",
+    "status_addcl_alternate_source",
+    "status_addcl_alternate_site",
+    "status_addcl_unproved_entry",
+    "status_stale_addcl_function",
+    "status_stale_addcl",
 )
 
 
@@ -303,12 +319,19 @@ def build(
     addresses = symbol_addresses(text, VALIDATION_NAMES)
     if text.count("ADDU         ACC, AR6") != 13:
         raise RuntimeError("validation fixture lost its thirteen ADDU sites")
+    if text.count("ADDCL        ACC, XAR6") != 13:
+        raise RuntimeError("validation fixture lost its thirteen ADDCL sites")
     for marker in (
         "SETC         OVM",
         "CLRC         OVM",
+        "SETC         SXM|TC",
+        "CLRC         SXM|TC",
+        "SETC         SXM|OVM",
+        "CLRC         SXM|OVM",
         "LCR          *XAR7",
         "LC           0x",
         "FFC          XAR7",
+        "POP          ST0",
         "MOV          ACC, AR6 << 8",
     ):
         if marker not in text:
@@ -319,6 +342,7 @@ def build(
     print("STATUS_MODE_COMPILER_OPT_LEVELS=2")
     print("STATUS_MODE_COMPILER_IMMEDIATE_SHIFTS=0,1,8,15")
     print("STATUS_MODE_VALIDATION_ADDU_SITES=13")
+    print("STATUS_MODE_VALIDATION_ADDCL_SITES=13")
     return subjects
 
 

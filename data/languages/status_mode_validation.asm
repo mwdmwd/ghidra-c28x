@@ -19,6 +19,22 @@
     .global status_alternate_addu
     .global status_sxm_unknown_full
     .global status_stale_function
+    .global status_addcl_boundary_zero
+    .global status_addcl_setc_sxm_preserve
+    .global status_addcl_clrc_sxm_preserve
+    .global status_addcl_setc_multibit_preserve
+    .global status_addcl_clrc_multibit_preserve
+    .global status_addcl_setc_includes_ovm
+    .global status_addcl_clrc_includes_ovm
+    .global status_addcl_conflict_rejoin
+    .global status_addcl_ambiguous_call
+    .global status_addcl_st0_write
+    .global status_addcl_alternate_ingress
+    .global status_addcl_alternate_source
+    .global status_addcl_alternate_site
+    .global status_addcl_unproved_entry
+    .global status_stale_addcl_function
+    .global status_stale_addcl
 
     .asmfunc
 status_validation_entry:
@@ -36,6 +52,18 @@ status_validation_entry:
     LCR       #status_alternate_ingress
     LCR       #status_alternate_source
     LCR       #status_sxm_unknown_full
+    LCR       #status_addcl_boundary_zero
+    LCR       #status_addcl_setc_sxm_preserve
+    LCR       #status_addcl_clrc_sxm_preserve
+    LCR       #status_addcl_setc_multibit_preserve
+    LCR       #status_addcl_clrc_multibit_preserve
+    LCR       #status_addcl_setc_includes_ovm
+    LCR       #status_addcl_clrc_includes_ovm
+    LCR       #status_addcl_conflict_rejoin
+    LCR       #status_addcl_ambiguous_call
+    LCR       #status_addcl_st0_write
+    LCR       #status_addcl_alternate_ingress
+    LCR       #status_addcl_alternate_source
     LRETR
     .endasmfunc
 
@@ -184,11 +212,132 @@ status_sxm_unknown_full:
     LRETR
     .endasmfunc
 
+    ; An ordinary TI C boundary establishes OVM=0 without assuming a global
+    ; architectural reset state.  This is the simplest exact ADDCL consumer.
+    .asmfunc
+status_addcl_boundary_zero:
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    ; Mode mask bit 0 is SXM.  These exact single-bit masks must preserve the
+    ; incoming OVM=0 fact rather than being mistaken for an OVM write.
+    .asmfunc
+status_addcl_setc_sxm_preserve:
+    SETC      SXM
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    .asmfunc
+status_addcl_clrc_sxm_preserve:
+    CLRC      SXM
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    ; 0x05 selects SXM and TC, but not bit 1 (OVM).  Both exact multi-bit
+    ; SETC and CLRC therefore preserve the incoming OVM state.
+    .asmfunc
+status_addcl_setc_multibit_preserve:
+    SETC      #5
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    .asmfunc
+status_addcl_clrc_multibit_preserve:
+    CLRC      #5
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    ; 0x03 selects both SXM and OVM.  SETC makes OVM one and must retain the
+    ; generic saturating ADDCL; CLRC makes OVM zero and selects the exact form.
+    .asmfunc
+status_addcl_setc_includes_ovm:
+    SETC      #3
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    .asmfunc
+status_addcl_clrc_includes_ovm:
+    SETC      OVM
+    CLRC      #3
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    .asmfunc
+status_addcl_conflict_rejoin:
+    CMPB      AL, #0
+    SB        status_addcl_clear_arm, EQ
+    SETC      OVM
+    SB        status_addcl_conflict_join, UNC
+status_addcl_clear_arm:
+    CLRC      OVM
+status_addcl_conflict_join:
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    .asmfunc
+status_addcl_ambiguous_call:
+    LCR       *XAR7
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    ; A dynamic ST0 restore writes OVM among the other status fields.  It is
+    ; intentionally not treated like a preserving exact SETC/CLRC mask.
+    .asmfunc
+status_addcl_st0_write:
+    POP       ST0
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    ; An interior branch from a different function invalidates the otherwise
+    ; ordinary C boundary fact at this exact ADDCL site.
+    .asmfunc
+status_addcl_alternate_ingress:
+    MOVB      AL, #6
+status_addcl_alternate_inner:
+    MOVL      ACC, XAR4
+status_addcl_alternate_site:
+    ADDCL     ACC, XAR6
+    LRETR
+    .endasmfunc
+
+    .asmfunc
+status_addcl_alternate_source:
+    LB        status_addcl_alternate_inner
+    .endasmfunc
+
     ; No call reaches this function.  Its ADDU must remain architectural.
     .asmfunc
 status_unproved_entry:
     MOVL      ACC, XAR4
     ADDU      ACC, AR6
+    LRETR
+    .endasmfunc
+
+    ; No call reaches this function.  Its ADDCL must remain architectural.
+    .asmfunc
+status_addcl_unproved_entry:
+    MOVL      ACC, XAR4
+    ADDCL     ACC, XAR6
     LRETR
     .endasmfunc
 
@@ -200,6 +349,14 @@ status_stale_addu:
     ADDU      ACC, AR6
 status_stale_nonaddu:
     NOP
+    LRETR
+    .endasmfunc
+
+    .asmfunc
+status_stale_addcl_function:
+    MOVL      ACC, XAR4
+status_stale_addcl:
+    ADDCL     ACC, XAR6
     LRETR
     .endasmfunc
     .end
