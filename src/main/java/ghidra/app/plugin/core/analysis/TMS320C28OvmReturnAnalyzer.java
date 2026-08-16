@@ -56,16 +56,19 @@ import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
 /**
- * Selects an exact OVM=0 form of {@code ADDU ACC,loc16} only where a finite
- * data-flow proof establishes the TI C run-time return contract.
+ * Selects exact OVM=0 forms of {@code ADDU ACC,loc16} and
+ * {@code ADDCL ACC,loc32} only where a finite data-flow proof establishes the
+ * TI C run-time return contract.
  * <p>
  * Raw instruction P-Code remains fully architectural everywhere else.  A zero
  * fact can originate at an exclusively C-call-entered function boundary, at
  * an explicit {@code CLRC OVM}, or after a completed call whose unique callee
  * uses the prototype model appropriate to its architectural call mechanism.
- * {@code SETC OVM} produces a known-one state; arbitrary ST0/OVM writes and
- * unresolved or ambiguous calls produce unknown.  Every CFG predecessor must
- * agree, and alternate ingress invalidates the proof.
+ * {@code SETC OVM} produces a known-one state, {@code CLRC OVM} produces a
+ * known-zero state, and an exact constant SETC/CLRC mask which does not select
+ * OVM preserves the incoming fact.  Arbitrary ST0/OVM writes and unresolved or
+ * ambiguous calls produce unknown.  Every CFG predecessor must agree, and
+ * alternate ingress invalidates the proof.
  * <p>
  * The context is revalidated on every run.  Stale tags are revoked before the
  * affected instruction is redisassembled with the ordinary OVM-sensitive
@@ -87,6 +90,14 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
     private static final String DEFAULT_CONVENTION = "__stdcall";
     private static final String LC_CONVENTION = "__lc";
     private static final String FFC_CONVENTION = "__ffc";
+
+    /** Architectural effect of an exact SETC/CLRC mode-mask operand on OVM. */
+    private enum OvmTransfer {
+        SET_ZERO,
+        SET_ONE,
+        PRESERVE,
+        NOT_APPLICABLE
+    }
 
     public TMS320C28OvmReturnAnalyzer() {
         super(NAME, DESCRIPTION, AnalyzerType.FUNCTION_ANALYZER);
@@ -134,7 +145,7 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
             Instruction instruction = instructions.next();
             boolean tagged = tagged(context, canonicalContext, instruction);
             boolean valid = validSites.contains(instruction.getMinAddress()) &&
-                isAdduAccumulator(instruction);
+                isOvmZeroConsumer(instruction);
             if (valid && !tagged) {
                 additions.add(instruction);
             }
@@ -154,7 +165,7 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
             Address address = instruction.getMinAddress();
             changeContext(listing, context, canonicalContext, instruction,
                 BigInteger.ONE, redisassemble, log);
-            Msg.info(this, "proved OVM=0 ADDU at " + address);
+            Msg.info(this, "proved OVM=0 arithmetic at " + address);
         }
 
         if (!redisassemble.isEmpty()) {
@@ -267,7 +278,7 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
         }
 
         for (Node node : nodes.values()) {
-            if (node.inputState == ZERO && isAdduAccumulator(node.instruction)) {
+            if (node.inputState == ZERO && isOvmZeroConsumer(node.instruction)) {
                 validSites.add(node.instruction.getMinAddress());
             }
         }
@@ -275,9 +286,16 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
 
     private static int transfer(Program program, Instruction instruction, int incoming,
             Register ovm) {
-        Integer explicit = explicitOvm(instruction);
-        if (explicit != null) {
-            return explicit.intValue();
+        OvmTransfer explicit = explicitOvmTransfer(instruction);
+        switch (explicit) {
+            case SET_ZERO:
+                return ZERO;
+            case SET_ONE:
+                return ONE;
+            case PRESERVE:
+                return incoming;
+            case NOT_APPLICABLE:
+                break;
         }
         if (isArchitecturalCall(instruction) && instruction.getFlowType().isCall() &&
             instruction.getFallThrough() != null) {
@@ -292,33 +310,85 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
         return incoming;
     }
 
-    private static Integer explicitOvm(Instruction instruction) {
-        if (instruction == null || instruction.getNumOperands() == 0) {
-            return null;
+    private static OvmTransfer explicitOvmTransfer(Instruction instruction) {
+        if (instruction == null || instruction.getNumOperands() != 1) {
+            return OvmTransfer.NOT_APPLICABLE;
         }
         boolean clear = isMnemonic(instruction, "CLRC");
         boolean set = isMnemonic(instruction, "SETC");
         if (!clear && !set) {
-            return null;
+            return OvmTransfer.NOT_APPLICABLE;
         }
 
-        boolean selected = false;
+        // The architectural Mode operand is an eight-bit mask.  Require exact
+        // decoded scalar evidence; free-form aliases may corroborate that
+        // scalar, but can never manufacture or widen it.
         Scalar scalar = instruction.getScalar(0);
-        if (scalar != null && (scalar.getUnsignedValue() & 0x2L) != 0) {
-            selected = true;
+        if (scalar == null) {
+            return OvmTransfer.NOT_APPLICABLE;
         }
-        String representation = instruction.getDefaultOperandRepresentation(0);
-        if (representation != null) {
-            for (String token : representation.toUpperCase(Locale.ROOT).split("[^A-Z0-9_]+")) {
-                if ("OVM".equals(token)) {
-                    selected = true;
+        long unsigned = scalar.getUnsignedValue();
+        if ((unsigned & ~0xffL) != 0) {
+            return OvmTransfer.NOT_APPLICABLE;
+        }
+        int mask = (int) unsigned;
+
+        Object[] objects = instruction.getOpObjects(0);
+        for (Object object : objects) {
+            if (object instanceof Scalar objectScalar) {
+                long objectValue = objectScalar.getUnsignedValue();
+                if ((objectValue & ~0xffL) != 0 || (int) objectValue != mask) {
+                    return OvmTransfer.NOT_APPLICABLE;
                 }
             }
+            else if (object instanceof Register register) {
+                int bit = modeRegisterBit(register.getName());
+                if (bit < 0 || (mask & (1 << bit)) == 0) {
+                    return OvmTransfer.NOT_APPLICABLE;
+                }
+            }
+            else {
+                return OvmTransfer.NOT_APPLICABLE;
+            }
         }
-        if (!selected) {
-            return null;
+
+        String representation = instruction.getDefaultOperandRepresentation(0);
+        if (representation != null && !aliasesAgreeWithMask(representation, mask)) {
+            return OvmTransfer.NOT_APPLICABLE;
         }
-        return Integer.valueOf(clear ? ZERO : ONE);
+
+        if ((mask & 0x2) == 0) {
+            return OvmTransfer.PRESERVE;
+        }
+        return clear ? OvmTransfer.SET_ZERO : OvmTransfer.SET_ONE;
+    }
+
+    private static boolean aliasesAgreeWithMask(String representation, int mask) {
+        for (String token : representation.toUpperCase(Locale.ROOT).split("[^A-Z0-9_]+")) {
+            int bit = modeRegisterBit(token);
+            if (bit >= 0 && (mask & (1 << bit)) == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Map the documented SETC/CLRC Mode aliases to their eight-bit mask bit. */
+    private static int modeRegisterBit(String name) {
+        if (name == null) {
+            return -1;
+        }
+        return switch (name.toUpperCase(Locale.ROOT)) {
+            case "SXM" -> 0;
+            case "OVM" -> 1;
+            case "TC" -> 2;
+            case "C" -> 3;
+            case "INTM" -> 4;
+            case "DBGM" -> 5;
+            case "PAGE0" -> 6;
+            case "VMAP" -> 7;
+            default -> -1;
+        };
     }
 
     /** Return the unique callee only when its selected model matches the opcode. */
@@ -396,8 +466,22 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
         target.predecessors.add(source);
     }
 
+    private static boolean isOvmZeroConsumer(Instruction instruction) {
+        return isAdduAccumulator(instruction) || isAddclAccumulator(instruction);
+    }
+
     private static boolean isAdduAccumulator(Instruction instruction) {
-        return isMnemonic(instruction, "ADDU") && instruction.getNumOperands() == 2 &&
+        return isMnemonic(instruction, "ADDU") && instruction.getLength() == 2 &&
+            instruction.getNumOperands() == 2 &&
+            isExactRegisterOperand(instruction, 0, "ACC");
+    }
+
+    private static boolean isAddclAccumulator(Instruction instruction) {
+        // ADDCL ACC,loc32 has one fixed two-word encoding.  Requiring its exact
+        // decoded length and destination prevents mnemonic lookalikes, ADDCU,
+        // ADDUL, and alternate destinations from becoming consumers.
+        return isMnemonic(instruction, "ADDCL") && instruction.getLength() == 4 &&
+            instruction.getNumOperands() == 2 &&
             isExactRegisterOperand(instruction, 0, "ACC");
     }
 

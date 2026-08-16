@@ -455,6 +455,34 @@ macro acc_add_carry32(value) {
 	commit_acc_signed(wrapped, old, overflow);
 }
 
+# Exact OVM=0 ADDCL specialization used only at analyzer-proved sites.  The
+# constructor snapshots ACC and incoming C before materializing loc32, so an
+# ACC source alias and every addressing side effect observe the architectural
+# pre-instruction state.  Preserve the full two-stage carry and signed-overflow
+# cancellation behavior of the generic helper, but omit the unreachable OVM
+# read and saturation select.
+macro acc_add_carry32_ovm0(value, old, incoming) {
+	local partial:4 = old + value;
+	local first_carry:1 = carry(old, value);
+	local second_carry:1 = carry(partial, incoming);
+	local first_overflow:1 = scarry(old, value);
+	local second_overflow:1 = scarry(partial, incoming);
+	local wrapped:4 = partial + incoming;
+	local overflow:1 = first_overflow != second_overflow;
+	local old_negative:1 = old[31,1];
+	local overflow_mask:1 = 0 - overflow;
+	local count_direction:1 = 1 - (old_negative << 1); # +1 positive, -1 negative
+	local ovc_delta:1 = count_direction & overflow_mask;
+	local ovc_next:1 = OVC + ovc_delta;
+	local ovc_raw:1 = ovc_next & 0x3f;
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+	C = first_carry || second_carry;
+	ACC = wrapped;
+	V = V || overflow;
+	flagnz(ACC);
+}
+
 macro acc_sub_borrow32(value) {
 	local old:4 = ACC;
 	local borrow:1 = (C == 0);
@@ -2192,8 +2220,16 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	xarn8 = xarn8 + imm7;
 }
 
-# p.138; SPRU430F ADDCL flags and modes.
-:addcl ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {
+# p.138; SPRU430F ADDCL flags and modes.  Only the finite analyzer may select
+# the OVM=0 constructor; the ordinary form remains authoritative elsewhere.
+:addcl ACC, loc32 is ovm_zero=1 & ctx_objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {
+	local old:4 = ACC;
+	local incoming:4 = zext(C);
+	local value:4 = loc32;
+	acc_add_carry32_ovm0(value, old, incoming);
+}
+
+:addcl ACC, loc32 is ovm_zero=0 & ctx_objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {
 	local value:4 = loc32;
 	acc_add_carry32(value);
 }
