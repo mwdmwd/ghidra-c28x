@@ -26,6 +26,7 @@ COMPILER_NAMES = (
     "status_full_signed_shift0",
     "status_full_unsigned_shift15",
     "status_full_signed_shift15",
+    "status_mul6_signed",
     "status_low_volatile",
     "status_full_volatile",
     "status_callee",
@@ -78,6 +79,24 @@ VALIDATION_NAMES = (
     "status_addcl_unproved_entry",
     "status_stale_addcl_function",
     "status_stale_addcl",
+    "status_addl_pm_boundary_zero",
+    "status_addl_pm_explicit_clear",
+    "status_addl_pm_setc_sxm_preserve",
+    "status_addl_pm_clrc_sxm_preserve",
+    "status_addl_pm_setc_multibit_preserve",
+    "status_addl_pm_clrc_multibit_preserve",
+    "status_addl_pm_setc_ovm",
+    "status_addl_pm_conflict_rejoin",
+    "status_addl_pm_ambiguous_call",
+    "status_addl_pm_st0_write",
+    "status_addl_pm_alternate_ingress",
+    "status_addl_pm_alternate_source",
+    "status_addl_pm_alternate_site",
+    "status_addl_pm_unproved_entry",
+    "status_stale_addl_pm_function",
+    "status_stale_addl_pm",
+    "status_stale_addl_loc32_function",
+    "status_stale_addl_loc32",
 )
 
 
@@ -256,6 +275,15 @@ def build(
             require_pattern(body, rf"\b{mode}\s+SXM", f"{optimization} {name}")
             require_pattern(body, r"\bMOV\s+ACC, AL", f"{optimization} {name}")
 
+        mul6 = function_text(text, "status_mul6_signed")
+        if len(re.findall(r"\bADDL\s+ACC,\s*P\s*<<\s*PM", mul6)) != 1:
+            raise RuntimeError(
+                f"{optimization} status_mul6_signed lost exact ADDL ACC,P << PM"
+            )
+        require_pattern(mul6, r"\bMOVL\s+P,\s*ACC", f"{optimization} mul6")
+        require_pattern(mul6, r"\bSPM\s+#1", f"{optimization} mul6")
+        require_pattern(mul6, r"\bLSL\s+ACC,\s*2", f"{optimization} mul6")
+
         require_pattern(
             function_text(text, "status_low_volatile"),
             r"\bMOV\s+ACC, @[^\n]+<< 8",
@@ -321,6 +349,17 @@ def build(
         raise RuntimeError("validation fixture lost its thirteen ADDU sites")
     if text.count("ADDCL        ACC, XAR6") != 13:
         raise RuntimeError("validation fixture lost its thirteen ADDCL sites")
+    if len(re.findall(r"\bADDL\s+ACC,\s*P\s*<<\s*PM", text)) != 13:
+        raise RuntimeError(
+            "validation fixture lost its thirteen exact ADDL ACC,P << PM sites"
+        )
+    if re.search(
+        r"^[0-9a-fA-F]+\s+status_stale_addl_loc32:\s*$"
+        r"[\s\S]*?\bADDL\s+ACC,\s*XAR6",
+        text,
+        re.MULTILINE,
+    ) is None:
+        raise RuntimeError("validation fixture lost stale non-candidate ADDL loc32")
     for marker in (
         "SETC         OVM",
         "CLRC         OVM",
@@ -341,8 +380,10 @@ def build(
 
     print("STATUS_MODE_COMPILER_OPT_LEVELS=2")
     print("STATUS_MODE_COMPILER_IMMEDIATE_SHIFTS=0,1,8,15")
+    print("STATUS_MODE_COMPILER_ADDL_PM_SITES=1")
     print("STATUS_MODE_VALIDATION_ADDU_SITES=13")
     print("STATUS_MODE_VALIDATION_ADDCL_SITES=13")
+    print("STATUS_MODE_VALIDATION_ADDL_PM_SITES=13")
     return subjects
 
 

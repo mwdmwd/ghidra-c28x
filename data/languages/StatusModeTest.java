@@ -84,6 +84,23 @@ public class StatusModeTest extends GhidraScript {
         "status_stale_addcl_function"
     };
 
+    private static final String[] VALIDATION_ADDL_PM_ZERO = {
+        "status_addl_pm_boundary_zero",
+        "status_addl_pm_explicit_clear",
+        "status_addl_pm_setc_sxm_preserve",
+        "status_addl_pm_clrc_sxm_preserve",
+        "status_addl_pm_setc_multibit_preserve",
+        "status_addl_pm_clrc_multibit_preserve"
+    };
+    private static final String[] VALIDATION_ADDL_PM_GENERIC = {
+        "status_addl_pm_setc_ovm",
+        "status_addl_pm_conflict_rejoin",
+        "status_addl_pm_ambiguous_call",
+        "status_addl_pm_st0_write",
+        "status_addl_pm_unproved_entry",
+        "status_stale_addl_pm_function"
+    };
+
     private Listing listing;
     private FunctionManager functions;
     private Register ovmContext;
@@ -96,6 +113,8 @@ public class StatusModeTest extends GhidraScript {
     private Register z;
     private Register acc;
     private Register al;
+    private Register p;
+    private Register pm;
     private final Map<String, Address> fixtureAddresses = new LinkedHashMap<>();
 
     @Override
@@ -112,10 +131,12 @@ public class StatusModeTest extends GhidraScript {
         z = currentProgram.getLanguage().getRegister("Z");
         acc = currentProgram.getLanguage().getRegister("ACC");
         al = currentProgram.getLanguage().getRegister("AL");
+        p = currentProgram.getLanguage().getRegister("P");
+        pm = currentProgram.getLanguage().getRegister("PM");
         require(ovmContext != null && sxm != null && ovm != null && ovc != null &&
-            carry != null &&
-            v != null && n != null && z != null && acc != null && al != null,
-            "missing status/accumulator registers");
+            carry != null && v != null && n != null && z != null && acc != null &&
+            al != null && p != null && pm != null,
+            "missing status/accumulator/product registers");
 
         String kind = parseFixtureArguments();
         if (kind.equals("compiler")) {
@@ -135,6 +156,12 @@ public class StatusModeTest extends GhidraScript {
         auditCompilerSxm();
 
         Set<Address> expected = new HashSet<>();
+        Instruction mul6 = onlyAddlPm(function("status_mul6_signed"));
+        require(tagged(mul6),
+            "compiler mul6 shifted-P ADDL did not receive the C-entry OVM=0 fact");
+        requireOvmZeroAddlPmPcode(mul6, "status_mul6_signed");
+        expected.add(mul6.getMinAddress());
+
         for (String name : COMPILER_DIRECT_OVM) {
             Instruction addu = onlyAddu(function(name));
             require(tagged(addu), name + " did not receive the completed-call OVM=0 fact");
@@ -168,6 +195,7 @@ public class StatusModeTest extends GhidraScript {
         println("STATUS_MODE_COMPILER_SXM_LOW_FUNCTIONS=" +
             (LOW_COMBINE.length + LOW_SHIFTS.length + 1));
         println("STATUS_MODE_COMPILER_OVM_CANONICAL_SITES=" + expected.size());
+        println("STATUS_MODE_COMPILER_ADDL_PM_CANONICAL_SITES=1");
         println("STATUS_MODE_COMPILER_AMBIGUOUS_CALLS_REJECTED=1");
     }
 
@@ -350,8 +378,30 @@ public class StatusModeTest extends GhidraScript {
             "ADDCL alternate ingress was unsafely proved OVM=0");
         requireGenericAddclPcode(alternateAddcl, "status_addcl_alternate_ingress");
 
+        for (String name : VALIDATION_ADDL_PM_ZERO) {
+            Instruction addl = onlyAddlPm(function(name));
+            require(tagged(addl), name + " was not proved OVM=0");
+            requireOvmZeroAddlPmPcode(addl, name);
+            expected.add(addl.getMinAddress());
+        }
+        for (String name : VALIDATION_ADDL_PM_GENERIC) {
+            Instruction addl = onlyAddlPm(function(name));
+            require(!tagged(addl), name + " was unsafely proved OVM=0");
+            requireGenericAddlPmPcode(addl, name);
+        }
+        Instruction alternateAddl = instruction("status_addl_pm_alternate_site");
+        require(isAddlPm(alternateAddl),
+            "ADDL shifted-P alternate-ingress label no longer identifies exact consumer");
+        require(!tagged(alternateAddl),
+            "ADDL shifted-P alternate ingress was unsafely proved OVM=0");
+        requireGenericAddlPmPcode(alternateAddl, "status_addl_pm_alternate_ingress");
+
         require(!tagged(instruction("status_stale_nonaddu")),
             "stale OVM context survived on a non-candidate instruction");
+        Instruction staleLoc32 = instruction("status_stale_addl_loc32");
+        require(!tagged(staleLoc32),
+            "stale OVM context survived on a non-candidate ADDL loc32");
+        requireGenericAddlLoc32Pcode(staleLoc32, "status_stale_addl_loc32");
         requireContextOnlyOn(expected);
 
         requireModeMask(function("status_addcl_setc_sxm_preserve"), "SETC", 0x01,
@@ -366,6 +416,14 @@ public class StatusModeTest extends GhidraScript {
             "SETC SXM|OVM");
         requireModeMask(function("status_addcl_clrc_includes_ovm"), "CLRC", 0x03,
             "CLRC SXM|OVM");
+        requireModeMask(function("status_addl_pm_setc_sxm_preserve"), "SETC", 0x01,
+            "ADDL SETC SXM");
+        requireModeMask(function("status_addl_pm_clrc_sxm_preserve"), "CLRC", 0x01,
+            "ADDL CLRC SXM");
+        requireModeMask(function("status_addl_pm_setc_multibit_preserve"), "SETC", 0x05,
+            "ADDL SETC SXM|TC");
+        requireModeMask(function("status_addl_pm_clrc_multibit_preserve"), "CLRC", 0x05,
+            "ADDL CLRC SXM|TC");
         auditExactMaskTransferPremises();
 
         Function setAdd = function("status_ovm_set_add");
@@ -390,9 +448,14 @@ public class StatusModeTest extends GhidraScript {
             VALIDATION_ADDCL_ZERO.length);
         println("STATUS_MODE_VALIDATION_ADDCL_NEAR_MISSES=" +
             (VALIDATION_ADDCL_GENERIC.length + 1));
+        println("STATUS_MODE_VALIDATION_ADDL_PM_ZERO_SITES=" +
+            VALIDATION_ADDL_PM_ZERO.length);
+        println("STATUS_MODE_VALIDATION_ADDL_PM_NEAR_MISSES=" +
+            (VALIDATION_ADDL_PM_GENERIC.length + 1));
         println("STATUS_MODE_VALIDATION_MASK_PRESERVES=4");
+        println("STATUS_MODE_VALIDATION_ADDL_PM_MASK_PRESERVES=4");
         println("STATUS_MODE_VALIDATION_MASK_EVIDENCE_NEAR_MISSES=4");
-        println("STATUS_MODE_VALIDATION_STALE_CONTEXT_REVOKED=3");
+        println("STATUS_MODE_VALIDATION_STALE_CONTEXT_REVOKED=5");
         println("STATUS_MODE_VALIDATION_IDEMPOTENT=true");
         println("STATUS_MODE_VALIDATION_SXM_UNKNOWN_VISIBLE=true");
     }
@@ -425,6 +488,13 @@ public class StatusModeTest extends GhidraScript {
         String known = decompile(function("status_post_known_indirect"));
         require(!known.contains("in_OVM") && !known.contains("0x7fffffff"),
             "proved known indirect call retained OVM saturation:\n" + known);
+        String mul6 = decompile(function("status_mul6_signed"));
+        require(!mul6.contains("in_OVM") && !mul6.contains("SCARRY") &&
+            !mul6.contains("0x7fffffff") && !mul6.contains("0x80000000"),
+            "compiler mul6 retained an OVM saturation expression:\n" + mul6);
+        require(mul6.contains("* 6") || mul6.contains("* 4") ||
+            mul6.contains("<< 2"),
+            "compiler mul6 no longer exposes ordinary arithmetic:\n" + mul6);
     }
 
     private void requireCompletedCallCounts() throws Exception {
@@ -533,6 +603,62 @@ public class StatusModeTest extends GhidraScript {
             where + " lost an architectural ADDCL status effect");
     }
 
+    private void requireOvmZeroAddlPmPcode(Instruction instruction, String where)
+            throws Exception {
+        requireAddlPmEncoding(instruction, where);
+        PcodeOp[] ops = instruction.getPcode();
+        require(!referencesRegister(ops, ovm), where + " still references OVM");
+        require(!containsConstant(ops, 0x7fffffffL) &&
+            !containsConstant(ops, 0x80000000L),
+            where + " retained a saturation constant/select");
+        require(readsRegister(ops, p) && readsRegister(ops, pm),
+            where + " lost dynamic P/PM inputs");
+        PcodeOp accWrite = outputWrite(ops, acc);
+        require(accWrite != null && anyInputDependsOn(ops, accWrite, p) &&
+            anyInputDependsOn(ops, accWrite, pm),
+            where + " complete ACC result no longer depends on P and PM");
+        require(outputWrite(ops, carry) != null && outputWrite(ops, ovc) != null &&
+            outputWrite(ops, v) != null && outputWrite(ops, n) != null &&
+            outputWrite(ops, z) != null,
+            where + " lost an architectural ADDL status effect");
+        require(!hasInternalPcodeFlow(ops),
+            where + " manufactured instruction-local control flow");
+        require(!hasNonstandardArithmeticWidth(ops),
+            where + " introduced a nonstandard arithmetic width");
+    }
+
+    private void requireGenericAddlPmPcode(Instruction instruction, String where)
+            throws Exception {
+        requireAddlPmEncoding(instruction, where);
+        PcodeOp[] ops = instruction.getPcode();
+        require(referencesRegister(ops, ovm), where + " lost architectural OVM input");
+        require(containsConstant(ops, 0x7fffffffL),
+            where + " lost architectural saturation construction");
+        require(readsRegister(ops, p) && readsRegister(ops, pm),
+            where + " lost dynamic P/PM inputs");
+        PcodeOp accWrite = outputWrite(ops, acc);
+        require(accWrite != null && anyInputDependsOn(ops, accWrite, p) &&
+            anyInputDependsOn(ops, accWrite, pm),
+            where + " complete ACC result no longer depends on P and PM");
+        require(outputWrite(ops, carry) != null && outputWrite(ops, ovc) != null &&
+            outputWrite(ops, v) != null && outputWrite(ops, n) != null &&
+            outputWrite(ops, z) != null,
+            where + " lost an architectural ADDL status effect");
+        require(!hasInternalPcodeFlow(ops),
+            where + " manufactured instruction-local control flow");
+        require(!hasNonstandardArithmeticWidth(ops),
+            where + " introduced a nonstandard arithmetic width");
+    }
+
+    private void requireGenericAddlLoc32Pcode(Instruction instruction, String where)
+            throws Exception {
+        requireAddlLoc32Encoding(instruction, where);
+        PcodeOp[] ops = instruction.getPcode();
+        require(referencesRegister(ops, ovm), where + " lost architectural OVM input");
+        require(containsConstant(ops, 0x7fffffffL),
+            where + " lost architectural saturation construction");
+    }
+
     private void requireAdduEncoding(Instruction instruction, String where) throws Exception {
         require(instruction.getMnemonicString().equalsIgnoreCase("ADDU"),
             where + " mnemonic changed: " + instruction);
@@ -565,6 +691,50 @@ public class StatusModeTest extends GhidraScript {
             where + " ADDCL bytes changed: " + instruction + " [" + hex(bytes) + "]");
     }
 
+    private void requireAddlPmEncoding(Instruction instruction, String where)
+            throws Exception {
+        require(isAddlPm(instruction), where + " decoded structure changed: " + instruction);
+        require(normalize(instruction.getDefaultOperandRepresentation(0)).equals("ACC") &&
+            normalize(instruction.getDefaultOperandRepresentation(1)).equals("P") &&
+            normalize(instruction.getDefaultOperandRepresentation(2)).equals("PM"),
+            where + " operands changed: " + instruction);
+        require(exactOperandRegister(instruction, 0, acc) &&
+            exactOperandRegister(instruction, 1, p) &&
+            exactOperandRegister(instruction, 2, pm),
+            where + " operands are not exact ACC/P/PM registers: " + instruction);
+        byte[] bytes = instruction.getBytes();
+        require(bytes.length == 2 && (bytes[0] & 0xff) == 0xac &&
+            (bytes[1] & 0xff) == 0x10,
+            where + " ADDL shifted-P bytes changed: " + instruction + " [" + hex(bytes) + "]");
+        require(normalize(instruction.toString()).equals("ADDLACC,P<<PM"),
+            where + " display changed: " + instruction);
+    }
+
+    private void requireAddlLoc32Encoding(Instruction instruction, String where)
+            throws Exception {
+        require(instruction.getMnemonicString().equalsIgnoreCase("ADDL") &&
+            instruction.getLength() == 2 && instruction.getNumOperands() == 2 &&
+            normalize(instruction.getDefaultOperandRepresentation(0)).equals("ACC") &&
+            normalize(instruction.getDefaultOperandRepresentation(1)).equals("XAR6"),
+            where + " non-candidate ADDL operands changed: " + instruction);
+        byte[] bytes = instruction.getBytes();
+        require(bytes.length == 2 && (bytes[0] & 0xff) == 0xa6 &&
+            (bytes[1] & 0xff) == 0x07,
+            where + " non-candidate ADDL bytes changed: " + instruction + " [" +
+                hex(bytes) + "]");
+    }
+
+    private boolean exactOperandRegister(Instruction instruction, int operand,
+            Register expected) {
+        Register direct = instruction.getRegister(operand);
+        if (direct != null) {
+            return direct.equals(expected);
+        }
+        Object[] objects = instruction.getOpObjects(operand);
+        return objects.length == 1 && objects[0] instanceof Register register &&
+            register.equals(expected);
+    }
+
     private void requireLowWidthC(String c, String where) {
         String lower = c.toLowerCase(Locale.ROOT);
         require(!c.contains("in_SXM"), where + " still exposes incoming SXM:\n" + c);
@@ -584,7 +754,7 @@ public class StatusModeTest extends GhidraScript {
                 continue;
             }
             actual.add(instruction.getMinAddress());
-            if (!isAddu(instruction) && !isAddcl(instruction)) {
+            if (!isAddu(instruction) && !isAddcl(instruction) && !isAddlPm(instruction)) {
                 nonConsumer++;
             }
         }
@@ -714,6 +884,21 @@ public class StatusModeTest extends GhidraScript {
         return false;
     }
 
+    private boolean hasNonstandardArithmeticWidth(PcodeOp[] ops) {
+        for (PcodeOp op : ops) {
+            if (op.getOutput() != null &&
+                (op.getOutput().getSize() == 3 || op.getOutput().getSize() == 5)) {
+                return true;
+            }
+            for (Varnode input : op.getInputs()) {
+                if (input.getSize() == 3 || input.getSize() == 5) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private boolean containsConstant(PcodeOp[] ops, long value) {
         for (PcodeOp op : ops) {
             for (Varnode input : op.getInputs()) {
@@ -798,6 +983,22 @@ public class StatusModeTest extends GhidraScript {
         return matches.get(0);
     }
 
+    private Instruction onlyAddlPm(Function function) throws Exception {
+        List<Instruction> matches = new ArrayList<>();
+        InstructionIterator iterator = listing.getInstructions(function.getBody(), true);
+        while (iterator.hasNext()) {
+            monitor.checkCancelled();
+            Instruction instruction = iterator.next();
+            if (isAddlPm(instruction)) {
+                matches.add(instruction);
+            }
+        }
+        require(matches.size() == 1,
+            function.getName() + " contains " + matches.size() +
+                " exact ADDL ACC,P << PM instructions");
+        return matches.get(0);
+    }
+
     private Instruction onlyCall(Function function) throws Exception {
         List<Instruction> calls = new ArrayList<>();
         InstructionIterator iterator = listing.getInstructions(function.getBody(), true);
@@ -873,6 +1074,14 @@ public class StatusModeTest extends GhidraScript {
         return instruction != null && instruction.getMnemonicString().equalsIgnoreCase("ADDCL") &&
             instruction.getNumOperands() == 2 && instruction.getLength() == 4 &&
             normalize(instruction.getDefaultOperandRepresentation(0)).equals("ACC");
+    }
+
+    private boolean isAddlPm(Instruction instruction) {
+        return instruction != null && instruction.getMnemonicString().equalsIgnoreCase("ADDL") &&
+            instruction.getLength() == 2 && instruction.getNumOperands() == 3 &&
+            normalize(instruction.getDefaultOperandRepresentation(0)).equals("ACC") &&
+            normalize(instruction.getDefaultOperandRepresentation(1)).equals("P") &&
+            normalize(instruction.getDefaultOperandRepresentation(2)).equals("PM");
     }
 
     private boolean tagged(Instruction instruction) {

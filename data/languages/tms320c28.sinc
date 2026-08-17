@@ -572,6 +572,15 @@ macro acc_add_pm_p() {
 	acc_add32(shifted);
 }
 
+# Exact OVM=0 specialization for the decoded ADDL ACC,P << PM instruction.
+# Keep the complete dynamic signed-PM product shift and omit only the
+# unreachable OVM read/saturation selection at analyzer-proved sites.
+macro acc_add_pm_p_ovm0() {
+	local shifted:4;
+	pmshift(shifted, P);
+	acc_add32_ovm0(shifted);
+}
+
 macro acc_sub_pm_p() {
 	local shifted:4;
 	pmshift(shifted, P);
@@ -2247,7 +2256,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 }
 
 # p.141
-:addl ACC, P << PM is op0_16=0b0001000010101100 & ACC & P & PM { # conflict with `mova T, loc16` and `movp T, loc16`
+:addl ACC, P << PM is ovm_zero=1 & op0_16=0b0001000010101100 & ACC & P & PM { # conflict with `mova T, loc16` and `movp T, loc16`
+	acc_add_pm_p_ovm0();
+}
+
+:addl ACC, P << PM is ovm_zero=0 & op0_16=0b0001000010101100 & ACC & P & PM { # conflict with `mova T, loc16` and `movp T, loc16`
 	acc_add_pm_p();
 }
 

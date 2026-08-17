@@ -20,11 +20,16 @@ public class StatusModeSeedStale extends GhidraScript {
         seed(context, addresses, "status_stale_addu", 1);
         seed(context, addresses, "status_stale_nonaddu", 1);
         seed(context, addresses, "status_stale_addcl", 2);
+        seed(context, addresses, "status_stale_addl_pm", 1);
+        seed(context, addresses, "status_stale_addl_loc32", 1);
         seedUncalledFunction(addresses, "status_unproved_entry");
         seedUncalledFunction(addresses, "status_stale_function");
         seedUncalledFunction(addresses, "status_addcl_unproved_entry");
         seedUncalledFunction(addresses, "status_stale_addcl_function");
-        println("STATUS_MODE_STALE_CONTEXT_SEEDED=3");
+        seedUncalledFunction(addresses, "status_addl_pm_unproved_entry");
+        seedUncalledFunction(addresses, "status_stale_addl_pm_function");
+        seedUncalledFunction(addresses, "status_stale_addl_loc32_function");
+        println("STATUS_MODE_STALE_CONTEXT_SEEDED=5");
     }
 
     private Map<String, Address> parseAddresses() {
@@ -47,7 +52,8 @@ public class StatusModeSeedStale extends GhidraScript {
         require(address != null, "missing stale context address " + name);
         ProgramContext programContext = currentProgram.getProgramContext();
         // C28 program addresses are word-addressed.  Cover the complete exact
-        // instruction before disassembly: one word for ADDU/NOP, two for ADDCL.
+        // instruction before disassembly: one word for ADDU/NOP/ADDL and two
+        // words for ADDCL.
         programContext.setValue(context, address, address.add(words - 1), BigInteger.ONE);
         println("STATUS_MODE_STALE_CONTEXT_SEEDED_" + name.toUpperCase() + "=" + address);
     }

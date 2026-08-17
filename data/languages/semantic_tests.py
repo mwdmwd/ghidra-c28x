@@ -2509,6 +2509,147 @@ def check_addcl_alias_safe(ops: list) -> None:
     )
 
 
+def check_addl_pm_proved_ovm_zero(_: list) -> None:
+    selected = _translate_ovm_zero((0x10AC,))
+    generic = _translate((0x10AC,))
+    _no_internal_cfg(selected)
+    _no_nonstandard_arithmetic_widths(selected)
+
+    touched = {
+        _reg(node)
+        for op in selected
+        for node in (*op.inputs, op.output)
+        if node is not None and _reg(node) is not None
+    }
+    assert {"ACC", "P", "PM"} <= touched, (
+        f"proved OVM=0 ADDL ACC,P << PM lost architectural inputs: {touched}"
+    )
+    assert "OVM" not in touched, (
+        f"proved OVM=0 ADDL ACC,P << PM still references OVM: {touched}"
+    )
+    assert not any(
+        any(_is_const(value, constant) for value in op.inputs)
+        for op in selected
+        for constant in (0x7FFFFFFF, 0x80000000)
+    ), "proved OVM=0 ADDL ACC,P << PM retained saturation constants"
+
+    acc_write = _find(
+        selected, lambda op: _reg(op.output) == "ACC", "selected ADDL ACC write"
+    )
+    assert any(_depends_on_register(selected, value, "P") for value in acc_write.inputs), (
+        "selected ADDL result no longer depends on P"
+    )
+    assert any(_depends_on_register(selected, value, "PM") for value in acc_write.inputs), (
+        "selected ADDL result no longer depends on PM"
+    )
+    left_shifts = [op for op in selected if op.opcode == OpCode.INT_LEFT]
+    right_shifts = [op for op in selected if op.opcode == OpCode.INT_SRIGHT]
+    assert left_shifts and right_shifts, (
+        "selected ADDL must retain both logical-left and arithmetic-right PM paths"
+    )
+    assert any(
+        _depends_on_register(selected, op.inputs[0], "P")
+        and _depends_on_register(selected, op.inputs[1], "PM")
+        for op in left_shifts
+    ), "selected ADDL logical-left shift lost P/PM dependency"
+    assert any(
+        _depends_on_register(selected, op.inputs[0], "P")
+        and _depends_on_register(selected, op.inputs[1], "PM")
+        for op in right_shifts
+    ), "selected ADDL arithmetic-right shift lost P/PM dependency"
+
+    for register in ("ACC", "C", "V", "OVC", "N", "Z"):
+        _find(
+            selected,
+            lambda op, register=register: _reg(op.output) == register,
+            f"selected ADDL {register} write",
+        )
+    assert any(
+        op.opcode == OpCode.INT_CARRY and _depends_on_register(selected, op.inputs[1], "P")
+        for op in selected
+    ), "selected ADDL lost wrapped-add carry"
+    assert any(
+        op.opcode == OpCode.INT_SCARRY and _depends_on_register(selected, op.inputs[1], "P")
+        for op in selected
+    ), "selected ADDL lost signed overflow"
+    sticky_v = _find(
+        selected,
+        lambda op: op.opcode == OpCode.BOOL_OR and _reg(op.output) == "V",
+        "selected sticky V update",
+    )
+    assert any(_reg(value) == "V" for value in sticky_v.inputs), (
+        "selected ADDL V is no longer sticky"
+    )
+    ovc_write = _find(
+        selected, lambda op: _reg(op.output) == "OVC", "selected signed OVC update"
+    )
+    assert ovc_write.opcode == OpCode.INT_OR
+    assert any(
+        op.opcode == OpCode.INT_AND and any(_is_const(value, 0x3F) for value in op.inputs)
+        for op in selected
+    ), "selected ADDL OVC update must wrap as a signed six-bit counter"
+
+    vectors = (
+        (
+            {"ACC": 1, "P": 2, "PM": 1, "V": 1, "OVC": 7},
+            {"ACC": 5, "C": 0, "V": 1, "OVC": 7, "N": 0, "Z": 0},
+            "selected ADDL logical-left PM shift and sticky V",
+        ),
+        (
+            {"ACC": 0xFFFFFFFF, "P": 1, "PM": 0, "V": 0, "OVC": 0},
+            {"ACC": 0, "C": 1, "V": 0, "OVC": 0, "N": 0, "Z": 1},
+            "selected ADDL zero PM shift with carry and zero",
+        ),
+        (
+            {"ACC": 1, "P": 0xFFFFFFFE, "PM": 0xFF, "V": 0, "OVC": 0},
+            {"ACC": 0, "C": 1, "V": 0, "OVC": 0, "N": 0, "Z": 1},
+            "selected ADDL arithmetic-right negative PM shift",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "P": 1, "PM": 1, "V": 0, "OVC": 0},
+            {"ACC": 0x80000001, "C": 0, "V": 1, "OVC": 1, "N": 1, "Z": 0},
+            "selected ADDL positive overflow increments OVC",
+        ),
+        (
+            {"ACC": 0x7FFFFFFF, "P": 1, "PM": 1, "V": 0, "OVC": 0x1F},
+            {"ACC": 0x80000001, "C": 0, "V": 1, "OVC": 0xE0, "N": 1, "Z": 0},
+            "selected ADDL positive OVC wrap 31 to -32",
+        ),
+        (
+            {"ACC": 0x80000000, "P": 0xFFFFFFFE, "PM": 0xFF,
+             "V": 0, "OVC": 0},
+            {"ACC": 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 0xFF, "N": 0, "Z": 0},
+            "selected ADDL negative overflow decrements OVC",
+        ),
+        (
+            {"ACC": 0x80000000, "P": 0xFFFFFFFE, "PM": 0xFF,
+             "V": 0, "OVC": 0xE0},
+            {"ACC": 0x7FFFFFFF, "C": 1, "V": 1, "OVC": 0x1F, "N": 0, "Z": 0},
+            "selected ADDL negative OVC wrap -32 to 31",
+        ),
+    )
+    compared_registers = ("ACC", "C", "V", "OVC", "N", "Z")
+    for initial, expected, description in vectors:
+        _assert_execution(selected, initial, expected, description)
+        generic_initial = dict(initial)
+        generic_initial["OVM"] = 0
+        selected_state = _execute_integer_pcode(selected, initial)
+        generic_state = _execute_integer_pcode(generic, generic_initial)
+        mismatches = {
+            register: (selected_state[register], generic_state[register])
+            for register in compared_registers
+            if selected_state[register] != generic_state[register]
+        }
+        assert not mismatches, f"{description} differs from generic OVM=0: {mismatches}"
+
+    _assert_execution(
+        generic,
+        {"ACC": 0x7FFFFFFF, "P": 1, "PM": 1, "V": 0, "OVC": 7, "OVM": 1},
+        {"ACC": 0x7FFFFFFF, "C": 0, "V": 1, "OVC": 7, "N": 0, "Z": 0},
+        "generic ADDL ACC,P << PM retains OVM positive saturation",
+    )
+
+
 def check_addcl_proved_ovm_zero(_: list) -> None:
     selected = _translate_ovm_zero((0x5640, 0x00A6))
     generic = _translate((0x5640, 0x00A6))
@@ -3718,6 +3859,11 @@ CASES = (
     Case("proved switch SUBB uses bounded no-borrow arithmetic", (0x1901,), check_subb_switch_canonical),
     Case("ADDU uses ordinary widths with zero-extended source", (0x0DA6,), check_addu_standard_width),
     Case("status mode: proved OVM-zero ADDU omits only saturation", (0x0DA6,), check_addu_proved_ovm_zero),
+    Case(
+        "status mode: proved OVM-zero ADDL ACC,P << PM preserves dynamic shift and signed status",
+        (0x10AC,),
+        check_addl_pm_proved_ovm_zero,
+    ),
     Case(
         "status mode: proved OVM-zero ADDCL preserves carry and signed status",
         (0x5640, 0x00A6),

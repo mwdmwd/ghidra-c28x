@@ -56,9 +56,9 @@ import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
 /**
- * Selects exact OVM=0 forms of {@code ADDU ACC,loc16} and
- * {@code ADDCL ACC,loc32} only where a finite data-flow proof establishes the
- * TI C run-time return contract.
+ * Selects exact OVM=0 forms of {@code ADDU ACC,loc16},
+ * {@code ADDCL ACC,loc32}, and {@code ADDL ACC,P << PM} only where a finite
+ * data-flow proof establishes the TI C run-time return contract.
  * <p>
  * Raw instruction P-Code remains fully architectural everywhere else.  A zero
  * fact can originate at an exclusively C-call-entered function boundary, at
@@ -178,6 +178,18 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
     private static void analyzeFunction(Program program, Function function,
             Register ovm, Set<Address> validSites, TaskMonitor monitor)
             throws CancelledException {
+        analyzeFunction(program, function, ovm, validSites, null, monitor);
+    }
+
+    /**
+     * Analyze one function, optionally exporting the solved input state at each
+     * decoded instruction for exact-image regression support.  The product
+     * analyzer uses only {@code validSites}; the state map is deliberately a
+     * read-only observation of the unchanged finite proof.
+     */
+    private static void analyzeFunction(Program program, Function function,
+            Register ovm, Set<Address> validSites, Map<Address, Integer> inputStates,
+            TaskMonitor monitor) throws CancelledException {
         if (function == null || function.isExternal()) {
             return;
         }
@@ -278,6 +290,9 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
         }
 
         for (Node node : nodes.values()) {
+            if (inputStates != null) {
+                inputStates.put(node.instruction.getMinAddress(), node.inputState);
+            }
             if (node.inputState == ZERO && isOvmZeroConsumer(node.instruction)) {
                 validSites.add(node.instruction.getMinAddress());
             }
@@ -467,7 +482,8 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
     }
 
     private static boolean isOvmZeroConsumer(Instruction instruction) {
-        return isAdduAccumulator(instruction) || isAddclAccumulator(instruction);
+        return isAdduAccumulator(instruction) || isAddclAccumulator(instruction) ||
+            isAddlShiftedProductAccumulator(instruction);
     }
 
     private static boolean isAdduAccumulator(Instruction instruction) {
@@ -483,6 +499,18 @@ public class TMS320C28OvmReturnAnalyzer extends AbstractAnalyzer {
         return isMnemonic(instruction, "ADDCL") && instruction.getLength() == 4 &&
             instruction.getNumOperands() == 2 &&
             isExactRegisterOperand(instruction, 0, "ACC");
+    }
+
+    private static boolean isAddlShiftedProductAccumulator(Instruction instruction) {
+        // The exact one-word 0x10ac form decodes as three register operands.
+        // Requiring the complete decoded structure avoids the overlapping
+        // MOVA/MOVP encodings and every ADDL loc32 form without consulting raw
+        // firmware bytes or widening the consumer family by mnemonic alone.
+        return isMnemonic(instruction, "ADDL") && instruction.getLength() == 2 &&
+            instruction.getNumOperands() == 3 &&
+            isExactRegisterOperand(instruction, 0, "ACC") &&
+            isExactRegisterOperand(instruction, 1, "P") &&
+            isExactRegisterOperand(instruction, 2, "PM");
     }
 
     private static boolean isMnemonic(Instruction instruction, String mnemonic) {

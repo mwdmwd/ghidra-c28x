@@ -68,6 +68,11 @@ NOINLINE c28_s32 status_full_signed_shift15(c28_s16 value)
     return ((c28_s32)value) << 15;
 }
 
+NOINLINE c28_s32 status_mul6_signed(c28_s32 value)
+{
+    return value * 6L;
+}
+
 NOINLINE void status_low_volatile(void)
 {
     status_sink16 = (c28_u16)(status_mmio_word << 8);
@@ -144,6 +149,7 @@ void status_mode_entry(void)
     status_sink32 = (c28_u32)status_full_signed_shift0((c28_s16)status_fixture_output);
     status_sink32 = status_full_unsigned_shift15(status_fixture_output);
     status_sink32 = (c28_u32)status_full_signed_shift15((c28_s16)status_fixture_output);
+    status_sink32 = (c28_u32)status_mul6_signed((c28_s32)status_fixture_output);
     status_low_volatile();
     status_sink32 = status_full_volatile();
     status_sink32 = (c28_u32)status_post_call_sum(status_fixture_output);
