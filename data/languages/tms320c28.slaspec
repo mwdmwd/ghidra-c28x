@@ -33,7 +33,7 @@ define register offset=0x210 size=4  [  STF ];
 define register offset=0x300 size=4  [  R0H  R1H  R2H  R3H  R4H  R5H  R6H  R7H  ];
 
 define register offset=0x320 size=4  [  RB  ];
-# Block start byte-address register for RPTB loop-back (written by RPTB, read by ^instruction wrapper)
+# Block start word-address register for RPTB loop-back (written by RPTB, read by ^instruction wrapper)
 define register offset=0x324 size=4  [  RB_RSTART  ];
 # Internal repeat counter loaded by RPT instruction
 define register offset=0x122 size=2  [  RPTC  ];

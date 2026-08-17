@@ -1497,6 +1497,19 @@ def check_movst0_ci_selective(ops: list) -> None:
         _assert_execution(ops, initial, expected, f"CI maps TF={tf} to C")
 
 
+def check_rptb_start_word_address(ops: list) -> None:
+    write = _find(
+        ops,
+        lambda op: op.output is not None and _reg(op.output) == "RB_RSTART",
+        "RPTB block-start register write",
+    )
+    assert write.opcode == OpCode.INT_RIGHT, "RB_RSTART must convert byte to word units"
+    assert len(write.inputs) == 2, "unexpected RB_RSTART shift shape"
+    assert _is_const(write.inputs[0], 4) and _is_const(write.inputs[1], 1), (
+        "RPTB at byte address zero must convert byte successor 4 to word address 2"
+    )
+
+
 def check_movst0_tf_selective(ops: list) -> None:
     _no_internal_cfg(ops)
     for tf, expected_tc in ((0, 0), (1, 1)):
@@ -3916,6 +3929,7 @@ CASES = (
     Case("SFR ACC,#5 is branch-free with SXM and carry", (0xFF44,), check_sfr_immediate_eventual_state),
     Case("SFR ACC,T is branch-free for zero and maximum shifts", (0xFF51,), check_sfr_t_eventual_state),
     Case("CMPF32 conditions special values without internal CFG", (0xE694, 0x0008), check_cmpf32_branch_free),
+    Case("RPTB stores block start in word-address units", (0xB589, 0x0002), check_rptb_start_word_address),
     Case("MOVST0 all flags commits selected eventual state", (0xADFF,), check_movst0_all_eventual_state),
     Case("MOVST0 LVF preserves unselected state", (0xAD01,), check_movst0_lvf_selective),
     Case("MOVST0 CI maps TF to C without internal CFG", (0xAD40,), check_movst0_ci_selective),

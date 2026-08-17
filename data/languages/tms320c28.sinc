@@ -2067,7 +2067,7 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # RPTB block-end wrapper: loops the whole block RB_RC+1 times total.
 # rptb_flag is set (with noflow) by RPTB via globalset on the last block instruction.
-# RB_RSTART holds the byte address of the first block instruction (set by RPTB body).
+# RB_RSTART holds the word address consumed by the C28x indirect branch.
 :^instruction is rpt_phase=0 & rptb_flag=1 & instruction [ rpt_phase=1; ] {
     build instruction;
     if (RB_RC == 0) goto <done>;

@@ -894,7 +894,7 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel,
 	local end_addr:4 = (inst_start + zext(rsz) + 2) & 0x7F;
 	RB_RE = end_addr[0,7];
 	RB_RA = (count != 0);
-	RB_RSTART = inst_next;
+	RB_RSTART = inst_next >> 1;
 }
 
 # p.129
@@ -906,7 +906,7 @@ rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel,
 	local end_addr:4 = (inst_start + zext(rsz) + 2) & 0x7F;
 	RB_RE = end_addr[0,7];
 	RB_RA = (count != 0);
-	RB_RSTART = inst_next;
+	RB_RSTART = inst_next >> 1;
 }
 
 # p.133
