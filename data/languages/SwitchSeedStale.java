@@ -69,6 +69,7 @@ public class SwitchSeedStale extends GhidraScript {
             require(function.getBody().contains(wordAddress(target)),
                 "stale target did not enter seeded body " + wordAddress(target));
         }
+        println("SWITCH_STALE_OWNERSHIP_SEEDED=" + wordAddress(BRANCH));
         println("SWITCH_STALE_DESCRIPTOR_SEEDED=" + wordAddress(BRANCH));
     }
 

@@ -1,15 +1,22 @@
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
+import ghidra.app.cmd.function.CreateFunctionCmd;
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
+import ghidra.app.plugin.core.analysis.TMS320C28SwitchAnalyzer;
 import ghidra.app.script.GhidraScript;
+import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressIterator;
 import ghidra.program.model.lang.Register;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
+import ghidra.program.model.listing.Listing;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.pcode.HighFunction;
+import ghidra.program.model.pcode.JumpTable;
 import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.scalar.Scalar;
@@ -20,6 +27,8 @@ import ghidra.program.model.symbol.ReferenceManager;
 import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolIterator;
+import ghidra.program.model.symbol.SymbolTable;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,6 +36,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 public class SwitchTest extends GhidraScript {
@@ -345,6 +355,8 @@ public class SwitchTest extends GhidraScript {
         require(computedJumpCount(wordAddress(0x170ae)) == 0,
             "stale saved-selector computed references survived revalidation");
         requireOwnedSwitchOverride(0x170ae, false, "stale reload-slot descriptor");
+        require(switchOverrideNamespace(0x170ae) == null,
+            "stale reload-slot jump namespace survived complete revocation");
         Function stale = getFunctionContaining(wordAddress(0x1709f));
         require(stale != null, "missing stale-seed function after analysis");
         for (long target : new long[] { 0x170b1, 0x170b3, 0x170b5 }) {
@@ -356,12 +368,262 @@ public class SwitchTest extends GhidraScript {
         requireInstructionText(0x170aa, "add ACC,AR6 << #0x1");
         requireInstructionText(0x170ae, "lb *XAR7");
 
+        println("SWITCH_STALE_NAMESPACE_REMOVED=" + wordAddress(0x170ae));
+        println("SWITCH_STALE_REVOCATION_COMPLETE=1");
+
+        testOwnedSwitchLifecycle(context, globalTargets);
+        testUserOwnedNamespaceControls(context, stackTargets);
+
         println("SWITCH_SAVED_POSITIVE_REFS=4,4,4");
         println("SWITCH_SAVED_CANONICAL_SITES=" + tagged);
         println("SWITCH_SAVED_CASE_RANGES=0-3,0-3,1-4");
         println("SWITCH_SAVED_REJECTED_NEAR_MISSES=" + nearMissBranches.length);
         println("SWITCH_SAVED_STALE_REVOCATION=PASS");
         println("SWITCH_SAVED_OWNED_OVERRIDES=2");
+    }
+
+    private void testOwnedSwitchLifecycle(Register context, long[] targetWords)
+            throws Exception {
+        long functionWord = 0x1703b;
+        long modeWord = 0x17044;
+        long addWord = 0x17046;
+        long branchWord = 0x1704a;
+        long defaultWord = 0x1704b;
+        Address modeAddress = wordAddress(modeWord);
+        Address branchAddress = wordAddress(branchWord);
+        Memory memory = currentProgram.getMemory();
+        int originalModeWord = memory.getShort(modeAddress, false) & 0xffff;
+        String originalModeText = instructionText(modeWord);
+        List<Address> originalTargets = sortedAddresses(targetWords);
+
+        Function function = getFunctionContaining(wordAddress(functionWord));
+        require(function != null, "missing lifecycle switch function");
+        require(isCanonical(wordAddress(addWord), context) &&
+                isCanonical(branchAddress, context),
+            "lifecycle switch did not begin canonicalized");
+        require(computedJumpDestinations(branchAddress).equals(originalTargets),
+            "lifecycle switch did not begin with the exact target set");
+        Namespace initialNamespace = switchOverrideNamespace(branchWord);
+        requireOwnedNamespaceDescriptor(branchWord, targetWords,
+            "initial lifecycle descriptor");
+        NamespaceState initialState = namespaceState(initialNamespace);
+        require(initialState.children.size() == targetWords.length + 2,
+            "initial lifecycle namespace has the wrong child count: " + initialState);
+        String initialC = decompile(function);
+        require(hasCaseLabel(initialC, 0) && hasCaseLabel(initialC, 3),
+            "initial lifecycle switch did not decompile with cases 0-3\n" + initialC);
+
+        Reference userReference = currentProgram.getReferenceManager().addMemoryReference(
+            branchAddress, wordAddress(defaultWord), RefType.COMPUTED_JUMP,
+            SourceType.USER_DEFINED, Reference.MNEMONIC);
+        require(userReference != null, "could not seed user computed-jump reference");
+
+        // Changing only the explicit SXM mode makes the global saved-selector
+        // schedule fail its finite variant proof while leaving the dispatch and
+        // table bytes otherwise intact.
+        replaceInstructionWord(modeWord, 0x2901);
+        requireInstructionText(modeWord, "clrc 0x1");
+        rerunSwitchAnalyzer("lifecycle invalidation");
+
+        function = getFunctionContaining(wordAddress(functionWord));
+        require(function != null, "lifecycle function disappeared after invalidation");
+        require(!isCanonical(wordAddress(addWord), context) &&
+                !isCanonical(branchAddress, context),
+            "invalid lifecycle switch retained canonical context");
+        require(computedJumpCount(branchAddress, SourceType.ANALYSIS) == 0,
+            "invalid lifecycle switch retained analyzer references");
+        require(hasComputedJumpReference(branchAddress, wordAddress(defaultWord),
+                SourceType.USER_DEFINED),
+            "owned-state revocation removed the user computed-jump reference");
+        require(computedJumpCount(branchAddress, SourceType.USER_DEFINED) == 1,
+            "unexpected user computed-jump reference count after invalidation");
+        require(switchOverrideNamespace(branchWord) == null,
+            "invalid lifecycle switch retained its exact jump namespace");
+        for (long targetWord : targetWords) {
+            require(!function.getBody().contains(wordAddress(targetWord)),
+                "invalid lifecycle target remained in the function body: " +
+                    wordAddress(targetWord));
+        }
+        String invalidC = decompile(function);
+        require(!(hasCaseLabel(invalidC, 0) && hasCaseLabel(invalidC, 3)),
+            "invalid lifecycle switch still decompiled as the complete old switch\n" +
+                invalidC);
+        requireWords(modeWord, 0x2901);
+        requireWords(addWord, 0x5604, 0x01a6);
+        requireWords(branchWord, 0x7620);
+        requireInstructionText(addWord, "add ACC,AR6 << #0x1");
+        requireInstructionText(branchWord, "lb *XAR7");
+        println("SWITCH_LIFECYCLE_INVALIDATED=1");
+        println("SWITCH_LIFECYCLE_USER_REFERENCE_PRESERVED=1");
+
+        removeComputedJumpReferences(branchAddress, SourceType.USER_DEFINED);
+        require(!hasComputedJumpReference(branchAddress, wordAddress(defaultWord),
+                SourceType.USER_DEFINED),
+            "could not remove lifecycle user-reference seed before restoration");
+        replaceInstructionWord(modeWord, originalModeWord);
+        require(instructionText(modeWord).equals(originalModeText),
+            "restored lifecycle evidence did not reproduce its original text");
+        rerunSwitchAnalyzer("lifecycle restoration");
+
+        function = getFunctionContaining(wordAddress(functionWord));
+        require(function != null, "lifecycle function disappeared after restoration");
+        require(isCanonical(wordAddress(addWord), context) &&
+                isCanonical(branchAddress, context),
+            "restored lifecycle switch did not regain canonical context");
+        requireExactComputedTargets(branchWord, targetWords,
+            "restored lifecycle descriptor");
+        requireOwnedNamespaceDescriptor(branchWord, targetWords,
+            "restored lifecycle descriptor");
+        requireCompleteSwitch(functionWord, branchWord, defaultWord, targetWords, 0, 3,
+            "restored lifecycle descriptor");
+        requireWords(modeWord, originalModeWord);
+        require(instructionText(modeWord).equals(originalModeText),
+            "restored lifecycle instruction text changed");
+        println("SWITCH_LIFECYCLE_REPUBLISHED_TARGETS=" + targetWords.length);
+        println("SWITCH_LIFECYCLE_NAMESPACE_CHILDREN=" +
+            namespaceState(switchOverrideNamespace(branchWord)).children.size());
+
+        NamespaceSemanticState namespaceBefore = namespaceSemanticState(
+            switchOverrideNamespace(branchWord));
+        List<String> referencesBefore = computedReferenceSignatures(branchAddress);
+        String bodyBefore = function.getBody().toString();
+        String decompilationBefore = normalizeText(decompile(function));
+        rerunSwitchAnalyzer("lifecycle idempotence");
+
+        function = getFunctionContaining(wordAddress(functionWord));
+        require(function != null, "lifecycle function disappeared on idempotent rerun");
+        require(namespaceBefore.equals(namespaceSemanticState(
+                switchOverrideNamespace(branchWord))),
+            "idempotent rerun changed the owned namespace descriptor");
+        require(referencesBefore.equals(computedReferenceSignatures(branchAddress)),
+            "idempotent rerun changed computed-reference state");
+        require(bodyBefore.equals(function.getBody().toString()),
+            "idempotent rerun changed the containing function body");
+        require(decompilationBefore.equals(normalizeText(decompile(function))),
+            "idempotent rerun changed decompilation");
+        require(isCanonical(wordAddress(addWord), context) &&
+                isCanonical(branchAddress, context),
+            "idempotent rerun changed canonical context");
+        requireWords(modeWord, originalModeWord);
+        require(instructionText(modeWord).equals(originalModeText),
+            "idempotent rerun changed restored fixture evidence");
+        println("SWITCH_LIFECYCLE_IDEMPOTENT=1");
+    }
+
+    private void testUserOwnedNamespaceControls(Register context, long[] targetWords)
+            throws Exception {
+        long functionWord = 0x17055;
+        long addWord = 0x1705f;
+        long branchWord = 0x17063;
+        long defaultWord = 0x17064;
+        Address branch = wordAddress(branchWord);
+        Function function = getFunctionContaining(wordAddress(functionWord));
+        require(function != null, "missing user-control switch function");
+        requireOwnedNamespaceDescriptor(branchWord, targetWords,
+            "initial user-control descriptor");
+
+        removeOwnedSwitchStateForTest(function, branchWord);
+        Namespace empty = createStandardSwitchNamespace(function, branchWord);
+        NamespaceState emptyBefore = namespaceState(empty);
+        require(emptyBefore.children.isEmpty(),
+            "empty user namespace unexpectedly has children: " + emptyBefore);
+        rerunSwitchAnalyzer("empty user namespace control");
+        Namespace emptyAfter = switchOverrideNamespace(branchWord);
+        require(emptyAfter != null && emptyBefore.equals(namespaceState(emptyAfter)),
+            "analyzer changed the empty unmarked user namespace");
+        require(!hasExactOwnerMarker(branchWord, SourceType.ANALYSIS),
+            "analyzer marked the empty user namespace");
+        println("SWITCH_USER_EMPTY_NAMESPACE_PRESERVED=1");
+        deleteNamespaceForTest(emptyAfter, "empty user namespace");
+        removeComputedJumpReferences(branch, SourceType.ANALYSIS);
+        CreateFunctionCmd.fixupFunctionBody(currentProgram, function, monitor);
+
+        ArrayList<Address> targets = new ArrayList<>(sortedAddresses(targetWords));
+        new JumpTable(branch, targets, true, 0).writeOverride(function);
+        Namespace manual = switchOverrideNamespace(branchWord);
+        require(manual != null, "manual JumpTable override was not created");
+        require(JumpTable.readOverride(manual, currentProgram.getSymbolTable()) != null,
+            "manual JumpTable override is unreadable");
+        NamespaceState manualBefore = namespaceState(manual);
+        require(manualBefore.children.size() == targetWords.length + 1,
+            "manual JumpTable override has the wrong child count: " + manualBefore);
+        rerunSwitchAnalyzer("nonempty user namespace control");
+        Namespace manualAfter = switchOverrideNamespace(branchWord);
+        require(manualAfter != null && manualBefore.equals(namespaceState(manualAfter)),
+            "analyzer changed the nonempty unmarked user namespace");
+        require(!hasExactOwnerMarker(branchWord, SourceType.ANALYSIS),
+            "analyzer claimed the manual JumpTable override");
+        println("SWITCH_USER_NONEMPTY_NAMESPACE_CHILDREN=" +
+            manualBefore.children.size());
+
+        HighFunction.createLabelSymbol(currentProgram.getSymbolTable(), branch,
+            SWITCH_OWNER_MARKER, manualAfter, SourceType.USER_DEFINED, false);
+        NamespaceState userMarkerBefore = namespaceState(manualAfter);
+        rerunSwitchAnalyzer("non-analysis owner-marker control");
+        Namespace userMarkerAfter = switchOverrideNamespace(branchWord);
+        require(userMarkerAfter != null &&
+                userMarkerBefore.equals(namespaceState(userMarkerAfter)),
+            "analyzer treated a non-analysis owner-name symbol as ownership");
+        require(hasExactOwnerMarker(branchWord, SourceType.USER_DEFINED),
+            "non-analysis owner-name symbol did not survive");
+        println("SWITCH_USER_SOURCE_MARKER_PRESERVED=1");
+        deleteNamespaceForTest(userMarkerAfter, "manual user namespace");
+        removeComputedJumpReferences(branch, SourceType.ANALYSIS);
+        CreateFunctionCmd.fixupFunctionBody(currentProgram, function, monitor);
+
+        Namespace wrongAddress = createStandardSwitchNamespace(function, branchWord);
+        HighFunction.createLabelSymbol(currentProgram.getSymbolTable(),
+            wordAddress(defaultWord), SWITCH_OWNER_MARKER, wrongAddress,
+            SourceType.ANALYSIS, false);
+        NamespaceState wrongAddressBefore = namespaceState(wrongAddress);
+        rerunSwitchAnalyzer("wrong-address owner-marker control");
+        Namespace wrongAddressAfter = switchOverrideNamespace(branchWord);
+        require(wrongAddressAfter != null &&
+                wrongAddressBefore.equals(namespaceState(wrongAddressAfter)),
+            "wrong-address analysis marker granted namespace ownership");
+        require(!hasExactOwnerMarker(branchWord, SourceType.ANALYSIS),
+            "wrong-address marker was mistaken for the exact owner marker");
+        println("SWITCH_USER_WRONG_ADDRESS_MARKER_PRESERVED=1");
+        deleteNamespaceForTest(wrongAddressAfter, "wrong-address user namespace");
+        removeComputedJumpReferences(branch, SourceType.ANALYSIS);
+        CreateFunctionCmd.fixupFunctionBody(currentProgram, function, monitor);
+
+        rerunSwitchAnalyzer("restore user-control switch");
+        function = getFunctionContaining(wordAddress(functionWord));
+        require(function != null, "user-control switch function disappeared");
+        require(isCanonical(wordAddress(addWord), context) && isCanonical(branch, context),
+            "user-control switch did not regain canonical context");
+        requireOwnedNamespaceDescriptor(branchWord, targetWords,
+            "restored user-control descriptor");
+        requireCompleteSwitch(functionWord, branchWord, defaultWord, targetWords, 0, 3,
+            "restored user-control descriptor");
+
+        long outsideBranchWord = 0x170ae;
+        Address outsideBranch = wordAddress(outsideBranchWord);
+        Function outsideFunction = getFunctionContaining(outsideBranch);
+        require(outsideFunction != null, "missing outside-marker control function");
+        require(switchOverrideNamespace(outsideBranchWord) == null,
+            "outside-marker control unexpectedly has a standard jump namespace");
+        Namespace outside = currentProgram.getSymbolTable().createNameSpace(outsideFunction,
+            "jmp_" + outsideBranch, SourceType.USER_DEFINED);
+        HighFunction.createLabelSymbol(currentProgram.getSymbolTable(), outsideBranch,
+            SWITCH_OWNER_MARKER, outside, SourceType.ANALYSIS, false);
+        NamespaceState outsideBefore = namespaceState(outside);
+        rerunSwitchAnalyzer("outside owner-marker control");
+        Namespace outsideAfter = findDirectChildNamespace(outsideFunction,
+            "jmp_" + outsideBranch);
+        require(outsideAfter != null && outsideBefore.equals(namespaceState(outsideAfter)),
+            "analysis marker outside the standard override namespace was changed");
+        require(switchOverrideNamespace(outsideBranchWord) == null,
+            "outside marker caused creation of a standard stale namespace");
+        println("SWITCH_OUTSIDE_ANALYSIS_MARKER_PRESERVED=1");
+        deleteNamespaceForTest(outsideAfter, "outside analysis-marker namespace");
+
+        requireOwnedNamespaceDescriptor(branchWord, targetWords,
+            "final user-control descriptor");
+        requireExactComputedTargets(branchWord, targetWords,
+            "final user-control descriptor");
+        println("SWITCH_USER_NAMESPACE_CONTROLS=5");
     }
 
     private void requireCompleteSwitch(long functionWord, long branchWord, long defaultWord,
@@ -1008,6 +1270,203 @@ public class SwitchTest extends GhidraScript {
         return results.getDecompiledFunction().getC();
     }
 
+    private void rerunSwitchAnalyzer(String phase) throws Exception {
+        MessageLog log = new MessageLog();
+        TMS320C28SwitchAnalyzer analyzer = new TMS320C28SwitchAnalyzer();
+        require(analyzer.added(currentProgram, new AddressSet(currentProgram.getMemory()),
+            monitor, log), "switch analyzer failed during " + phase + ": " + log);
+        AutoAnalysisManager.getAnalysisManager(currentProgram).startAnalysis(monitor);
+    }
+
+    private void replaceInstructionWord(long word, int replacement) throws Exception {
+        Address address = wordAddress(word);
+        Instruction instruction = getInstructionAt(address);
+        require(instruction != null, "missing instruction to replace at " + address);
+        Listing listing = currentProgram.getListing();
+        listing.clearCodeUnits(address, instruction.getMaxAddress(), false);
+        currentProgram.getMemory().setShort(address, (short) replacement, false);
+        require(disassemble(address), "could not disassemble replacement at " + address);
+    }
+
+    private String instructionText(long word) {
+        Instruction instruction = getInstructionAt(wordAddress(word));
+        require(instruction != null, "missing instruction at " + wordAddress(word));
+        return normalizeText(instruction.toString()).toLowerCase();
+    }
+
+    private String normalizeText(String text) {
+        return text.replaceAll("\\s+", " ").trim();
+    }
+
+    private List<Address> sortedAddresses(long[] words) {
+        List<Address> result = new ArrayList<>();
+        for (long word : words) {
+            result.add(wordAddress(word));
+        }
+        Collections.sort(result);
+        return result;
+    }
+
+    private void requireOwnedNamespaceDescriptor(long branchWord, long[] targetWords,
+            String description) {
+        Address branch = wordAddress(branchWord);
+        Namespace namespace = switchOverrideNamespace(branchWord);
+        require(namespace != null, description + " has no jump namespace");
+        SymbolTable symbols = currentProgram.getSymbolTable();
+        Symbol owner = symbols.getSymbol(SWITCH_OWNER_MARKER, branch, namespace);
+        require(owner != null && owner.getSource() == SourceType.ANALYSIS,
+            description + " lacks its exact analysis owner marker");
+        Symbol switchSymbol = symbols.getSymbol("switch", branch, namespace);
+        require(switchSymbol != null && switchSymbol.getSource() == SourceType.USER_DEFINED,
+            description + " lacks the standard switch symbol");
+        for (int index = 0; index < targetWords.length; index++) {
+            Address target = wordAddress(targetWords[index]);
+            Symbol caseSymbol = symbols.getSymbol("case_" + index, target, namespace);
+            require(caseSymbol != null &&
+                    caseSymbol.getSource() == SourceType.USER_DEFINED,
+                description + " lacks case_" + index + " at " + target);
+        }
+        NamespaceSemanticState state = namespaceSemanticState(namespace);
+        require(state.children.size() == targetWords.length + 2,
+            description + " has unexpected namespace children: " + state.children);
+        require(JumpTable.readOverride(namespace, symbols) != null,
+            description + " is not readable as a standard JumpTable override");
+    }
+
+    private Namespace createStandardSwitchNamespace(Function function, long branchWord) {
+        Address branch = wordAddress(branchWord);
+        Namespace override = HighFunction.findCreateOverrideSpace(function);
+        require(override != null,
+            "could not create override namespace for " + branch);
+        String name = "jmp_" + branch;
+        require(HighFunction.findNamespace(currentProgram.getSymbolTable(), override, name) == null,
+            "standard jump namespace already exists before user control at " + branch);
+        Namespace namespace = HighFunction.findCreateNamespace(
+            currentProgram.getSymbolTable(), override, name);
+        require(namespace != null,
+            "could not create standard jump namespace for " + branch);
+        return namespace;
+    }
+
+    private Namespace findDirectChildNamespace(Namespace parent, String name) {
+        return HighFunction.findNamespace(currentProgram.getSymbolTable(), parent, name);
+    }
+
+    private void removeOwnedSwitchStateForTest(Function function, long branchWord)
+            throws Exception {
+        Namespace namespace = switchOverrideNamespace(branchWord);
+        require(namespace != null && hasExactOwnerMarker(branchWord, SourceType.ANALYSIS),
+            "test cleanup cannot prove analyzer ownership at " + wordAddress(branchWord));
+        deleteNamespaceForTest(namespace, "analyzer-owned user-control setup");
+        removeComputedJumpReferences(wordAddress(branchWord), SourceType.ANALYSIS);
+        CreateFunctionCmd.fixupFunctionBody(currentProgram, function, monitor);
+    }
+
+    private void deleteNamespaceForTest(Namespace namespace, String description)
+            throws Exception {
+        SymbolTable symbols = currentProgram.getSymbolTable();
+        require(HighFunction.clearNamespace(symbols, namespace),
+            "could not clear " + description);
+        require(!symbols.getSymbols(namespace).hasNext(),
+            description + " retained children after clear");
+        Symbol namespaceSymbol = namespace.getSymbol();
+        require(namespaceSymbol != null && namespaceSymbol.delete(),
+            "could not delete " + description);
+    }
+
+    private boolean hasExactOwnerMarker(long branchWord, SourceType source) {
+        Namespace namespace = switchOverrideNamespace(branchWord);
+        if (namespace == null) {
+            return false;
+        }
+        Symbol marker = currentProgram.getSymbolTable().getSymbol(
+            SWITCH_OWNER_MARKER, wordAddress(branchWord), namespace);
+        return marker != null && marker.getSource() == source;
+    }
+
+    private void removeComputedJumpReferences(Address branch, SourceType source) {
+        for (Reference reference :
+                currentProgram.getReferenceManager().getReferencesFrom(branch)) {
+            if (reference.getReferenceType() == RefType.COMPUTED_JUMP &&
+                    reference.getSource() == source) {
+                currentProgram.getReferenceManager().delete(reference);
+            }
+        }
+    }
+
+    private int computedJumpCount(Address address, SourceType source) {
+        int count = 0;
+        for (Reference reference :
+                currentProgram.getReferenceManager().getReferencesFrom(address)) {
+            if (reference.getReferenceType() == RefType.COMPUTED_JUMP &&
+                    reference.getSource() == source) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean hasComputedJumpReference(Address from, Address to, SourceType source) {
+        for (Reference reference :
+                currentProgram.getReferenceManager().getReferencesFrom(from)) {
+            if (reference.getReferenceType() == RefType.COMPUTED_JUMP &&
+                    reference.getSource() == source &&
+                    reference.getToAddress().equals(to)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> computedReferenceSignatures(Address branch) {
+        List<String> result = new ArrayList<>();
+        for (Reference reference :
+                currentProgram.getReferenceManager().getReferencesFrom(branch)) {
+            if (reference.getReferenceType() == RefType.COMPUTED_JUMP) {
+                result.add(reference.getReferenceType() + "|" + reference.getSource() + "|" +
+                    reference.getOperandIndex() + "|" + reference.getToAddress());
+            }
+        }
+        Collections.sort(result);
+        return result;
+    }
+
+    private NamespaceState namespaceState(Namespace namespace) {
+        require(namespace != null, "cannot snapshot a null namespace");
+        Symbol namespaceSymbol = namespace.getSymbol();
+        require(namespaceSymbol != null, "namespace has no symbol: " + namespace);
+        Namespace parent = namespace.getParentNamespace();
+        List<String> children = new ArrayList<>();
+        SymbolIterator iterator = currentProgram.getSymbolTable().getSymbols(namespace);
+        while (iterator.hasNext()) {
+            Symbol symbol = iterator.next();
+            children.add(symbol.getID() + "|" + symbol.getName() + "|" +
+                symbol.getAddress() + "|" + symbol.getSource() + "|" +
+                symbol.getSymbolType());
+        }
+        Collections.sort(children);
+        return new NamespaceState(namespace.getID(), namespaceSymbol.getID(),
+            parent == null ? -1 : parent.getID(), namespace.getName(),
+            namespaceSymbol.getSource(), children);
+    }
+
+    private NamespaceSemanticState namespaceSemanticState(Namespace namespace) {
+        require(namespace != null, "cannot snapshot a null namespace");
+        Symbol namespaceSymbol = namespace.getSymbol();
+        require(namespaceSymbol != null, "namespace has no symbol: " + namespace);
+        Namespace parent = namespace.getParentNamespace();
+        List<String> children = new ArrayList<>();
+        SymbolIterator iterator = currentProgram.getSymbolTable().getSymbols(namespace);
+        while (iterator.hasNext()) {
+            Symbol symbol = iterator.next();
+            children.add(symbol.getName() + "|" + symbol.getAddress() + "|" +
+                symbol.getSource() + "|" + symbol.getSymbolType());
+        }
+        Collections.sort(children);
+        return new NamespaceSemanticState(parent == null ? -1 : parent.getID(),
+            namespace.getName(), namespaceSymbol.getSource(), children);
+    }
+
     private Address wordAddress(long wordOffset) {
         int wordSize = currentProgram.getAddressFactory()
                 .getDefaultAddressSpace()
@@ -1029,6 +1488,7 @@ public class SwitchTest extends GhidraScript {
                 destinations.add(reference.getToAddress());
             }
         }
+        Collections.sort(destinations);
         return destinations;
     }
 
@@ -1276,5 +1736,77 @@ public class SwitchTest extends GhidraScript {
             previous.getMaxAddress().next().equals(instruction.getMinAddress())
                 ? previous
                 : null;
+    }
+
+    private static final class NamespaceState {
+        private final long namespaceId;
+        private final long namespaceSymbolId;
+        private final long parentId;
+        private final String name;
+        private final SourceType source;
+        private final List<String> children;
+
+        private NamespaceState(long namespaceId, long namespaceSymbolId, long parentId,
+                String name, SourceType source, List<String> children) {
+            this.namespaceId = namespaceId;
+            this.namespaceSymbolId = namespaceSymbolId;
+            this.parentId = parentId;
+            this.name = name;
+            this.source = source;
+            this.children = List.copyOf(children);
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (!(object instanceof NamespaceState other)) {
+                return false;
+            }
+            return namespaceId == other.namespaceId &&
+                namespaceSymbolId == other.namespaceSymbolId &&
+                parentId == other.parentId && Objects.equals(name, other.name) &&
+                source == other.source && children.equals(other.children);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(namespaceId, namespaceSymbolId, parentId, name, source,
+                children);
+        }
+
+        @Override
+        public String toString() {
+            return "NamespaceState[id=" + namespaceId + ", symbol=" +
+                namespaceSymbolId + ", parent=" + parentId + ", name=" + name +
+                ", source=" + source + ", children=" + children + "]";
+        }
+    }
+
+    private static final class NamespaceSemanticState {
+        private final long parentId;
+        private final String name;
+        private final SourceType source;
+        private final List<String> children;
+
+        private NamespaceSemanticState(long parentId, String name, SourceType source,
+                List<String> children) {
+            this.parentId = parentId;
+            this.name = name;
+            this.source = source;
+            this.children = List.copyOf(children);
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (!(object instanceof NamespaceSemanticState other)) {
+                return false;
+            }
+            return parentId == other.parentId && Objects.equals(name, other.name) &&
+                source == other.source && children.equals(other.children);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(parentId, name, source, children);
+        }
     }
 }

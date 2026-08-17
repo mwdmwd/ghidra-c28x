@@ -403,6 +403,31 @@ switch-test: tms320c28.sla analyzer switch_test.out switch_native_test.out \
 			test "$$markers" -eq 1 || { \
 				echo "expected one switch pass marker for $$input, found $$markers" >&2; \
 				cat "$$console_log" >&2; cat "$$script_log" >&2; exit 1; }; \
+			if test "$$input" = switch_saved_validation.out; then \
+				lifecycle_markers=( \
+					'SWITCH_STALE_OWNERSHIP_SEEDED=000170ae' \
+					'SWITCH_STALE_NAMESPACE_REMOVED=000170ae' \
+					'SWITCH_STALE_REVOCATION_COMPLETE=1' \
+					'SWITCH_LIFECYCLE_INVALIDATED=1' \
+					'SWITCH_LIFECYCLE_USER_REFERENCE_PRESERVED=1' \
+					'SWITCH_LIFECYCLE_REPUBLISHED_TARGETS=4' \
+					'SWITCH_LIFECYCLE_NAMESPACE_CHILDREN=6' \
+					'SWITCH_LIFECYCLE_IDEMPOTENT=1' \
+					'SWITCH_USER_EMPTY_NAMESPACE_PRESERVED=1' \
+					'SWITCH_USER_NONEMPTY_NAMESPACE_CHILDREN=5' \
+					'SWITCH_USER_SOURCE_MARKER_PRESERVED=1' \
+					'SWITCH_USER_WRONG_ADDRESS_MARKER_PRESERVED=1' \
+					'SWITCH_OUTSIDE_ANALYSIS_MARKER_PRESERVED=1' \
+					'SWITCH_USER_NAMESPACE_CONTROLS=5' \
+				); \
+				for lifecycle_marker in "$${lifecycle_markers[@]}"; do \
+					count=$$(grep -F -c "$$lifecycle_marker" "$$script_log" || true); \
+					test "$$count" -eq 1 || { \
+						echo "expected one '$$lifecycle_marker', found $$count" >&2; \
+						cat "$$script_log" >&2; exit 1; }; \
+				done; \
+				echo "SWITCH_LIFECYCLE_ASSERTIONS=$${#lifecycle_markers[@]}"; \
+			fi; \
 			grep -E '(SWITCH_|FFC_)' "$$script_log"; \
 			actual=$$((actual + markers)); \
 		done; \

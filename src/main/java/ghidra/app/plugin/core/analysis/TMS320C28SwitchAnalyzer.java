@@ -46,7 +46,6 @@ import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.pcode.HighFunction;
-import ghidra.program.model.pcode.JumpTable;
 import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.Namespace;
 import ghidra.program.model.symbol.Reference;
@@ -237,15 +236,47 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 	private static void changeContext(Listing listing, ProgramContext context,
 			Register switchContext, Instruction instruction, BigInteger value,
 			AddressSet redisassemble, MessageLog log) {
+		List<PreservedComputedJumpReference> preserved =
+			preserveNonAnalysisComputedJumpReferences(instruction);
 		try {
 			Address start = instruction.getMinAddress();
 			Address end = instruction.getMaxAddress();
 			listing.clearCodeUnits(start, end, false);
-			context.setValue(switchContext, start, end, value);
+			try {
+				context.setValue(switchContext, start, end, value);
+			}
+			finally {
+				restoreComputedJumpReferences(instruction.getProgram(), start, preserved);
+			}
 			redisassemble.add(start);
 		}
 		catch (ContextChangeException exception) {
 			log.appendException(exception);
+		}
+	}
+
+	private static List<PreservedComputedJumpReference>
+			preserveNonAnalysisComputedJumpReferences(Instruction instruction) {
+		List<PreservedComputedJumpReference> preserved = new ArrayList<>();
+		for (Reference reference : instruction.getProgram().getReferenceManager()
+				.getReferencesFrom(instruction.getMinAddress())) {
+			if (reference.getReferenceType() == RefType.COMPUTED_JUMP &&
+				reference.getSource() != SourceType.ANALYSIS) {
+				preserved.add(new PreservedComputedJumpReference(reference.getToAddress(),
+					reference.getSource(), reference.getOperandIndex(), reference.isPrimary()));
+			}
+		}
+		return preserved;
+	}
+
+	private static void restoreComputedJumpReferences(Program program, Address branch,
+			List<PreservedComputedJumpReference> preserved) {
+		for (PreservedComputedJumpReference saved : preserved) {
+			Reference restored = program.getReferenceManager().addMemoryReference(branch,
+				saved.target, RefType.COMPUTED_JUMP, saved.source, saved.operandIndex);
+			if (saved.primary) {
+				program.getReferenceManager().setPrimary(restored, true);
+			}
 		}
 	}
 
@@ -279,22 +310,12 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 				// the standard jump-override namespace for the containing function.
 				continue;
 			}
-			try {
-				if (HighFunction.clearNamespace(symbols, expectedNamespace)) {
-					removeAnalysisComputedJumpReferences(program, marker.getAddress());
-					if (function != null) {
-						CreateFunctionCmd.fixupFunctionBody(program, function, monitor);
-					}
-					Msg.info(TMS320C28SwitchAnalyzer.class,
-						"revoked stale analyzer-owned switch override at " + marker.getAddress());
-				}
-				else {
-					log.appendMsg(NAME,
-						"could not clear owned switch namespace at " + marker.getAddress());
-				}
-			}
-			catch (InvalidInputException exception) {
-				log.appendException(exception);
+			if (clearOwnedSwitchNamespace(program, function, marker.getAddress(),
+				expectedNamespace, "revoke", log)) {
+				removeAnalysisComputedJumpReferences(program, marker.getAddress());
+				CreateFunctionCmd.fixupFunctionBody(program, function, monitor);
+				Msg.info(TMS320C28SwitchAnalyzer.class,
+					"revoked stale analyzer-owned switch override at " + marker.getAddress());
 			}
 		}
 	}
@@ -336,29 +357,21 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 
 		try {
-			if (owned && !HighFunction.clearNamespace(program.getSymbolTable(), existing)) {
-				log.appendMsg(NAME,
-					"could not refresh owned switch namespace at " + descriptor.branchAddress);
-				return;
+			if (owned) {
+				if (!clearOwnedSwitchNamespace(program, function, descriptor.branchAddress,
+					existing, "refresh", log)) {
+					return;
+				}
+				// Once the durable owner marker and its namespace are gone, no
+				// analyzer edge may remain without a revocation key.  Remove the old
+				// edges before attempting publication of the replacement descriptor.
+				removeAnalysisComputedJumpReferences(program, descriptor.branchAddress);
+				CreateFunctionCmd.fixupFunctionBody(program, function, monitor);
 			}
-			JumpTable override = new JumpTable(descriptor.branchAddress,
-				new ArrayList<>(descriptor.validatedTargets), true, 0);
-			override.writeOverride(function);
-			Namespace namespace = findSwitchOverrideNamespace(function, descriptor.branchAddress);
+
+			Namespace namespace = publishOwnedSwitchNamespace(program, function, descriptor, log);
 			if (namespace == null) {
-				log.appendMsg(NAME,
-					"failed to find published switch namespace at " + descriptor.branchAddress);
 				return;
-			}
-			try {
-				HighFunction.createLabelSymbol(program.getSymbolTable(), descriptor.branchAddress,
-					OVERRIDE_OWNER_MARKER, namespace, SourceType.ANALYSIS, false);
-			}
-			catch (InvalidInputException exception) {
-				// An unmarked override would be indistinguishable from user state and
-				// therefore could not be safely refreshed or revoked.
-				HighFunction.clearNamespace(program.getSymbolTable(), namespace);
-				throw exception;
 			}
 
 			// Publish edges only after the ownership marker exists.  Thus every
@@ -376,6 +389,129 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 		}
 	}
 
+	/**
+	 * Remove exactly one analyzer-owned standard jump namespace.  Ownership must
+	 * be established while the marker still exists because clearNamespace removes
+	 * the evidence along with the descriptor children.
+	 */
+	private static boolean clearOwnedSwitchNamespace(Program program, Function function,
+			Address branch, Namespace namespace, String operation, MessageLog log) {
+		SymbolTable symbols = program.getSymbolTable();
+		Namespace expected = findSwitchOverrideNamespace(function, branch);
+		Symbol owner = expected == null ? null :
+			symbols.getSymbol(OVERRIDE_OWNER_MARKER, branch, expected);
+		if (expected == null || !expected.equals(namespace) || owner == null ||
+			owner.getSource() != SourceType.ANALYSIS) {
+			log.appendMsg(NAME,
+				"refused to " + operation + " unowned switch namespace at " + branch);
+			return false;
+		}
+
+		try {
+			if (!HighFunction.clearNamespace(symbols, namespace)) {
+				log.appendMsg(NAME,
+					"could not clear owned switch namespace at " + branch);
+				return false;
+			}
+		}
+		catch (InvalidInputException exception) {
+			log.appendException(exception);
+			return false;
+		}
+
+		if (symbols.getSymbols(namespace).hasNext()) {
+			log.appendMsg(NAME,
+				"owned switch namespace was not empty after clear at " + branch);
+			return false;
+		}
+		Symbol namespaceSymbol = namespace.getSymbol();
+		if (namespaceSymbol == null || !namespaceSymbol.delete()) {
+			log.appendMsg(NAME,
+				"could not delete empty owned switch namespace at " + branch);
+			return false;
+		}
+		if (findSwitchOverrideNamespace(function, branch) != null) {
+			log.appendMsg(NAME,
+				"owned switch namespace still exists after deletion at " + branch);
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Publish Ghidra's standard jump-table override symbols with the analyzer
+	 * owner marker first.  This is equivalent to JumpTable.writeOverride(...)
+	 * with display format zero, but avoids a markerless descriptor if later label
+	 * creation fails.
+	 */
+	private static Namespace publishOwnedSwitchNamespace(Program program, Function function,
+			SwitchDescriptor descriptor, MessageLog log) throws InvalidInputException {
+		SymbolTable symbols = program.getSymbolTable();
+		Namespace override = HighFunction.findCreateOverrideSpace(function);
+		if (override == null) {
+			throw new InvalidInputException("Could not create override namespace");
+		}
+		String namespaceName = "jmp_" + descriptor.branchAddress;
+		if (HighFunction.findNamespace(symbols, override, namespaceName) != null) {
+			// User precedence and owned refresh were handled by the caller.  Never
+			// reinterpret a namespace that appeared without that proof.
+			log.appendMsg(NAME,
+				"switch namespace appeared before publication at " +
+					descriptor.branchAddress);
+			return null;
+		}
+		Namespace namespace = HighFunction.findCreateNamespace(symbols, override, namespaceName);
+		if (namespace == null) {
+			throw new InvalidInputException("Could not create jump override namespace");
+		}
+
+		boolean ownerCreated = false;
+		try {
+			HighFunction.createLabelSymbol(symbols, descriptor.branchAddress,
+				OVERRIDE_OWNER_MARKER, namespace, SourceType.ANALYSIS, false);
+			ownerCreated = true;
+			HighFunction.createLabelSymbol(symbols, descriptor.branchAddress, "switch", namespace,
+				SourceType.USER_DEFINED, false);
+			for (int index = 0; index < descriptor.validatedTargets.size(); index++) {
+				HighFunction.createLabelSymbol(symbols, descriptor.validatedTargets.get(index),
+					"case_" + index, namespace, SourceType.USER_DEFINED, false);
+			}
+			return namespace;
+		}
+		catch (InvalidInputException exception) {
+			if (ownerCreated) {
+				clearOwnedSwitchNamespace(program, function, descriptor.branchAddress, namespace,
+					"roll back", log);
+			}
+			else {
+				// This exact unmarked namespace was created in this invocation and no
+				// cancellation point exists between creation and marker publication.
+				// Existing empty unmarked namespaces never reach this path.
+				deleteFreshEmptySwitchNamespace(program, function, descriptor.branchAddress,
+					namespace, log);
+			}
+			throw exception;
+		}
+	}
+
+	private static void deleteFreshEmptySwitchNamespace(Program program, Function function,
+			Address branch, Namespace namespace, MessageLog log) {
+		SymbolTable symbols = program.getSymbolTable();
+		Namespace expected = findSwitchOverrideNamespace(function, branch);
+		if (expected == null || !expected.equals(namespace) ||
+			symbols.getSymbols(namespace).hasNext()) {
+			log.appendMsg(NAME,
+				"could not roll back fresh empty switch namespace at " + branch);
+			return;
+		}
+		Symbol namespaceSymbol = namespace.getSymbol();
+		if (namespaceSymbol == null || !namespaceSymbol.delete() ||
+			findSwitchOverrideNamespace(function, branch) != null) {
+			log.appendMsg(NAME,
+				"fresh empty switch namespace survived rollback at " + branch);
+		}
+	}
+
 	private static Namespace findSwitchOverrideNamespace(Function function, Address branch) {
 		Namespace override = HighFunction.findOverrideSpace(function);
 		if (override == null) {
@@ -386,7 +522,9 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 	}
 
 	private static boolean hasOwnerMarker(Program program, Namespace namespace, Address branch) {
-		return program.getSymbolTable().getSymbol(OVERRIDE_OWNER_MARKER, branch, namespace) != null;
+		Symbol marker =
+			program.getSymbolTable().getSymbol(OVERRIDE_OWNER_MARKER, branch, namespace);
+		return marker != null && marker.getSource() == SourceType.ANALYSIS;
 	}
 
 	private static void removeAnalysisComputedJumpReferences(Program program, Address branch) {
@@ -1807,6 +1945,21 @@ public class TMS320C28SwitchAnalyzer extends AbstractAnalyzer {
 	private enum SxmMode {
 		SET,
 		CLEAR
+	}
+
+	private static final class PreservedComputedJumpReference {
+		private final Address target;
+		private final SourceType source;
+		private final int operandIndex;
+		private final boolean primary;
+
+		private PreservedComputedJumpReference(Address target, SourceType source,
+				int operandIndex, boolean primary) {
+			this.target = target;
+			this.source = source;
+			this.operandIndex = operandIndex;
+			this.primary = primary;
+		}
 	}
 
 	private static final class IndexExpression {
