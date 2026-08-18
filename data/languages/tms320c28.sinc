@@ -5211,8 +5211,8 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.470
 :zalr ACC, loc16 is ctx_objmode=1 & op0_16=0b0101011000010011; op8_8=0b00000000 & ACC & loc16 {
-	AH = loc16;
-	AL = 0x8000;
+	local source:2 = loc16;
+	ACC = (zext(source) << 16) | 0x8000;
 	flagnz(ACC);
 }
 

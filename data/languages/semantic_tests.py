@@ -1497,6 +1497,31 @@ def check_movst0_ci_selective(ops: list) -> None:
         _assert_execution(ops, initial, expected, f"CI maps TF={tf} to C")
 
 
+def check_zalr_full_width_write(ops: list) -> None:
+    writes = [_reg(op.output) for op in ops if op.output is not None]
+    assert writes.count("ACC") == 1, f"expected one full ACC write, got {writes}"
+    assert "AH" not in writes and "AL" not in writes, (
+        "ZALR must not publish separate half-register writes"
+    )
+    load = _find(
+        ops,
+        lambda op: op.opcode == OpCode.LOAD and op.output is not None and op.output.size == 2,
+        "ZALR 16-bit source load",
+    )
+    write = _find(
+        ops,
+        lambda op: op.output is not None and _reg(op.output) == "ACC",
+        "ZALR full ACC write",
+    )
+    assert write.opcode == OpCode.INT_OR, "ZALR must assemble the complete ACC value"
+    assert any(_is_const(node, 0x8000) for node in write.inputs), (
+        "ZALR full-width write must include the rounding constant"
+    )
+    assert any(_depends_on_varnode(ops, node, load.output) for node in write.inputs), (
+        "ZALR full-width write must depend on the snapshotted loc16 source"
+    )
+
+
 def check_rptb_start_word_address(ops: list) -> None:
     write = _find(
         ops,
@@ -3929,6 +3954,7 @@ CASES = (
     Case("SFR ACC,#5 is branch-free with SXM and carry", (0xFF44,), check_sfr_immediate_eventual_state),
     Case("SFR ACC,T is branch-free for zero and maximum shifts", (0xFF51,), check_sfr_t_eventual_state),
     Case("CMPF32 conditions special values without internal CFG", (0xE694, 0x0008), check_cmpf32_branch_free),
+    Case("ZALR publishes one full-width ACC write", (0x5613, 0x0011), check_zalr_full_width_write),
     Case("RPTB stores block start in word-address units", (0xB589, 0x0002), check_rptb_start_word_address),
     Case("MOVST0 all flags commits selected eventual state", (0xADFF,), check_movst0_all_eventual_state),
     Case("MOVST0 LVF preserves unselected state", (0xAD01,), check_movst0_lvf_selective),
