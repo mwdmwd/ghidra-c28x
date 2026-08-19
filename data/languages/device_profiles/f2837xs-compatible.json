@@ -1,4 +1,1720 @@
 {
+  "accessViews": [
+    {
+      "address": 295170,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Command Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 4-7",
+          "name": "DATA_B",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 1,
+          "parentShift": 16,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 0-3",
+          "name": "DATA_A",
+          "overlapLogicalBitOffset": 17,
+          "overlapWidthBits": 1,
+          "parentShift": 17,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Transmission Request Bit",
+          "name": "TXRQST",
+          "overlapLogicalBitOffset": 18,
+          "overlapWidthBits": 1,
+          "parentShift": 18,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Clear Interrupt Pending Bit",
+          "name": "CLRINTPND",
+          "overlapLogicalBitOffset": 19,
+          "overlapWidthBits": 1,
+          "parentShift": 19,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Control Bits",
+          "name": "CONTROL",
+          "overlapLogicalBitOffset": 20,
+          "overlapWidthBits": 1,
+          "parentShift": 20,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Arbitration Bits",
+          "name": "ARB",
+          "overlapLogicalBitOffset": 21,
+          "overlapWidthBits": 1,
+          "parentShift": 21,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Mask Bits",
+          "name": "MASK",
+          "overlapLogicalBitOffset": 22,
+          "overlapWidthBits": 1,
+          "parentShift": 22,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Write/Read Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 23,
+          "overlapWidthBits": 1,
+          "parentShift": 23,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1CMD_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF1CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295171,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Command Register",
+      "fieldOverlaps": [],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1CMD_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF1CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295174,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1MSK_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF1MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295175,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Message Direction",
+          "name": "MDIR",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Extended Identifier",
+          "name": "MXTD",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1MSK_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF1MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295178,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "`",
+          "name": "ID",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1ARB_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF1ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295179,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "`",
+          "name": "ID",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 29,
+          "overlapWidthBits": 1,
+          "parentShift": 29,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Extended Identifier",
+          "name": "XTD",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Valid",
+          "name": "MSGVAL",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1ARB_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF1ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295186,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 2",
+          "name": "DATA_2",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1DATA_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF1DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295187,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 3",
+          "name": "DATA_3",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1DATA_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF1DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295190,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 6",
+          "name": "DATA_6",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1DATB_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF1DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295191,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 7",
+          "name": "DATA_7",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1DATB_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF1DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295202,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Command Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 4-7",
+          "name": "DATA_B",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 1,
+          "parentShift": 16,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 0-3",
+          "name": "DATA_A",
+          "overlapLogicalBitOffset": 17,
+          "overlapWidthBits": 1,
+          "parentShift": 17,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Transmission Request Bit",
+          "name": "TXRQST",
+          "overlapLogicalBitOffset": 18,
+          "overlapWidthBits": 1,
+          "parentShift": 18,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Clear Interrupt Pending Bit",
+          "name": "CLRINTPND",
+          "overlapLogicalBitOffset": 19,
+          "overlapWidthBits": 1,
+          "parentShift": 19,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Control Bits",
+          "name": "CONTROL",
+          "overlapLogicalBitOffset": 20,
+          "overlapWidthBits": 1,
+          "parentShift": 20,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Arbitration Bits",
+          "name": "ARB",
+          "overlapLogicalBitOffset": 21,
+          "overlapWidthBits": 1,
+          "parentShift": 21,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Mask Bits",
+          "name": "MASK",
+          "overlapLogicalBitOffset": 22,
+          "overlapWidthBits": 1,
+          "parentShift": 22,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Write/Read Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 23,
+          "overlapWidthBits": 1,
+          "parentShift": 23,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2CMD_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF2CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295203,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Command Register",
+      "fieldOverlaps": [],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2CMD_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF2CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295206,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2MSK_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF2MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295207,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Message Direction",
+          "name": "MDIR",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Extended Identifier",
+          "name": "MXTD",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2MSK_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF2MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295210,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2ARB_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF2ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295211,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 29,
+          "overlapWidthBits": 1,
+          "parentShift": 29,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Extended Identifier",
+          "name": "XTD",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Valid",
+          "name": "MSGVAL",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2ARB_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF2ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295218,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 2",
+          "name": "DATA_2",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2DATA_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF2DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295219,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 3",
+          "name": "DATA_3",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2DATA_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF2DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295222,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 6",
+          "name": "DATA_6",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2DATB_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF2DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295223,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 7",
+          "name": "DATA_7",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2DATB_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF2DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295238,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3MSK_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF3MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295239,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Message Direction",
+          "name": "MDIR",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Extended Identifier",
+          "name": "MXTD",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3MSK_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF3MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295242,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3ARB_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF3ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295243,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 29,
+          "overlapWidthBits": 1,
+          "parentShift": 29,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Extended Identifier",
+          "name": "XTD",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Valid",
+          "name": "MSGVAL",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3ARB_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF3ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295250,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 2",
+          "name": "DATA_2",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3DATA_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF3DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295251,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 3",
+          "name": "DATA_3",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3DATA_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF3DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295254,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 6",
+          "name": "DATA_6",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3DATB_BYTE2",
+      "namespace": "CANA",
+      "parentRegister": "IF3DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 295255,
+      "baseSymbol": "CANA_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 7",
+          "name": "DATA_7",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3DATB_BYTE3",
+      "namespace": "CANA",
+      "parentRegister": "IF3DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303362,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Command Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 4-7",
+          "name": "DATA_B",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 1,
+          "parentShift": 16,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 0-3",
+          "name": "DATA_A",
+          "overlapLogicalBitOffset": 17,
+          "overlapWidthBits": 1,
+          "parentShift": 17,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Transmission Request Bit",
+          "name": "TXRQST",
+          "overlapLogicalBitOffset": 18,
+          "overlapWidthBits": 1,
+          "parentShift": 18,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Clear Interrupt Pending Bit",
+          "name": "CLRINTPND",
+          "overlapLogicalBitOffset": 19,
+          "overlapWidthBits": 1,
+          "parentShift": 19,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Control Bits",
+          "name": "CONTROL",
+          "overlapLogicalBitOffset": 20,
+          "overlapWidthBits": 1,
+          "parentShift": 20,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Arbitration Bits",
+          "name": "ARB",
+          "overlapLogicalBitOffset": 21,
+          "overlapWidthBits": 1,
+          "parentShift": 21,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Mask Bits",
+          "name": "MASK",
+          "overlapLogicalBitOffset": 22,
+          "overlapWidthBits": 1,
+          "parentShift": 22,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Write/Read Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 23,
+          "overlapWidthBits": 1,
+          "parentShift": 23,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1CMD_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF1CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303363,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Command Register",
+      "fieldOverlaps": [],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1CMD_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF1CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303366,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1MSK_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF1MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303367,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Message Direction",
+          "name": "MDIR",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Extended Identifier",
+          "name": "MXTD",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1MSK_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF1MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303370,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "`",
+          "name": "ID",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1ARB_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF1ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303371,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "`",
+          "name": "ID",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 29,
+          "overlapWidthBits": 1,
+          "parentShift": 29,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Extended Identifier",
+          "name": "XTD",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Valid",
+          "name": "MSGVAL",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1ARB_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF1ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303378,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 2",
+          "name": "DATA_2",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1DATA_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF1DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303379,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 3",
+          "name": "DATA_3",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1DATA_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF1DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303382,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 6",
+          "name": "DATA_6",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF1DATB_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF1DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303383,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF1 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 7",
+          "name": "DATA_7",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF1DATB_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF1DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303394,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Command Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 4-7",
+          "name": "DATA_B",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 1,
+          "parentShift": 16,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Data Bytes 0-3",
+          "name": "DATA_A",
+          "overlapLogicalBitOffset": 17,
+          "overlapWidthBits": 1,
+          "parentShift": 17,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Transmission Request Bit",
+          "name": "TXRQST",
+          "overlapLogicalBitOffset": 18,
+          "overlapWidthBits": 1,
+          "parentShift": 18,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Clear Interrupt Pending Bit",
+          "name": "CLRINTPND",
+          "overlapLogicalBitOffset": 19,
+          "overlapWidthBits": 1,
+          "parentShift": 19,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Control Bits",
+          "name": "CONTROL",
+          "overlapLogicalBitOffset": 20,
+          "overlapWidthBits": 1,
+          "parentShift": 20,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Arbitration Bits",
+          "name": "ARB",
+          "overlapLogicalBitOffset": 21,
+          "overlapWidthBits": 1,
+          "parentShift": 21,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Access Mask Bits",
+          "name": "MASK",
+          "overlapLogicalBitOffset": 22,
+          "overlapWidthBits": 1,
+          "parentShift": 22,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Write/Read Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 23,
+          "overlapWidthBits": 1,
+          "parentShift": 23,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2CMD_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF2CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303395,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Command Register",
+      "fieldOverlaps": [],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2CMD_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF2CMD",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303398,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2MSK_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF2MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303399,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Identifier Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Message Direction",
+          "name": "MDIR",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Extended Identifier",
+          "name": "MXTD",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2MSK_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF2MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303402,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2ARB_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF2ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303403,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 29,
+          "overlapWidthBits": 1,
+          "parentShift": 29,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Extended Identifier",
+          "name": "XTD",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Valid",
+          "name": "MSGVAL",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2ARB_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF2ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303410,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 2",
+          "name": "DATA_2",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2DATA_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF2DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303411,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 3",
+          "name": "DATA_3",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2DATA_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF2DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303414,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 6",
+          "name": "DATA_6",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF2DATB_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF2DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303415,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF2 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 7",
+          "name": "DATA_7",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF2DATB_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF2DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303430,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3MSK_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF3MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303431,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Mask Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Mask",
+          "name": "MSK",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Message Direction",
+          "name": "MDIR",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Mask Extended Identifier",
+          "name": "MXTD",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3MSK_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF3MSK",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303434,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 0,
+          "parentSize": 29
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3ARB_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF3ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303435,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Arbitration Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": true,
+          "description": "Message  Identifier",
+          "name": "ID",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 5,
+          "parentShift": 0,
+          "parentSize": 29
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Direction",
+          "name": "DIR",
+          "overlapLogicalBitOffset": 29,
+          "overlapWidthBits": 1,
+          "parentShift": 29,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Extended Identifier",
+          "name": "XTD",
+          "overlapLogicalBitOffset": 30,
+          "overlapWidthBits": 1,
+          "parentShift": 30,
+          "parentSize": 1
+        },
+        {
+          "crossesByteBoundary": false,
+          "description": "Message Valid",
+          "name": "MSGVAL",
+          "overlapLogicalBitOffset": 31,
+          "overlapWidthBits": 1,
+          "parentShift": 31,
+          "parentSize": 1
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3ARB_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF3ARB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303442,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 2",
+          "name": "DATA_2",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3DATA_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF3DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303443,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data A Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 3",
+          "name": "DATA_3",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3DATA_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF3DATA",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303446,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 6",
+          "name": "DATA_6",
+          "overlapLogicalBitOffset": 16,
+          "overlapWidthBits": 8,
+          "parentShift": 16,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 16,
+      "logicalWidthBits": 8,
+      "name": "IF3DATB_BYTE2",
+      "namespace": "CANB",
+      "parentRegister": "IF3DATB",
+      "physicalStorageWidthBits": 16
+    },
+    {
+      "address": 303447,
+      "baseSymbol": "CANB_BASE",
+      "description": "C28x byte-peripheral physical access view of IF3 Data B Register",
+      "fieldOverlaps": [
+        {
+          "crossesByteBoundary": false,
+          "description": "Data Byte 7",
+          "name": "DATA_7",
+          "overlapLogicalBitOffset": 24,
+          "overlapWidthBits": 8,
+          "parentShift": 24,
+          "parentSize": 8
+        }
+      ],
+      "logicalBitOffset": 24,
+      "logicalWidthBits": 8,
+      "name": "IF3DATB_BYTE3",
+      "namespace": "CANB",
+      "parentRegister": "IF3DATB",
+      "physicalStorageWidthBits": 16
+    }
+  ],
   "addressUnitBytes": 2,
   "baseLabels": [
     {
@@ -2763,8 +4479,8 @@
   "provenance": {
     "generatedBy": "tools/generate_f2837xs_profile.py",
     "inputFilesSha256": {
-      "device-headers/F2837xS_piectrl.h": "d9c45905a5b218099aa442d74e7ef99b22741a18d4a803877e55597da7bd7c47",
-      "device-headers/F2837xS_pievect.h": "843af0fdbd28d8ff4e5d77490ebaf0874fb7f957b045a368bc2e9f1be63c1ef1",
+      "device-headers/F2837xS_piectrl.h": "551fe6292121866b8eef2c1d9c3d1027c61fb0a58241c026e76b902db61b2974",
+      "device-headers/F2837xS_pievect.h": "b69e537f1ea94a445486eb25698e2c7011acad58c6456b68d2a75683598f6900",
       "sysconfig-registers/f2837xs_adc_registers.js": "b264200cb6fb51b58fc7faab8433b7a7f287d1be6869786d22e4786584328195",
       "sysconfig-registers/f2837xs_asysctl_registers.js": "f487272bdf77b3d191d9b8125f97a635aec144621ff7cc790e0e40a6df8a0062",
       "sysconfig-registers/f2837xs_can_registers.js": "e6e5f726a073f7a8d84074dcc2aed9a88222361580539490a08544232c303cc9",
@@ -2794,7 +4510,7 @@
       "sysconfig-registers/f2837xs_upp_registers.js": "aca70053bf3ffd94cb6800abd6ca97cd1149074aabcf767d4632d19ed8581731",
       "sysconfig-registers/f2837xs_xbar_registers.js": "523aad260da41a503bdebbc076342d115404a908270eb72bcb6619584534a6db"
     },
-    "inputsAggregateSha256": "ee401eaf357f78d21bf93ad7b440cdab44ea2086b5a716c890d963ce6887cf75",
+    "inputsAggregateSha256": "6464ebad7d5a63a70ceb0198bc9b9f86ebf050a23ca0631790c340ba76cf9f97",
     "memoryMapSha256": "c67f3032a2c295dad461016325fb25834e459b1d00a6531184600eb754f88baa",
     "subsetLicense": "TI BSD-3-Clause terms in device_profiles/UPSTREAM_LICENSE.md"
   },

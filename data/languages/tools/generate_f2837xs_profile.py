@@ -22,6 +22,11 @@ PROFILE_VERSION = 1
 PIECTRL_HEADER = Path("device-headers/F2837xS_piectrl.h")
 PIEVECT_HEADER = Path("device-headers/F2837xS_pievect.h")
 PIE_METADATA_SOURCE = "TI F2837xS bit-field header"
+CAN_ACCESS_VIEW_STORAGE_BITS = 16
+CAN_ACCESS_VIEW_LOGICAL_BITS = 8
+CAN_ACCESS_VIEW_LANES = (2, 3)
+CAN_ACCESS_VIEW_NAMESPACE_RE = re.compile(r"CAN[AB]")
+CAN_ACCESS_VIEW_PARENT_RE = re.compile(r"IF[123][A-Z0-9_]+")
 
 
 
@@ -255,6 +260,79 @@ def add_instance(
                 "fields": list(r.fields),
             }
         )
+
+
+def is_can_byte_peripheral_parent(register: dict) -> bool:
+    """Return whether *register* has the finite TI CAN IF access layout.
+
+    The C28x byte-peripheral intrinsic exposes logical bytes 2 and 3 of a
+    32-bit IF1/IF2/IF3 register at displayed word offsets +2 and +3.  This is
+    intentionally narrower than a generic reinterpretation of 32-bit MMIO.
+    """
+    return (
+        register.get("widthBits") == 32
+        and CAN_ACCESS_VIEW_NAMESPACE_RE.fullmatch(register.get("namespace", ""))
+        is not None
+        and CAN_ACCESS_VIEW_PARENT_RE.fullmatch(register.get("name", ""))
+        is not None
+    )
+
+
+def access_view_field_overlaps(register: dict, logical_bit_offset: int) -> list[dict]:
+    logical_end = logical_bit_offset + CAN_ACCESS_VIEW_LOGICAL_BITS
+    overlaps: list[dict] = []
+    for source in register.get("fields", []):
+        field_start = source["shift"]
+        field_end = field_start + source["size"]
+        overlap_start = max(field_start, logical_bit_offset)
+        overlap_end = min(field_end, logical_end)
+        if overlap_start >= overlap_end:
+            continue
+        overlaps.append(
+            {
+                "name": source["name"],
+                "description": source.get("description", ""),
+                "parentShift": field_start,
+                "parentSize": source["size"],
+                "overlapLogicalBitOffset": overlap_start,
+                "overlapWidthBits": overlap_end - overlap_start,
+                "crossesByteBoundary": (
+                    field_start < logical_bit_offset or field_end > logical_end
+                ),
+            }
+        )
+    return overlaps
+
+
+def build_can_access_views(registers: Iterable[dict]) -> list[dict]:
+    """Build deterministic physical views for TI CAN IF upper byte lanes."""
+    result: list[dict] = []
+    for register in registers:
+        if not is_can_byte_peripheral_parent(register):
+            continue
+        for logical_byte in CAN_ACCESS_VIEW_LANES:
+            logical_bit_offset = logical_byte * 8
+            result.append(
+                {
+                    "namespace": register["namespace"],
+                    "baseSymbol": register["baseSymbol"],
+                    "name": f"{register['name']}_BYTE{logical_byte}",
+                    "address": register["address"] + logical_byte,
+                    "physicalStorageWidthBits": CAN_ACCESS_VIEW_STORAGE_BITS,
+                    "parentRegister": register["name"],
+                    "logicalBitOffset": logical_bit_offset,
+                    "logicalWidthBits": CAN_ACCESS_VIEW_LOGICAL_BITS,
+                    "description": (
+                        "C28x byte-peripheral physical access view of "
+                        f"{register.get('description', register['name'])}"
+                    ),
+                    "fieldOverlaps": access_view_field_overlaps(
+                        register, logical_bit_offset
+                    ),
+                }
+            )
+    result.sort(key=lambda view: (view["address"], view["namespace"], view["name"]))
+    return result
 
 
 def select(regs: list[Register], pred: Callable[[Register], bool]) -> list[Register]:
@@ -547,6 +625,89 @@ def validate_profile(profile: dict) -> None:
             if (a[0], a[1]) != (b[0], b[1]):
                 raise ValueError(f"partially overlapping register spans: {a[2]} and {b[2]}")
 
+    register_by_name = {
+        (register["namespace"], register["name"]): register
+        for register in profile["registers"]
+    }
+    access_view_names: set[tuple[str, str]] = set()
+    logical_lanes: set[tuple[str, str, int, int]] = set()
+    for view in profile.get("accessViews", []):
+        key = (view["namespace"], view["name"])
+        if key in access_view_names:
+            raise ValueError(f"duplicate access-view symbol: {key[0]}::{key[1]}")
+        access_view_names.add(key)
+
+        parent_key = (view["namespace"], view["parentRegister"])
+        parent = register_by_name.get(parent_key)
+        if parent is None:
+            raise ValueError(
+                f"missing access-view parent: {key[0]}::{view['parentRegister']}"
+            )
+        if not is_can_byte_peripheral_parent(parent):
+            raise ValueError(
+                f"unsupported access-view parent: {parent_key[0]}::{parent_key[1]}"
+            )
+        if view.get("baseSymbol") != parent.get("baseSymbol"):
+            raise ValueError(
+                f"access-view base mismatch: {key[0]}::{key[1]}"
+            )
+
+        logical_offset = view["logicalBitOffset"]
+        logical_width = view["logicalWidthBits"]
+        if logical_offset < 0 or logical_width <= 0 or logical_offset + logical_width > parent["widthBits"]:
+            raise ValueError(f"access-view logical range outside parent: {key[0]}::{key[1]}")
+        if logical_width != CAN_ACCESS_VIEW_LOGICAL_BITS:
+            raise ValueError(f"unsupported access-view logical width: {key[0]}::{key[1]}")
+
+        storage_width = view["physicalStorageWidthBits"]
+        if storage_width != CAN_ACCESS_VIEW_STORAGE_BITS:
+            raise ValueError(f"unsupported access-view storage width: {key[0]}::{key[1]}")
+        storage_words = storage_width // 16
+
+        parent_region = containing_region(
+            profile, parent["address"], parent["widthBits"] // 16
+        )
+        view_region = containing_region(profile, view["address"], storage_words)
+        if view_region is None or view_region != parent_region:
+            raise ValueError(f"access view is outside parent peripheral block: {key[0]}::{key[1]}")
+
+        lane = (view["namespace"], view["parentRegister"], logical_offset, logical_width)
+        if lane in logical_lanes:
+            raise ValueError(
+                "duplicate physical access view for logical lane: "
+                f"{key[0]}::{view['parentRegister']} bits "
+                f"{logical_offset}-{logical_offset + logical_width - 1}"
+            )
+        logical_lanes.add(lane)
+
+        if logical_offset not in tuple(byte * 8 for byte in CAN_ACCESS_VIEW_LANES):
+            raise ValueError(f"unsupported CAN access-view lane: {key[0]}::{key[1]}")
+        expected_name = f"{view['parentRegister']}_BYTE{logical_offset // 8}"
+        if view["name"] != expected_name:
+            raise ValueError(
+                f"CAN access-view name mismatch: {key[0]}::{key[1]} "
+                f"expected={expected_name}"
+            )
+        expected_address = parent["address"] + logical_offset // 8
+        if view["address"] != expected_address:
+            raise ValueError(
+                f"CAN access-view address mismatch: {key[0]}::{key[1]} "
+                f"address={view['address']:#x} expected={expected_address:#x}"
+            )
+
+        end = checked_end(view["address"], storage_words, f"access view {key[0]}::{key[1]}")
+        for register_start, register_end, register_name in spans:
+            if register_end <= view["address"] or register_start >= end:
+                continue
+            if (register_start, register_end) != (view["address"], end):
+                raise ValueError(
+                    f"access view overlaps incompatible register span: "
+                    f"{key[0]}::{key[1]} and {register_name}"
+                )
+        expected_overlaps = access_view_field_overlaps(parent, logical_offset)
+        if view.get("fieldOverlaps", []) != expected_overlaps:
+            raise ValueError(f"access-view field mapping mismatch: {key[0]}::{key[1]}")
+
     vector_names: set[tuple[str, str]] = set()
     vector_spans: list[tuple[int, int, str]] = []
     for vector in profile.get("codeVectors", []):
@@ -644,6 +805,7 @@ def build_full_profile(root: Path) -> dict:
         "blocks": build_blocks(),
         "baseLabels": base_labels,
         "registers": registers,
+        "accessViews": build_can_access_views(registers),
         "romEvidence": {
             "default": "uninitialized map only",
             "tiGoldenIsOptional": True,
@@ -669,6 +831,7 @@ def build_supplemented_profile(root: Path, base_profile: Path) -> dict:
         raise ValueError(f"unsupported base profile: {base_profile}")
     bases = {label["symbol"]: label["address"] for label in profile["baseLabels"]}
     add_pie_metadata(profile, root, bases)
+    profile["accessViews"] = build_can_access_views(profile["registers"])
     input_hashes, aggregate_hash = supplemental_provenance(profile, root)
     profile.setdefault("provenance", {})["inputFilesSha256"] = input_hashes
     profile["provenance"]["inputsAggregateSha256"] = aggregate_hash
@@ -700,6 +863,7 @@ def main() -> None:
     print(f"PROFILE_BLOCKS={len(profile['blocks'])}")
     print(f"PROFILE_BASE_LABELS={len(profile['baseLabels'])}")
     print(f"PROFILE_REGISTERS={len(profile['registers'])}")
+    print(f"PROFILE_ACCESS_VIEWS={len(profile.get('accessViews', []))}")
     print(f"PROFILE_CODE_VECTORS={len(profile.get('codeVectors', []))}")
     print(f"PROFILE_OUTPUT={args.output}")
 

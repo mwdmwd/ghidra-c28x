@@ -456,9 +456,10 @@ profile-generate-check: tools/generate_f2837xs_profile.py device_profiles/f2837x
 	@echo "PROFILE_GENERATE_CHECK=PASS"
 
 # Deterministic synthetic coverage: address-unit sizing, permissions, volatile
-# MMIO, symbols/types, idempotence, copy-table safety, and ROM overlap checks.
+# MMIO, generated CAN byte-peripheral access views, symbols/types, conflict
+# preservation, idempotence, copy-table safety, and ROM overlap checks.
 .PHONY: profile-test
-profile-test: tms320c28.sla profile_tests.py \
+profile-test: tms320c28.sla profile_tests.py tools/generate_f2837xs_profile.py \
 		ghidra_scripts/TMS320C28DeviceProfile.java \
 		ghidra_scripts/TMS320C28ImportRomEvidence.java \
 		ghidra_scripts/TMS320C28ProfileTest.java \

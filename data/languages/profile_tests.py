@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,23 @@ from typing import Iterable
 
 FIRMWARE_BASE = 0x1000
 FIRMWARE_WORDS = 0x200
+
+ACCESS_VIEW_NEGATIVES = {
+    "out-of-block": "outside parent peripheral block",
+    "incompatible-overlap": "overlaps incompatible register span",
+    "duplicate-name": "duplicate access-view symbol",
+    "duplicate-lane": "duplicate physical access view for logical lane",
+    "invalid-logical-range": "logical range outside parent",
+    "unsupported-logical-width": "unsupported access-view logical width",
+    "unsupported-storage-width": "unsupported access-view storage width",
+    "unsupported-lane": "unsupported CAN access-view lane",
+    "address-mismatch": "CAN access-view address mismatch",
+    "name-mismatch": "CAN access-view name mismatch",
+    "missing-parent": "missing access-view parent",
+    "unsupported-parent": "unsupported access-view parent",
+    "base-mismatch": "access-view base mismatch",
+    "field-mapping-mismatch": "access-view field mapping mismatch",
+}
 
 
 def put_word(image: bytearray, word_address: int, value: int) -> None:
@@ -109,7 +127,12 @@ def base_profile() -> dict:
                 "symbol": "TEST_PERIPH_BASE",
                 "displayName": "Synthetic peripheral",
                 "address": 0x3000,
-            }
+            },
+            {
+                "symbol": "CANA_BASE",
+                "displayName": "Synthetic CAN byte-peripheral window",
+                "address": 0x3020,
+            },
         ],
         "registers": [
             {
@@ -119,7 +142,13 @@ def base_profile() -> dict:
                 "widthBits": 16,
                 "description": "Synthetic 16-bit register",
                 "fields": [
-                    {"name": "ENABLE", "shift": 0, "size": 1, "description": "Enable"}
+                    {
+                        "name": "ENABLE",
+                        "shift": 0,
+                        "size": 1,
+                        "mask": 0x1,
+                        "description": "Enable",
+                    }
                 ],
             },
             {
@@ -129,7 +158,147 @@ def base_profile() -> dict:
                 "widthBits": 32,
                 "description": "Synthetic 32-bit register",
                 "fields": [
-                    {"name": "VALUE", "shift": 0, "size": 16, "description": "Value"}
+                    {
+                        "name": "VALUE",
+                        "shift": 0,
+                        "size": 16,
+                        "mask": 0xFFFF,
+                        "description": "Value",
+                    }
+                ],
+            },
+            {
+                "namespace": "CANA",
+                "baseSymbol": "CANA_BASE",
+                "name": "IF1ARB",
+                "address": 0x3020,
+                "widthBits": 32,
+                "description": "Synthetic IF1 arbitration register",
+                "fields": [
+                    {
+                        "name": "ID",
+                        "shift": 0,
+                        "size": 29,
+                        "mask": 0x1FFFFFFF,
+                        "description": "Message identifier",
+                    },
+                    {
+                        "name": "DIR",
+                        "shift": 29,
+                        "size": 1,
+                        "mask": 0x20000000,
+                        "description": "Message direction",
+                    },
+                    {
+                        "name": "XTD",
+                        "shift": 30,
+                        "size": 1,
+                        "mask": 0x40000000,
+                        "description": "Extended identifier",
+                    },
+                    {
+                        "name": "MSGVAL",
+                        "shift": 31,
+                        "size": 1,
+                        "mask": 0x80000000,
+                        "description": "Message valid",
+                    },
+                ],
+            },
+            {
+                "namespace": "CANA",
+                "baseSymbol": "CANA_BASE",
+                "name": "FOLLOWING16",
+                "address": 0x3024,
+                "widthBits": 16,
+                "description": "Synthetic following register",
+                "fields": [
+                    {
+                        "name": "READY",
+                        "shift": 0,
+                        "size": 1,
+                        "mask": 0x1,
+                        "description": "Ready",
+                    }
+                ],
+            },
+        ],
+        "accessViews": [
+            {
+                "namespace": "CANA",
+                "baseSymbol": "CANA_BASE",
+                "name": "IF1ARB_BYTE2",
+                "address": 0x3022,
+                "physicalStorageWidthBits": 16,
+                "parentRegister": "IF1ARB",
+                "logicalBitOffset": 16,
+                "logicalWidthBits": 8,
+                "description": (
+                    "C28x byte-peripheral physical access view of "
+                    "Synthetic IF1 arbitration register"
+                ),
+                "fieldOverlaps": [
+                    {
+                        "name": "ID",
+                        "description": "Message identifier",
+                        "parentShift": 0,
+                        "parentSize": 29,
+                        "overlapLogicalBitOffset": 16,
+                        "overlapWidthBits": 8,
+                        "crossesByteBoundary": True,
+                    }
+                ],
+            },
+            {
+                "namespace": "CANA",
+                "baseSymbol": "CANA_BASE",
+                "name": "IF1ARB_BYTE3",
+                "address": 0x3023,
+                "physicalStorageWidthBits": 16,
+                "parentRegister": "IF1ARB",
+                "logicalBitOffset": 24,
+                "logicalWidthBits": 8,
+                "description": (
+                    "C28x byte-peripheral physical access view of "
+                    "Synthetic IF1 arbitration register"
+                ),
+                "fieldOverlaps": [
+                    {
+                        "name": "ID",
+                        "description": "Message identifier",
+                        "parentShift": 0,
+                        "parentSize": 29,
+                        "overlapLogicalBitOffset": 24,
+                        "overlapWidthBits": 5,
+                        "crossesByteBoundary": True,
+                    },
+                    {
+                        "name": "DIR",
+                        "description": "Message direction",
+                        "parentShift": 29,
+                        "parentSize": 1,
+                        "overlapLogicalBitOffset": 29,
+                        "overlapWidthBits": 1,
+                        "crossesByteBoundary": False,
+                    },
+                    {
+                        "name": "XTD",
+                        "description": "Extended identifier",
+                        "parentShift": 30,
+                        "parentSize": 1,
+                        "overlapLogicalBitOffset": 30,
+                        "overlapWidthBits": 1,
+                        "crossesByteBoundary": False,
+                    },
+                    {
+                        "name": "MSGVAL",
+                        "description": "Message valid",
+                        "parentShift": 31,
+                        "parentSize": 1,
+                        "overlapLogicalBitOffset": 31,
+                        "overlapWidthBits": 1,
+                        "crossesByteBoundary": False,
+                    },
                 ],
             },
         ],
@@ -159,6 +328,120 @@ def base_profile() -> dict:
         },
         "provenance": {"generatedBy": "profile_tests.py"},
     }
+
+
+def load_profile_generator(root: Path):
+    path = root / "tools" / "generate_f2837xs_profile.py"
+    spec = importlib.util.spec_from_file_location("generate_f2837xs_profile_test", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load profile generator: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def expect_generator_failure(module, profile: dict, expected: str, name: str) -> None:
+    try:
+        module.validate_profile(profile)
+    except ValueError as exc:
+        require(expected in str(exc),
+            f"generator negative {name} reported {exc!s}, expected {expected!r}")
+        print(f"PROFILE_GENERATOR_NEGATIVE_PASS={name}")
+        return
+    raise RuntimeError(f"generator negative {name} unexpectedly passed")
+
+
+def mutate_access_view_profile(name: str) -> dict:
+    profile = base_profile()
+    views = profile["accessViews"]
+    parent = next(
+        register for register in profile["registers"]
+        if register["namespace"] == "CANA" and register["name"] == "IF1ARB"
+    )
+
+    if name == "out-of-block":
+        parent["address"] = 0x303E
+        views[0]["address"] = 0x3040
+        views[1]["address"] = 0x3041
+    elif name == "incompatible-overlap":
+        profile["registers"].append(
+            {
+                "namespace": "TESTPERIPH",
+                "baseSymbol": "TEST_PERIPH_BASE",
+                "name": "OVERLAPPING32",
+                "address": 0x3022,
+                "widthBits": 32,
+                "description": "Incompatible access-view overlap",
+                "fields": [],
+            }
+        )
+    elif name == "duplicate-name":
+        views[1]["name"] = views[0]["name"]
+    elif name == "duplicate-lane":
+        duplicate = copy.deepcopy(views[0])
+        duplicate["name"] = "IF1ARB_BYTE2_ALIAS"
+        views.append(duplicate)
+    elif name == "invalid-logical-range":
+        views[0]["logicalBitOffset"] = 31
+    elif name == "unsupported-logical-width":
+        views[0]["logicalWidthBits"] = 4
+    elif name == "unsupported-storage-width":
+        views[0]["physicalStorageWidthBits"] = 32
+    elif name == "unsupported-lane":
+        views[0]["logicalBitOffset"] = 8
+        views[0]["name"] = "IF1ARB_BYTE1"
+        views[0]["address"] = 0x3021
+        views[0]["fieldOverlaps"] = [
+            {
+                "name": "ID",
+                "description": "Message identifier",
+                "parentShift": 0,
+                "parentSize": 29,
+                "overlapLogicalBitOffset": 8,
+                "overlapWidthBits": 8,
+                "crossesByteBoundary": True,
+            }
+        ]
+    elif name == "address-mismatch":
+        views[0]["address"] += 1
+    elif name == "name-mismatch":
+        views[0]["name"] = "IF1ARB_UPPER2"
+    elif name == "missing-parent":
+        views[0]["parentRegister"] = "MISSING"
+    elif name == "unsupported-parent":
+        views[0]["parentRegister"] = "FOLLOWING16"
+        views[0]["name"] = "FOLLOWING16_BYTE2"
+        views[0]["address"] = 0x3026
+    elif name == "base-mismatch":
+        views[0]["baseSymbol"] = "TEST_PERIPH_BASE"
+    elif name == "field-mapping-mismatch":
+        views[0]["fieldOverlaps"] = []
+    else:
+        raise ValueError(f"unknown access-view mutation: {name}")
+    return profile
+
+
+def run_generator_access_view_tests(root: Path) -> int:
+    module = load_profile_generator(root)
+    profile = base_profile()
+    generated = module.build_can_access_views(profile["registers"])
+    require(generated == profile["accessViews"],
+        "generator helper did not reproduce the synthetic CAN views")
+    module.validate_profile(profile)
+    require([view["name"] for view in generated] ==
+        ["IF1ARB_BYTE2", "IF1ARB_BYTE3"],
+        "generator access-view names are not deterministic")
+    require([view["address"] for view in generated] == [0x3022, 0x3023],
+        "generator access-view addresses do not follow the C28x CAN rule")
+
+    for name, expected in ACCESS_VIEW_NEGATIVES.items():
+        expect_generator_failure(module, mutate_access_view_profile(name), expected, name)
+
+    print("PROFILE_GENERATOR_ACCESS_VIEWS=2")
+    print(f"PROFILE_GENERATOR_NEGATIVES={len(ACCESS_VIEW_NEGATIVES)}")
+    print("PROFILE_GENERATOR_TEST_PASS=all")
+    return len(ACCESS_VIEW_NEGATIVES)
 
 
 def base_workspace(image_hash: str) -> dict:
@@ -369,6 +652,46 @@ def expect_workspace_failure(
     print(f"PROFILE_TEST_NEGATIVE_PASS={name}")
 
 
+def expect_access_view_profile_failure(
+    *,
+    name: str,
+    expected: str,
+    ghidra: Path,
+    script_path: Path,
+    work: Path,
+    image: bytearray,
+) -> None:
+    case_dir = work / "cases" / f"access-view-{name}"
+    profile = mutate_access_view_profile(name)
+    workspace = base_workspace(sha256(image))
+    image_path, profile_path, _ = write_case(case_dir, image, profile, workspace)
+    _, output, _ = run_headless(
+        ghidra=ghidra,
+        script_path=script_path,
+        run_dir=work / "runs" / f"access-view-{name}",
+        image_path=image_path,
+        scripts=[
+            (
+                "TMS320C28DeviceProfile.java",
+                [
+                    f"profile={profile_path}",
+                    "applyRegisterTypes=true",
+                ],
+            )
+        ],
+        timeout=45,
+    )
+    require("DEVICE_PROFILE_ERROR:" in output and expected in output,
+        f"access-view negative {name} did not report {expected!r}", output)
+    require("DEVICE_PROFILE_BEGIN=" not in output,
+        f"access-view negative {name} began partial profile application", output)
+    require("DEVICE_PROFILE_BLOCKS_CREATED=" not in output,
+        f"access-view negative {name} emitted post-application state", output)
+    require("DEVICE_PROFILE_PASS=" not in output,
+        f"access-view negative {name} unexpectedly passed", output)
+    print(f"PROFILE_TEST_ACCESS_VIEW_NEGATIVE_PASS={name}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
@@ -383,9 +706,23 @@ def main() -> int:
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
 
+    generator_negatives = run_generator_access_view_tests(root)
+
     image = fixture_image()
     profile = base_profile()
     workspace = base_workspace(sha256(image))
+
+    for name, expected in ACCESS_VIEW_NEGATIVES.items():
+        expect_access_view_profile_failure(
+            name=name,
+            expected=expected,
+            ghidra=ghidra,
+            script_path=scripts,
+            work=work,
+            image=image,
+        )
+    print(f"PROFILE_TEST_ACCESS_VIEW_NEGATIVES={len(ACCESS_VIEW_NEGATIVES)}")
+
     positive_dir = work / "cases" / "positive"
     image_path, profile_path, workspace_path = write_case(
         positive_dir, image, profile, workspace
@@ -440,6 +777,14 @@ def main() -> int:
     vector_skipped = marker_values(marker_output, "DEVICE_PROFILE_CODE_VECTOR_DATA_SKIPPED")
     require(vector_skipped == [0, 2],
         f"code-vector reuse metrics are wrong: {vector_skipped}", output)
+    access_created = marker_values(
+        marker_output, "DEVICE_PROFILE_ACCESS_VIEW_DATA_CREATED")
+    require(access_created == [2, 0],
+        f"access-view creation was not idempotent: {access_created}", output)
+    access_skipped = marker_values(
+        marker_output, "DEVICE_PROFILE_ACCESS_VIEW_DATA_SKIPPED")
+    require(access_skipped == [0, 2],
+        f"access-view reuse metrics are wrong: {access_skipped}", output)
     require(marker_output.count("ROM_EVIDENCE_PASS=") == 2,
         "positive ROM evidence was not applied twice", output)
     rom_initialized = marker_values(marker_output, "ROM_EVIDENCE_BLOCKS_INITIALIZED")
@@ -447,8 +792,50 @@ def main() -> int:
         f"ROM idempotence initialized counts are wrong: {rom_initialized}", output)
     require("PROFILE_TEST_PASS=positive" in marker_output, "positive validator did not pass", output)
     print("PROFILE_TEST_IDEMPOTENCE=PASS")
+    print("PROFILE_TEST_ACCESS_VIEWS=2")
+    print("PROFILE_TEST_ACCESS_VIEW_IDEMPOTENCE=PASS")
     print("PROFILE_TEST_CODE_VECTORS=2")
     print("ROM_EVIDENCE_IDEMPOTENCE=PASS")
+
+    conflict_dir = work / "cases" / "access-view-user-conflict"
+    conflict_image_path, conflict_profile_path, _ = write_case(
+        conflict_dir, image, profile, workspace
+    )
+    conflict_args = [
+        f"profile={conflict_profile_path}",
+        "applyRegisterTypes=true",
+    ]
+    _, conflict_output, conflict_markers = run_headless(
+        ghidra=ghidra,
+        script_path=scripts,
+        run_dir=work / "runs" / "access-view-user-conflict",
+        image_path=conflict_image_path,
+        scripts=[
+            ("TMS320C28ProfileTestSetup.java", ["mode=accessViewConflict"]),
+            ("TMS320C28DeviceProfile.java", conflict_args),
+            ("TMS320C28DeviceProfile.java", conflict_args),
+            ("TMS320C28ProfileTest.java", ["mode=user-conflict"]),
+        ],
+    )
+    require(conflict_markers.count("PROFILE_TEST_SETUP_PASS=accessViewConflict") == 1,
+        "access-view conflict setup did not run exactly once", conflict_output)
+    require(conflict_markers.count("DEVICE_PROFILE_PASS=Synthetic-profile-test") == 2,
+        "access-view conflict profile was not applied twice", conflict_output)
+    conflict_created = marker_values(
+        conflict_markers, "DEVICE_PROFILE_ACCESS_VIEW_DATA_CREATED")
+    require(conflict_created == [1, 0],
+        f"access-view conflict creation counts are wrong: {conflict_created}",
+        conflict_output)
+    conflict_skipped = marker_values(
+        conflict_markers, "DEVICE_PROFILE_ACCESS_VIEW_DATA_SKIPPED")
+    require(conflict_skipped == [1, 2],
+        f"access-view conflict skip counts are wrong: {conflict_skipped}",
+        conflict_output)
+    require(conflict_markers.count("PROFILE_TEST_PASS=user-conflict") == 1,
+        "access-view conflict preservation validator did not pass exactly once",
+        conflict_output)
+    print("PROFILE_TEST_ACCESS_VIEW_USER_PRESERVATION=PASS")
+    print("PROFILE_TEST_ACCESS_VIEW_CONFLICT_IDEMPOTENCE=PASS")
 
     negatives = 0
 
@@ -543,6 +930,7 @@ def main() -> int:
     print("ROM_EVIDENCE_OVERLAP_REJECTION=PASS")
 
     print(f"PROFILE_TEST_NEGATIVES={negatives}")
+    print(f"PROFILE_TEST_GENERATOR_NEGATIVES={generator_negatives}")
     print("PROFILE_TEST_PASS=all")
     return 0
 

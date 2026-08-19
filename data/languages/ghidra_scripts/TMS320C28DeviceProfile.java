@@ -68,6 +68,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class TMS320C28DeviceProfile extends GhidraScript {
     private static final String SCHEMA = "tms320c28-device-profile";
@@ -82,6 +83,11 @@ public class TMS320C28DeviceProfile extends GhidraScript {
     private static final String SOURCE_DISPOSITION_INERT_STORAGE = "inert-storage";
     private static final String INERT_SOURCE_COMPONENT = ":COPY_SOURCE:EXPLICIT:";
     private static final String INERT_SOURCE_SUFFIX = ":INERT_STORAGE";
+    private static final int CAN_ACCESS_VIEW_STORAGE_BITS = 16;
+    private static final int CAN_ACCESS_VIEW_LOGICAL_BITS = 8;
+    private static final Set<Integer> CAN_ACCESS_VIEW_LOGICAL_OFFSETS = Set.of(16, 24);
+    private static final Pattern CAN_ACCESS_VIEW_NAMESPACE = Pattern.compile("CAN[AB]");
+    private static final Pattern CAN_ACCESS_VIEW_PARENT = Pattern.compile("IF[123][A-Z0-9_]+");
 
     private JsonObject profile;
     private JsonObject workspace;
@@ -105,6 +111,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
     private int labelsPromoted;
     private int dataCreated;
     private int dataSkipped;
+    private int accessViewDataCreated;
+    private int accessViewDataSkipped;
     private int codeVectorDataCreated;
     private int codeVectorDataSkipped;
     private int explicitCopies;
@@ -229,6 +237,18 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         }
     }
 
+    private static final class ProfileSpan {
+        final long start;
+        final long end;
+        final String name;
+
+        ProfileSpan(long start, long end, String name) {
+            this.start = start;
+            this.end = end;
+            this.name = name;
+        }
+    }
+
     @Override
     public void run() throws Exception {
         Map<String, String> args = parseArgs(getScriptArgs());
@@ -286,6 +306,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
             fail("this profile requires a C28x 16-bit addressable unit, got " + addressUnitBytes + " bytes");
         }
 
+        validateAccessViews();
+
         println("DEVICE_PROFILE_BEGIN=" + profileName);
         println("DEVICE_PROFILE_FILE=" + file);
         println("DEVICE_PROFILE_ADDRESS_UNIT_BYTES=" + addressUnitBytes);
@@ -295,6 +317,7 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         createMemoryLabels();
         createBaseLabels();
         createRegisterLabelsAndTypes(applyRegisterTypes);
+        createAccessViewLabelsAndTypes(applyRegisterTypes);
         createCodeVectorLabelsAndTypes(applyRegisterTypes);
 
         if (workspace != null) {
@@ -323,6 +346,199 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         requiredArray(profile, "blocks");
         requiredArray(profile, "baseLabels");
         requiredArray(profile, "registers");
+        if (profile.has("accessViews") && !profile.get("accessViews").isJsonArray()) {
+            fail("accessViews must be an array");
+        }
+    }
+
+    private void validateAccessViews() {
+        if (!profile.has("accessViews")) {
+            return;
+        }
+
+        Map<String, JsonObject> registerByName = new LinkedHashMap<>();
+        List<ProfileSpan> registerSpans = new ArrayList<>();
+        for (JsonElement element : requiredArray(profile, "registers")) {
+            JsonObject register = element.getAsJsonObject();
+            String namespace = requiredString(register, "namespace");
+            String name = requiredString(register, "name");
+            String key = qualifiedKey(namespace, name);
+            if (registerByName.putIfAbsent(key, register) != null) {
+                fail("duplicate register symbol while validating access views: " +
+                    namespace + "::" + name);
+            }
+            int widthBits = requiredInt(register, "widthBits");
+            if (widthBits != 16 && widthBits != 32) {
+                fail("unsupported register width while validating access views: " +
+                    namespace + "::" + name);
+            }
+            long start = requiredLong(register, "address");
+            long end = checkedProfileEnd(start, widthBits / 16,
+                "register " + namespace + "::" + name);
+            registerSpans.add(new ProfileSpan(start, end, namespace + "::" + name));
+        }
+
+        Set<String> viewNames = new HashSet<>();
+        Set<String> logicalLanes = new HashSet<>();
+        for (JsonElement element : requiredArray(profile, "accessViews")) {
+            JsonObject view = element.getAsJsonObject();
+            String namespace = requiredString(view, "namespace");
+            String name = requiredString(view, "name");
+            String key = qualifiedKey(namespace, name);
+            if (!viewNames.add(key)) {
+                fail("duplicate access-view symbol: " + namespace + "::" + name);
+            }
+
+            String parentName = requiredString(view, "parentRegister");
+            JsonObject parent = registerByName.get(qualifiedKey(namespace, parentName));
+            if (parent == null) {
+                fail("missing access-view parent: " + namespace + "::" + parentName);
+            }
+            if (!isCanAccessViewParent(parent)) {
+                fail("unsupported access-view parent: " + namespace + "::" + parentName);
+            }
+            if (!requiredString(parent, "baseSymbol").equals(requiredString(view, "baseSymbol"))) {
+                fail("access-view base mismatch: " + namespace + "::" + name);
+            }
+
+            int parentWidth = requiredInt(parent, "widthBits");
+            int logicalOffset = requiredInt(view, "logicalBitOffset");
+            int logicalWidth = requiredInt(view, "logicalWidthBits");
+            if (logicalOffset < 0 || logicalWidth <= 0 ||
+                    (long) logicalOffset + logicalWidth > parentWidth) {
+                fail("access-view logical range outside parent: " + namespace + "::" + name);
+            }
+            if (logicalWidth != CAN_ACCESS_VIEW_LOGICAL_BITS) {
+                fail("unsupported access-view logical width: " + namespace + "::" + name);
+            }
+
+            int storageWidth = requiredInt(view, "physicalStorageWidthBits");
+            if (storageWidth != CAN_ACCESS_VIEW_STORAGE_BITS) {
+                fail("unsupported access-view storage width: " + namespace + "::" + name);
+            }
+            int storageWords = storageWidth / 16;
+            long address = requiredLong(view, "address");
+
+            JsonObject parentBlock = containingProfileBlock(requiredLong(parent, "address"),
+                parentWidth / 16);
+            JsonObject viewBlock = containingProfileBlock(address, storageWords);
+            if (parentBlock == null || viewBlock == null ||
+                    requiredLong(parentBlock, "start") != requiredLong(viewBlock, "start") ||
+                    !requiredString(parentBlock, "name").equals(
+                        requiredString(viewBlock, "name")) ||
+                    !"peripheral".equals(requiredString(parentBlock, "kind"))) {
+                fail("access view is outside parent peripheral block: " +
+                    namespace + "::" + name);
+            }
+
+            String laneKey = qualifiedKey(namespace, parentName) + ":" +
+                logicalOffset + ":" + logicalWidth;
+            if (!logicalLanes.add(laneKey)) {
+                fail("duplicate physical access view for logical lane: " +
+                    namespace + "::" + parentName + " bits " + logicalOffset + "-" +
+                    (logicalOffset + logicalWidth - 1));
+            }
+
+            if (!CAN_ACCESS_VIEW_LOGICAL_OFFSETS.contains(logicalOffset)) {
+                fail("unsupported CAN access-view lane: " + namespace + "::" + name);
+            }
+            String expectedName = parentName + "_BYTE" + (logicalOffset / 8);
+            if (!name.equals(expectedName)) {
+                fail("CAN access-view name mismatch: " + namespace + "::" + name +
+                    " expected=" + expectedName);
+            }
+            long expectedAddress = addExact(requiredLong(parent, "address"),
+                logicalOffset / 8L, "CAN access-view address");
+            if (address != expectedAddress) {
+                fail("CAN access-view address mismatch: " + namespace + "::" + name +
+                    " address=0x" + Long.toHexString(address) + " expected=0x" +
+                    Long.toHexString(expectedAddress));
+            }
+
+            long end = checkedProfileEnd(address, storageWords,
+                "access view " + namespace + "::" + name);
+            for (ProfileSpan registerSpan : registerSpans) {
+                if (!profileSpansOverlap(address, end, registerSpan.start, registerSpan.end)) {
+                    continue;
+                }
+                if (registerSpan.start != address || registerSpan.end != end) {
+                    fail("access view overlaps incompatible register span: " +
+                        namespace + "::" + name + " and " + registerSpan.name);
+                }
+            }
+            JsonArray actualFields = view.has("fieldOverlaps")
+                ? view.getAsJsonArray("fieldOverlaps") : new JsonArray();
+            JsonArray expectedFields = expectedAccessViewFields(parent, logicalOffset);
+            if (!actualFields.equals(expectedFields)) {
+                fail("access-view field mapping mismatch: " + namespace + "::" + name);
+            }
+        }
+
+    }
+
+    private boolean isCanAccessViewParent(JsonObject register) {
+        return requiredInt(register, "widthBits") == 32 &&
+            CAN_ACCESS_VIEW_NAMESPACE.matcher(requiredString(register, "namespace")).matches() &&
+            CAN_ACCESS_VIEW_PARENT.matcher(requiredString(register, "name")).matches();
+    }
+
+    private JsonArray expectedAccessViewFields(JsonObject parent, int logicalOffset) {
+        int logicalEnd = logicalOffset + CAN_ACCESS_VIEW_LOGICAL_BITS;
+        JsonArray result = new JsonArray();
+        JsonArray fields = parent.has("fields") ? parent.getAsJsonArray("fields") : new JsonArray();
+        for (JsonElement element : fields) {
+            JsonObject field = element.getAsJsonObject();
+            int fieldStart = requiredInt(field, "shift");
+            int fieldSize = requiredInt(field, "size");
+            int fieldEnd = fieldStart + fieldSize;
+            int overlapStart = Math.max(fieldStart, logicalOffset);
+            int overlapEnd = Math.min(fieldEnd, logicalEnd);
+            if (overlapStart >= overlapEnd) {
+                continue;
+            }
+            JsonObject overlap = new JsonObject();
+            overlap.addProperty("name", requiredString(field, "name"));
+            overlap.addProperty("description", getString(field, "description", ""));
+            overlap.addProperty("parentShift", fieldStart);
+            overlap.addProperty("parentSize", fieldSize);
+            overlap.addProperty("overlapLogicalBitOffset", overlapStart);
+            overlap.addProperty("overlapWidthBits", overlapEnd - overlapStart);
+            overlap.addProperty("crossesByteBoundary",
+                fieldStart < logicalOffset || fieldEnd > logicalEnd);
+            result.add(overlap);
+        }
+        return result;
+    }
+
+    private JsonObject containingProfileBlock(long start, long words) {
+        long end = checkedProfileEnd(start, words, "profile range");
+        for (JsonElement element : requiredArray(profile, "blocks")) {
+            JsonObject block = element.getAsJsonObject();
+            long blockStart = requiredLong(block, "start");
+            long blockEnd = checkedProfileEnd(blockStart, requiredLong(block, "words"),
+                "block " + requiredString(block, "name"));
+            if (start >= blockStart && end <= blockEnd) {
+                return block;
+            }
+        }
+        return null;
+    }
+
+    private long checkedProfileEnd(long start, long words, String context) {
+        if (start < 0 || words <= 0) {
+            fail("invalid range for " + context + ": start=0x" +
+                Long.toHexString(start) + " words=" + words);
+        }
+        return addExact(start, words, context);
+    }
+
+    private static boolean profileSpansOverlap(long aStart, long aEnd,
+            long bStart, long bEnd) {
+        return aStart < bEnd && bStart < aEnd;
+    }
+
+    private static String qualifiedKey(String namespace, String name) {
+        return namespace + "\u0000" + name;
     }
 
     private void validateWorkspaceHeader() {
@@ -598,6 +814,115 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         catch (Exception ex) {
             dataSkipped++;
         }
+    }
+
+    private void createAccessViewLabelsAndTypes(boolean applyTypes) throws Exception {
+        if (!profile.has("accessViews")) {
+            return;
+        }
+        Namespace peripheralRoot = childNamespace("PERIPHERALS");
+        Set<Long> typedAddresses = new HashSet<>();
+        for (JsonElement element : requiredArray(profile, "accessViews")) {
+            monitor.checkCancelled();
+            JsonObject view = element.getAsJsonObject();
+            String module = sanitizeSymbol(requiredString(view, "namespace"));
+            Namespace namespace = symbols.getOrCreateNameSpace(
+                peripheralRoot, module, SourceType.ANALYSIS);
+            Address address = wordAddress(requiredLong(view, "address"));
+            if (memory.getBlock(address) == null) {
+                fail("access view is outside mapped memory: " + module + "::" +
+                    requiredString(view, "name") + " at " + address);
+            }
+            String name = sanitizeSymbol(requiredString(view, "name"));
+            createStableLabel(address, name, namespace, true);
+            if (applyTypes && typedAddresses.add(address.getOffset())) {
+                applyAccessViewType(address);
+            }
+            appendComment(address, formatAccessViewComment(module, name, view));
+        }
+    }
+
+    private void applyAccessViewType(Address address) {
+        DataType type = UnsignedShortDataType.dataType;
+        Address end = address.add(type.getLength() - 1L);
+        MemoryBlock block = memory.getBlock(address);
+        if (block == null || memory.getBlock(end) != block) {
+            accessViewDataSkipped++;
+            return;
+        }
+        Data existing = listing.getDefinedDataAt(address);
+        if (existing != null) {
+            accessViewDataSkipped++;
+            return;
+        }
+        if (!listing.isUndefined(address, end)) {
+            accessViewDataSkipped++;
+            return;
+        }
+        try {
+            Data created = listing.createData(address, type);
+            if (created != null && created.getLength() == type.getLength()) {
+                accessViewDataCreated++;
+            }
+            else {
+                accessViewDataSkipped++;
+            }
+        }
+        catch (Exception ex) {
+            accessViewDataSkipped++;
+        }
+    }
+
+    private String formatAccessViewComment(String module, String name, JsonObject view) {
+        int logicalOffset = requiredInt(view, "logicalBitOffset");
+        int logicalWidth = requiredInt(view, "logicalWidthBits");
+        long wordAddress = requiredLong(view, "address");
+        int storageBits = requiredInt(view, "physicalStorageWidthBits");
+        String parent = requiredString(view, "parentRegister");
+
+        StringBuilder sb = new StringBuilder();
+        String qualifiedModule = "F2837xS_COMPAT::PERIPHERALS::" + module;
+        sb.append(COMMENT_PREFIX).append(' ').append(qualifiedModule)
+            .append("::").append(name);
+        String description = getString(view, "description", "");
+        if (!description.isBlank()) {
+            sb.append(" — ").append(description);
+        }
+        sb.append("; parent logical register ").append(qualifiedModule)
+            .append("::").append(parent)
+            .append("; logical bits ").append(logicalOffset).append('-')
+            .append(logicalOffset + logicalWidth - 1)
+            .append("; physical C28x word address 0x")
+            .append(Long.toHexString(wordAddress).toUpperCase(Locale.ROOT))
+            .append("; physical storage ").append(storageBits)
+            .append(" bits (2 Ghidra bytes, one C28x word)");
+
+        JsonArray overlaps = view.has("fieldOverlaps")
+            ? view.getAsJsonArray("fieldOverlaps") : new JsonArray();
+        for (JsonElement element : overlaps) {
+            JsonObject overlap = element.getAsJsonObject();
+            int parentShift = requiredInt(overlap, "parentShift");
+            int parentSize = requiredInt(overlap, "parentSize");
+            int overlapStart = requiredInt(overlap, "overlapLogicalBitOffset");
+            int overlapWidth = requiredInt(overlap, "overlapWidthBits");
+            sb.append("\n  ").append(requiredString(overlap, "name"))
+                .append(" parent bits ").append(parentShift);
+            if (parentSize > 1) {
+                sb.append('-').append(parentShift + parentSize - 1);
+            }
+            sb.append("; represented bits ").append(overlapStart);
+            if (overlapWidth > 1) {
+                sb.append('-').append(overlapStart + overlapWidth - 1);
+            }
+            if (getBoolean(overlap, "crossesByteBoundary", false)) {
+                sb.append("; field crosses this byte boundary");
+            }
+            String fieldDescription = getString(overlap, "description", "");
+            if (!fieldDescription.isBlank()) {
+                sb.append(": ").append(fieldDescription);
+            }
+        }
+        return sb.toString();
     }
 
     private void createCodeVectorLabelsAndTypes(boolean applyTypes) throws Exception {
@@ -1942,6 +2267,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         options.setString("Profile Name", profileName);
         options.setInt("Profile Version", requiredInt(profile, "version"));
         options.setString("Profile File", file.getAbsolutePath());
+        options.setInt("Access View Data Created", accessViewDataCreated);
+        options.setInt("Access View Data Skipped", accessViewDataSkipped);
         options.setInt("Code Vector Data Created", codeVectorDataCreated);
         options.setInt("Code Vector Data Skipped", codeVectorDataSkipped);
         if (workspace != null) {
@@ -1972,6 +2299,8 @@ public class TMS320C28DeviceProfile extends GhidraScript {
         println("DEVICE_PROFILE_LABELS_PROMOTED=" + labelsPromoted);
         println("DEVICE_PROFILE_REGISTER_DATA_CREATED=" + dataCreated);
         println("DEVICE_PROFILE_REGISTER_DATA_SKIPPED=" + dataSkipped);
+        println("DEVICE_PROFILE_ACCESS_VIEW_DATA_CREATED=" + accessViewDataCreated);
+        println("DEVICE_PROFILE_ACCESS_VIEW_DATA_SKIPPED=" + accessViewDataSkipped);
         println("DEVICE_PROFILE_CODE_VECTOR_DATA_CREATED=" + codeVectorDataCreated);
         println("DEVICE_PROFILE_CODE_VECTOR_DATA_SKIPPED=" + codeVectorDataSkipped);
         println("DEVICE_PROFILE_PASS=" + profileName);

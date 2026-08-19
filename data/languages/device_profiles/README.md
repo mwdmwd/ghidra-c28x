@@ -8,9 +8,10 @@ TMS320C28DeviceProfile.java profile=/absolute/path/device_profiles/f2837xs-compa
 ```
 
 `TMS320C28DeviceProfile.java` creates the memory map, peripheral labels,
-register types, and exact pointer-to-function data for authoritative PIE vector
-slots, and is safe to rerun. The profile declares slot identities and types,
-never firmware handler values. If a separately maintained image
+register types, generated CAN byte-peripheral access views, and exact
+pointer-to-function data for authoritative PIE vector slots, and is safe to
+rerun. The profile declares slot identities and types, never firmware handler
+values. If a separately maintained image
 workspace exists, add `workspace=/absolute/path/workspace.json` to validate the
 image and recover its proved copies/seeds.
 
@@ -24,6 +25,22 @@ TMS320C28ImportRomEvidence.java path=/absolute/path/rom.bin base=0x... expectedW
 `TMS320C28ImportRomEvidence.java` verifies and materializes that dump.
 All JSON addresses and script `base` values are C28x word addresses.
 Run auto-analysis last.
+
+## CAN byte-peripheral access views
+
+The checked profile preserves every logical 32-bit CAN IF register as a
+four-byte `dword` and adds two non-overlapping physical access views for its
+upper lanes.  `<REGISTER>_BYTE2` and `<REGISTER>_BYTE3` identify logical bits
+16-23 and 24-31 at displayed C28x word offsets `+2` and `+3`.  Each view uses a
+two-byte Ghidra data unit, one word in this two-byte-addressed language.  The
+profile carries 28 such views for CANA and 28 for CANB; no rule is inferred for
+16-bit CAN registers or another peripheral family.
+
+`accessViews` metadata records the parent, logical range, physical storage, and
+the TI fields represented by each lane.  The applicator validates the complete
+collection before mapping any profile state.  It preserves incompatible code,
+data, and user symbols rather than clearing them, emits deterministic created/
+skipped counters, and is semantically idempotent.
 
 
 ## Explicit inert copy sources
