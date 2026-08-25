@@ -24,10 +24,12 @@ ghidra-division-test/
 pm-build/
 ghidra-pm-test/
 
+ghidra-shift-firmware-audit/
 shift-idiom-build/
 ghidra-shift-idiom-test/
-ghidra-shift-firmware-audit/
+
+status-mode-build/
+ghidra-status-mode-test/
 
 code-pointer-build/
 ghidra-code-pointer-test/
-
