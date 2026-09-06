@@ -117,7 +117,8 @@ attach variables ar67_8 [ AR6 AR7 ];
 # Macros
 ################################################################
 
-@define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) + imm16; ]"
+# Ghidra's assembler can invert | but not + here (which makes sense).
+@define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) | imm16; ]"
 
 define pcodeop breakpoint;
 define pcodeop iack;

@@ -3,10 +3,11 @@
 attach variables rah2 [ _ _ _ _ R0H R1H R2H R3H R4H R5H R6H R7H _ _ _ _ ];  # this is weird
 attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
+# Join disjoint immediate fields with OR so Ghidra's assembler can invert them.
 # Bind the register fields in the second word alongside the low immediate bits,
 # as ; already advances the parser to the next word.
-@define fpu_imm16_add "imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ]"
-@define fpu_imm16_cmp "imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
+@define fpu_imm16_add "imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) | fpu_imm10_lo; ]"
+@define fpu_imm16_cmp "imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) | fpu_imm13_lo; ]"
 
 # STF flags (Table 2-2 in SPRUEO2B)
 define register offset=0x124 size=1  [  STF_LV  STF_LU  STF_NF  STF_ZF  STF_NI  STF_ZI  STF_TF  ];

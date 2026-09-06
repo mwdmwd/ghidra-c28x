@@ -241,6 +241,11 @@ qghidra: tms320c28.sla
 qpcode: tms320c28.sla
 	$(Q)$(PYTHON) qpcode.py
 
+# Ghidra assembly regression, requires PyGhidra.
+.PHONY: assembler-test
+assembler-test: tms320c28.sla assembler_test.py
+	$(Q)$(PYTHON) assembler_test.py --ghidra-install "$(GHIDRA_INSTALL_DIR)"
+
 # Focused P-Code semantic regressions for compiler-critical instructions.
 .PHONY: semantic-test
 semantic-test: tms320c28.sla semantic_tests.py
