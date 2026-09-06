@@ -3,8 +3,10 @@
 attach variables rah2 [ _ _ _ _ R0H R1H R2H R3H R4H R5H R6H R7H _ _ _ _ ];  # this is weird
 attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
 
-@define fpu_imm16_add "imm6; fpu_imm10_lo [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ]"
-@define fpu_imm16_cmp "imm3; fpu_imm13_lo [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
+# Bind the register fields in the second word alongside the low immediate bits,
+# as ; already advances the parser to the next word.
+@define fpu_imm16_add "imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ]"
+@define fpu_imm16_cmp "imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ]"
 
 # STF flags (Table 2-2 in SPRUEO2B)
 define register offset=0x124 size=1  [  STF_LV  STF_LU  STF_NF  STF_ZF  STF_NI  STF_ZI  STF_TF  ];
@@ -325,7 +327,7 @@ macro update_stf_mov(res) {
 }
 
 # p.37 / p.39 (same encoding)
-:addf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100010 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
+:addf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100010 & $(fpu_imm16_add) {
 	local imm32:4 = fpu_imm16 << 16;
 	rah3 = rbh3 f+ imm32;
 }
@@ -342,7 +344,7 @@ macro update_stf_mov(res) {
 }
 
 # p.48
-:cmpf32 rah3, #fpu_imm16 is op3_13=0b1110100000010 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+:cmpf32 rah3, #fpu_imm16 is op3_13=0b1110100000010 & $(fpu_imm16_cmp) {
 	local imm32:4 = fpu_imm16 << 16;
 	update_stf_cmp(rah3, imm32);
 }
@@ -504,7 +506,7 @@ macro update_stf_mov(res) {
 }
 
 # p.77
-:maxf32 rah3, #fpu_imm16 is op3_13=0b1110100000100 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+:maxf32 rah3, #fpu_imm16 is op3_13=0b1110100000100 & $(fpu_imm16_cmp) {
 	local imm32:4 = fpu_imm16 << 16;
 	update_stf_cmp(rah3, imm32);
 	if (!STF_NF) goto <done>;
@@ -524,7 +526,7 @@ macro update_stf_mov(res) {
 }
 
 # p.80
-:minf32 rah3, #fpu_imm16 is op3_13=0b1110100000110 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+:minf32 rah3, #fpu_imm16 is op3_13=0b1110100000110 & $(fpu_imm16_cmp) {
 	local imm32:4 = fpu_imm16 << 16;
 	update_stf_cmp(rah3, imm32);
 	if (STF_NF) goto <done>;
@@ -725,12 +727,12 @@ macro update_stf_mov(res) {
 }
 
 # p.104
-:moviz rah3, #fpu_imm16 is op3_13=0b1110100000000 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+:moviz rah3, #fpu_imm16 is op3_13=0b1110100000000 & $(fpu_imm16_cmp) {
 	rah3 = fpu_imm16 << 16;
 }
 
 # p.106
-:movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) + fpu_imm13_lo; ] {
+:movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & $(fpu_imm16_cmp) {
 	# MOVXI replaces only RaH[15:0]; the upper half from a preceding MOVIZ is retained.
 	rah3 = (rah3 & 0xFFFF0000) | zext(fpu_imm16:2);
 }
@@ -776,7 +778,7 @@ macro update_stf_mov(res) {
 }
 
 # p.110/111 (same encoding)
-:mpyf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100001 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
+:mpyf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100001 & $(fpu_imm16_add) {
 	local imm32:4 = fpu_imm16 << 16;
 	rah3 = rbh3 f* imm32;
 }
@@ -804,7 +806,7 @@ macro update_stf_mov(res) {
 }
 
 # p.135 (same encoding as SUBF32 imm)
-:subf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100011 & imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) + fpu_imm10_lo; ] {
+:subf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100011 & $(fpu_imm16_add) {
 	local imm32:4 = fpu_imm16 << 16;
 	rah3 = imm32 f- rbh3;
 }
