@@ -3435,6 +3435,46 @@ def check_unconditional_direct_branch(ops: list) -> None:
     assert not conditional, "UNC branch must not expose a conditional fallthrough"
 
 
+def _check_flag_zero_test(op, flag: str, set_when_nonzero: bool) -> None:
+    expected = OpCode.INT_NOTEQUAL if set_when_nonzero else OpCode.INT_EQUAL
+    assert op.opcode == expected
+    assert _reg(op.inputs[0]) == flag and _is_const(op.inputs[1], 0)
+
+
+def check_cond_eq_zero_test(ops: list) -> None:
+    assert len(ops) == 2
+    comparison, branch = ops
+    _check_flag_zero_test(comparison, "Z", True)
+    assert branch.opcode == OpCode.CBRANCH
+    assert _key(branch.inputs[1]) == _key(comparison.output)
+
+
+def check_cond8_hi_zero_test(ops: list) -> None:
+    assert len(ops) == 4
+    carry, zero, conjunction, branch = ops
+    _check_flag_zero_test(carry, "C", True)
+    _check_flag_zero_test(zero, "Z", False)
+    assert conjunction.opcode == OpCode.BOOL_AND
+    assert {_key(node) for node in conjunction.inputs} == {
+        _key(carry.output), _key(zero.output)
+    }
+    assert branch.opcode == OpCode.CBRANCH
+    assert _key(branch.inputs[1]) == _key(conjunction.output)
+
+
+def check_cndf_leq_zero_test(ops: list) -> None:
+    assert len(ops) == 4
+    zero, negative, disjunction, store = ops
+    _check_flag_zero_test(zero, "STF_ZF", True)
+    _check_flag_zero_test(negative, "STF_NF", True)
+    assert disjunction.opcode == OpCode.BOOL_OR
+    assert {_key(node) for node in disjunction.inputs} == {
+        _key(zero.output), _key(negative.output)
+    }
+    assert store.opcode == OpCode.COPY and _reg(store.output) == "STF_TF"
+    assert _key(store.inputs[0]) == _key(disjunction.output)
+
+
 def check_sbf_condition(flag: str, tested_value: int) -> Callable[[list], None]:
     def check(ops: list) -> None:
         assert len(ops) == 2, "SBF must only test a flag and branch"
@@ -4008,6 +4048,9 @@ CASES = (
     Case("B UNC is an unconditional branch", (0xFFEF, 0x0001), check_unconditional_direct_branch),
     Case("BF UNC is an unconditional branch", (0x56CF, 0x0001), check_unconditional_direct_branch),
     Case("SB UNC is an unconditional branch", (0x6F02,), check_unconditional_direct_branch),
+    Case("B EQ uses the core zero-test condition", (0xFFE1, 0x0100), check_cond_eq_zero_test),
+    Case("SB HI combines core set and clear zero tests", (0x6602,), check_cond8_hi_zero_test),
+    Case("TESTTF LEQ combines FPU set zero tests", (0xE585,), check_cndf_leq_zero_test),
     Case("SBF EQ branches when Z is set", (0xEC02,), check_sbf_condition("Z", 1)),
     Case("SBF NEQ branches when Z is clear", (0xED02,), check_sbf_condition("Z", 0)),
     Case("SBF TC branches when TC is set", (0xEE02,), check_sbf_condition("TC", 1)),

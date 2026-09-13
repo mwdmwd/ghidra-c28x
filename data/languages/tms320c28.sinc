@@ -1866,36 +1866,36 @@ loc8: reg16loc is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16loc {
 }
 
 cond:  "NEQ"  is cond0_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
-cond:  "EQ"   is cond0_4=0b0001 { local cnd:1 = Z   == 1; export cnd; }
+cond:  "EQ"   is cond0_4=0b0001 { local cnd:1 = Z   != 0; export cnd; }
 cond:  "GT"   is cond0_4=0b0010 { local cnd:1 = Z   == 0 && N == 0; export cnd; }
 cond:  "GEQ"  is cond0_4=0b0011 { local cnd:1 = N   == 0; export cnd; }
-cond:  "LT"   is cond0_4=0b0100 { local cnd:1 = N   == 1; export cnd; }
-cond:  "LEQ"  is cond0_4=0b0101 { local cnd:1 = Z   == 1 || N == 1; export cnd; }
-cond:  "HI"   is cond0_4=0b0110 { local cnd:1 = C   == 1 && Z == 0; export cnd; }
-cond:  "HIS"  is cond0_4=0b0111 { local cnd:1 = C   == 1; export cnd; }
+cond:  "LT"   is cond0_4=0b0100 { local cnd:1 = N   != 0; export cnd; }
+cond:  "LEQ"  is cond0_4=0b0101 { local cnd:1 = Z   != 0 || N != 0; export cnd; }
+cond:  "HI"   is cond0_4=0b0110 { local cnd:1 = C   != 0 && Z == 0; export cnd; }
+cond:  "HIS"  is cond0_4=0b0111 { local cnd:1 = C   != 0; export cnd; }
 cond:  "LO"   is cond0_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
-cond:  "LOS"  is cond0_4=0b1001 { local cnd:1 = C   == 0 || Z == 1; export cnd; }
+cond:  "LOS"  is cond0_4=0b1001 { local cnd:1 = C   == 0 || Z != 0; export cnd; }
 cond:  "NOV"  is cond0_4=0b1010 { local cnd:1 = V   == 0; V = 0; export cnd; }
-cond:  "OV"   is cond0_4=0b1011 { local cnd:1 = V   == 1; V = 0; export cnd; }
+cond:  "OV"   is cond0_4=0b1011 { local cnd:1 = V   != 0; V = 0; export cnd; }
 cond:  "NTC"  is cond0_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
-cond:  "TC"   is cond0_4=0b1101 { local cnd:1 = TC  == 1; export cnd; }
+cond:  "TC"   is cond0_4=0b1101 { local cnd:1 = TC  != 0; export cnd; }
 cond:  "NBIO" is cond0_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
 cond:  "UNC"  is cond0_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 cond8: "NEQ"  is cond8_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
-cond8: "EQ"   is cond8_4=0b0001 { local cnd:1 = Z   == 1; export cnd; }
+cond8: "EQ"   is cond8_4=0b0001 { local cnd:1 = Z   != 0; export cnd; }
 cond8: "GT"   is cond8_4=0b0010 { local cnd:1 = Z   == 0 && N == 0; export cnd; }
 cond8: "GEQ"  is cond8_4=0b0011 { local cnd:1 = N   == 0; export cnd; }
-cond8: "LT"   is cond8_4=0b0100 { local cnd:1 = N   == 1; export cnd; }
-cond8: "LEQ"  is cond8_4=0b0101 { local cnd:1 = Z   == 1 || N == 1; export cnd; }
-cond8: "HI"   is cond8_4=0b0110 { local cnd:1 = C   == 1 && Z == 0; export cnd; }
-cond8: "HIS"  is cond8_4=0b0111 { local cnd:1 = C   == 1; export cnd; }
+cond8: "LT"   is cond8_4=0b0100 { local cnd:1 = N   != 0; export cnd; }
+cond8: "LEQ"  is cond8_4=0b0101 { local cnd:1 = Z   != 0 || N != 0; export cnd; }
+cond8: "HI"   is cond8_4=0b0110 { local cnd:1 = C   != 0 && Z == 0; export cnd; }
+cond8: "HIS"  is cond8_4=0b0111 { local cnd:1 = C   != 0; export cnd; }
 cond8: "LO"   is cond8_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
-cond8: "LOS"  is cond8_4=0b1001 { local cnd:1 = C   == 0 || Z == 1; export cnd; }
+cond8: "LOS"  is cond8_4=0b1001 { local cnd:1 = C   == 0 || Z != 0; export cnd; }
 cond8: "NOV"  is cond8_4=0b1010 { local cnd:1 = V   == 0; V = 0; export cnd; }
-cond8: "OV"   is cond8_4=0b1011 { local cnd:1 = V   == 1; V = 0; export cnd; }
+cond8: "OV"   is cond8_4=0b1011 { local cnd:1 = V   != 0; V = 0; export cnd; }
 cond8: "NTC"  is cond8_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
-cond8: "TC"   is cond8_4=0b1101 { local cnd:1 = TC  == 1; export cnd; }
+cond8: "TC"   is cond8_4=0b1101 { local cnd:1 = TC  != 0; export cnd; }
 cond8: "NBIO" is cond8_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
 cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
