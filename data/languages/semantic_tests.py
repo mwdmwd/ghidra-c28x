@@ -3435,6 +3435,26 @@ def check_unconditional_direct_branch(ops: list) -> None:
     assert not conditional, "UNC branch must not expose a conditional fallthrough"
 
 
+def check_sbf_condition(flag: str, tested_value: int) -> Callable[[list], None]:
+    def check(ops: list) -> None:
+        assert len(ops) == 2, "SBF must only test a flag and branch"
+        comparison, branch = ops
+        assert comparison.opcode in (OpCode.INT_EQUAL, OpCode.INT_NOTEQUAL)
+        assert _reg(comparison.inputs[0]) == flag
+        assert comparison.inputs[1].space.name == "const"
+        for flag_value in (0, 1):
+            actual = flag_value == comparison.inputs[1].offset
+            if comparison.opcode == OpCode.INT_NOTEQUAL:
+                actual = not actual
+            assert actual == (flag_value == tested_value), \
+                f"wrong SBF {flag} branch sense for {flag_value}"
+        assert branch.opcode == OpCode.CBRANCH
+        assert _key(branch.inputs[1]) == _key(comparison.output)
+        assert branch.inputs[0].space.name == "ram" and branch.inputs[0].offset == 4
+
+    return check
+
+
 def _check_xar7_code_target(ops: list, opcode: OpCode) -> None:
     flow = _find(ops, lambda op: op.opcode == opcode, f"{opcode.name} through XAR7")
     definitions = _unique_definitions(ops)
@@ -3988,6 +4008,10 @@ CASES = (
     Case("B UNC is an unconditional branch", (0xFFEF, 0x0001), check_unconditional_direct_branch),
     Case("BF UNC is an unconditional branch", (0x56CF, 0x0001), check_unconditional_direct_branch),
     Case("SB UNC is an unconditional branch", (0x6F02,), check_unconditional_direct_branch),
+    Case("SBF EQ branches when Z is set", (0xEC02,), check_sbf_condition("Z", 1)),
+    Case("SBF NEQ branches when Z is clear", (0xED02,), check_sbf_condition("Z", 0)),
+    Case("SBF TC branches when TC is set", (0xEE02,), check_sbf_condition("TC", 1)),
+    Case("SBF NTC branches when TC is clear", (0xEF02,), check_sbf_condition("TC", 0)),
     Case("conditional MOVB OV snapshots then clears V", (0x56BB, 0x0511), check_branch_v_clear),
     Case("XRETC OV snapshots then clears V", (0x56FB,), check_branch_v_clear),
     Case("LB *XAR7 masks its target to 22 code-address bits", (0x7620,), check_lb_xar7_target),

@@ -4579,16 +4579,16 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.401
 :sbf off8, "EQ"  is ctx_objmode=1 & op8_8=0b11101100 & off8 {
-	if (Z == 0) goto off8;
+	if (Z != 0) goto off8;
 }
 :sbf off8, "NEQ" is ctx_objmode=1 & op8_8=0b11101101 & off8 {
-	if (Z == 1) goto off8;
+	if (Z == 0) goto off8;
 }
 :sbf off8, "TC"  is ctx_objmode=1 & op8_8=0b11101110 & off8 {
-	if (TC == 0) goto off8;
+	if (TC != 0) goto off8;
 }
 :sbf off8, "NTC" is ctx_objmode=1 & op8_8=0b11101111 & off8 {
-	if (TC == 1) goto off8;
+	if (TC == 0) goto off8;
 }
 
 # p.402
