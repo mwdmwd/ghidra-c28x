@@ -3526,29 +3526,43 @@ with : ctx_objmode=1 {
 }
 
 # p.288
-# Indexed MOVB stores use byte_index_info so byte offsets select a byte within
-# the correct word.  Address-register side effects are built before the
-# condition, as required even when the conditional store is not taken.  Keep
-# these modes out of the ordinary loc16 constructors: once their operand
-# tables expand, the two patterns are equally specific despite needing
-# different effective-address semantics.
-:movb byte_index_info, #imm8_8, cond is ctx_objmode=1 & op4_12=0b010101101011 & cond; imm8_8 & byte_index_info {
-	local addr:4 = byte_index_info:4;
-	local high:1 = byte_index_info[32,8];
-	if (!cond) goto inst_next;
-	store_word_byte(addr, high, imm8_8:1);
-}
+# Unlike the four AX byte-load/store forms in Section 5.10, this instruction
+# writes a zero-extended 16-bit loc16 value.  Indexed operands therefore use
+# ordinary word offsets, and no old memory byte is read or preserved.
 :movb loc16, #imm8_8, cond is ctx_objmode=1 & ctx_amode=0 & op4_12=0b010101101011 & cond;
-	imm8_8 & op3_5!=0b10010 & op3_5!=0b10011 & op6_2!=0b11 & loc16 {
+	imm8_8 & loc16 {
 	if (!cond) goto inst_next;
-	local old_word:2 = loc16;
-	loc16 = (old_word & 0xff00) | zext(imm8_8:1);
+	loc16 = zext(imm8_8:1);
 }
 :movb loc16, #imm8_8, cond is ctx_objmode=1 & ctx_amode=1 & ctx_page0=0 & op4_12=0b010101101011 & cond;
-	imm8_8 & op3_5!=0b10010 & op3_5!=0b10011 & loc16 {
+	imm8_8 & loc16 {
 	if (!cond) goto inst_next;
-	local old_word:2 = loc16;
-	loc16 = (old_word & 0xff00) | zext(imm8_8:1);
+	loc16 = zext(imm8_8:1);
+}
+# The instruction also updates N/Z when the selected loc16 is AH or AL.
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=8 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
+}
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=9 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
+}
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=1 & ctx_page0=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=8 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
+}
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=1 & ctx_page0=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=9 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
 }
 
 # p.290

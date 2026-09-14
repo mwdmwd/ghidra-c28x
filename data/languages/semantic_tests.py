@@ -1998,6 +1998,81 @@ def check_movb_indexed_ar0_store(ops: list) -> None:
     _check_movb_indexed_store(ops, offset_register="AR0", delta=0)
 
 
+def _check_movb_conditional_immediate_store(ops: list):
+    stores = [op for op in ops if op.opcode == OpCode.STORE]
+    assert len(stores) == 1, "conditional MOVB must perform one word store"
+    store = stores[0]
+    assert store.inputs[2].size == 2, "conditional MOVB writes the whole loc16 word"
+    assert _evaluates_to_constant(ops, store.inputs[2], 0x5A), (
+        "conditional MOVB must zero-extend the immediate, clearing the old high byte"
+    )
+    assert not any(op.opcode == OpCode.LOAD for op in ops), (
+        "conditional MOVB immediate store must not read or merge the old word"
+    )
+    branch = _find_index(ops, lambda op: op.opcode == OpCode.CBRANCH, "MOVB condition")
+    assert branch < ops.index(store), "the word store must remain conditional"
+    return store
+
+
+def check_movb_conditional_immediate_direct(ops: list) -> None:
+    _check_movb_conditional_immediate_store(ops)
+
+
+def check_movb_conditional_immediate_indexed(ops: list, offset: int | str) -> None:
+    store = _check_movb_conditional_immediate_store(ops)
+    add = _find(
+        ops,
+        lambda op: op.opcode == OpCode.INT_ADD
+        and _depends_on_varnode(ops, store.inputs[1], op.output)
+        and any(_depends_on_register(ops, value, "XAR4") for value in op.inputs),
+        "ordinary loc16 indexed word address",
+    )
+    if isinstance(offset, int):
+        assert any(_evaluates_to_constant(ops, value, offset) for value in add.inputs), (
+            "conditional MOVB indexed immediate must use a word offset"
+        )
+    else:
+        assert any(_depends_on_register(ops, value, offset) for value in add.inputs), (
+            "conditional MOVB indexed register must use an unshifted word offset"
+        )
+        assert not any(
+            op.opcode == OpCode.INT_RIGHT
+            and any(_depends_on_register(ops, value, offset) for value in op.inputs)
+            for op in ops
+        ), "conditional MOVB must not halve a register index"
+
+
+def check_movb_conditional_immediate_postincrement(ops: list) -> None:
+    store = _check_movb_conditional_immediate_store(ops)
+    update = _find_index(ops, lambda op: _reg(op.output) == "XAR4", "XAR4 postincrement")
+    branch = _find_index(ops, lambda op: op.opcode == OpCode.CBRANCH, "MOVB condition")
+    assert update < branch < ops.index(store), (
+        "addressing-mode updates execute before the condition, even when it is false"
+    )
+
+
+def check_movb_conditional_immediate_ax(ops: list, register: str) -> None:
+    write = _find(ops, lambda op: _reg(op.output) == register, f"{register} full-width write")
+    assert write.output.size == 2
+    assert _evaluates_to_constant(ops, write.inputs[0], 0x5A), (
+        f"conditional MOVB must clear {register}'s upper byte"
+    )
+    assert not any(op.opcode == OpCode.LOAD for op in ops)
+    n_write = _find(ops, lambda op: _reg(op.output) == "N", "AX negative flag update")
+    z_write = _find(ops, lambda op: _reg(op.output) == "Z", "AX zero flag update")
+    assert ops.index(write) < ops.index(n_write) and ops.index(write) < ops.index(z_write)
+    assert any(_depends_on_register(ops, value, register) for value in z_write.inputs)
+
+
+def check_movb_conditional_immediate_other_register(ops: list) -> None:
+    write = _find(ops, lambda op: _reg(op.output) == "AR6", "AR6 full-width write")
+    assert write.output.size == 2
+    assert _evaluates_to_constant(ops, write.inputs[0], 0x5A)
+    assert not any(_reg(op.output) in {"N", "Z"} for op in ops), (
+        "only AH/AL register destinations update N/Z"
+    )
+
+
 def check_ar0_modifier32(ops: list) -> None:
     register_load = _find(
         ops,
@@ -3819,6 +3894,51 @@ CASES = (
         "MOVB AR0 byte store is branch-free read-modify-write",
         (0x3C94,),
         check_movb_indexed_ar0_store,
+    ),
+    Case(
+        "conditional MOVB direct store zero-extends the whole word",
+        (0x56BF, 0x5A11),
+        check_movb_conditional_immediate_direct,
+    ),
+    Case(
+        "conditional MOVB indexed immediate uses whole-word loc16 addressing",
+        (0x56BF, 0x5ADC),
+        lambda ops: check_movb_conditional_immediate_indexed(ops, 3),
+    ),
+    Case(
+        "conditional MOVB indexed AR0 uses unshifted word offset",
+        (0x56BF, 0x5A94),
+        lambda ops: check_movb_conditional_immediate_indexed(ops, "AR0"),
+    ),
+    Case(
+        "conditional MOVB in AMODE=1 zero-extends a word",
+        (0x561E, 0x56BF, 0x5A94),
+        lambda ops: check_movb_conditional_immediate_indexed(ops, "AR0"),
+    ),
+    Case(
+        "conditional MOVB postincrement occurs before the condition",
+        (0x56B1, 0x5A84),
+        check_movb_conditional_immediate_postincrement,
+    ),
+    Case(
+        "conditional MOVB AL clears its upper byte and sets N/Z",
+        (0x56BF, 0x5AA9),
+        lambda ops: check_movb_conditional_immediate_ax(ops, "AL"),
+    ),
+    Case(
+        "conditional MOVB AH clears its upper byte and sets N/Z",
+        (0x56B1, 0x5AA8),
+        lambda ops: check_movb_conditional_immediate_ax(ops, "AH"),
+    ),
+    Case(
+        "conditional MOVB AL in AMODE=1 also sets N/Z",
+        (0x561E, 0x56BF, 0x5AA9),
+        lambda ops: check_movb_conditional_immediate_ax(ops, "AL"),
+    ),
+    Case(
+        "conditional MOVB AR6 clears its upper byte without AX flags",
+        (0x56BF, 0x5AA6),
+        check_movb_conditional_immediate_other_register,
     ),
     Case("loc32 *0++ uses AR0 rather than loc width", (0x06BB,), check_ar0_modifier32),
     Case("loc32 *0-- uses AR0 rather than loc width", (0x06BC,), check_ar0_decrement32),
