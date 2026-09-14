@@ -320,6 +320,7 @@ macro circular_amode1_address(addr, delta) {
 	XAR1 = (XAR1 & 0xffff0000) | zext(next);
 }
 
+# In P-Code, inst_next/inst_start are byte addresses, while saved C28x PCs are words.
 macro intr_enter(vec) {
 	RB_RAS = RB_RA;
 	RB_RA = 0;
@@ -336,7 +337,7 @@ macro intr_enter(vec) {
 	push32(ie_v3);
 	local ie_v4:4 = zext(IER);
 	push32(ie_v4);
-	local iret_pc:4 = inst_next;
+	local iret_pc:4 = inst_next >> 1;
 	push32(iret_pc);
 	INTM = 1;
 	DBGM = 1;
@@ -2712,7 +2713,7 @@ with : ctx_objmode=1 {
 
 # p.195
 :ffc XAR7, imm22 is op6_10=0b0000000011 & XAR7 & $(imm22) {
-    XAR7 = inst_next;
+    XAR7 = inst_next >> 1;
     local tgt:4 = imm22;
     call [tgt];
 }
@@ -2889,7 +2890,7 @@ with : ctx_objmode=1 {
 
 # p.218
 :lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {
-	local tmp:4 = inst_next;
+	local tmp:4 = inst_next >> 1;
 	push32(tmp);
 	# Like LB *XAR7, LC ignores XAR7(31:22).
 	local target:4 = XAR7 & 0x003fffff;
@@ -2898,7 +2899,7 @@ with : ctx_objmode=1 {
 
 # p.219
 :lc dest22 is op6_10=0b0000000010 ... & dest22 {
-	local tmp:4 = inst_next;
+	local tmp:4 = inst_next >> 1;
 	push32(tmp);
 	call dest22;
 }
@@ -2907,7 +2908,7 @@ with : ctx_objmode=1 {
 :lcr dest22 is ctx_objmode=1 & op6_10=0b0111011001 ... & dest22 {
 	local tmp:4 = RPC;
 	push32(tmp);
-	RPC = inst_next;
+	RPC = inst_next >> 1;
 	call dest22;
 }
 
@@ -2915,7 +2916,7 @@ with : ctx_objmode=1 {
 :lcr *xarn0 is ctx_objmode=1 & op3_13=0b0011111001100 & xarn0 {
 	local tmp:4 = RPC;
 	push32(tmp);
-	RPC = inst_next;
+	RPC = inst_next >> 1;
 	local target:4 = xarn0 & 0x003fffff;
 	call [target];
 }
@@ -3479,7 +3480,7 @@ with : ctx_objmode=1 {
 
 # p.278
 :mov xarn0, PC is ctx_objmode=1 & op3_13=0b0011111001011 & xarn0 & PC {
-	xarn0 = inst_next;
+	xarn0 = inst_start >> 1;
 }
 
 # p.279
@@ -5077,7 +5078,7 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.450
 :xcall *AL is ctx_objmode=1 & op0_16=0b0101011000110100 & AL {
-	local tmp:4 = inst_next;
+	local tmp:4 = inst_next >> 1;
 	local ret:2 = tmp[0,16];
 	push16(ret);
 	local target:4 = 0x3f0000 | zext(AL);
@@ -5086,7 +5087,7 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.451
 :xcall imm16, *, "ARP"^imm3 is ctx_objmode=1 & op3_13=0b0011111001101 & imm3; imm16 {
-	local tmp:4 = inst_next;
+	local tmp:4 = inst_next >> 1;
 	local ret:2 = tmp[0,16];
 	push16(ret);
 	ARP = imm3;
@@ -5097,7 +5098,7 @@ movl_store_flags: is op0_8=0b10101001 {
 # p.452
 :xcall imm16, cond is ctx_objmode=1 & op4_12=0b010101101110 & cond; imm16 {
 	if (!cond) goto inst_next;
-	local tmp:4 = inst_next;
+	local tmp:4 = inst_next >> 1;
 	local ret:2 = tmp[0,16];
 	push16(ret);
 	local target:4 = 0x3f0000 | zext(imm16:2);

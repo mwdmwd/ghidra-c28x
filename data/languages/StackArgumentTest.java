@@ -480,9 +480,9 @@ public class StackArgumentTest extends GhidraScript {
         int spSubs = 0;
         int rpcStores = 0;
         int rpcLoads = 0;
-        int xar7Copies = 0;
+        int xar7WordPcWrites = 0;
         int callIndex = -1;
-        int xar7CopyIndex = -1;
+        int xar7WriteIndex = -1;
         for (int index = 0; index < ops.length; index++) {
             PcodeOp op = ops[index];
             if (op.getOpcode() == PcodeOp.CALL ||
@@ -505,19 +505,22 @@ public class StackArgumentTest extends GhidraScript {
                 op.getNumInputs() == 2 && isRegister(op.getInput(1), "SP")) {
                 rpcLoads++;
             }
-            if (op.getOpcode() == PcodeOp.COPY && outputRegister(op, "XAR7")) {
-                xar7Copies++;
-                xar7CopyIndex = index;
+            if (op.getOpcode() == PcodeOp.INT_RIGHT &&
+                outputRegister(op, "XAR7") && op.getNumInputs() == 2 &&
+                constant(op.getInput(0), instruction.getMaxAddress().getOffset() + 1) &&
+                constant(op.getInput(1), 1)) {
+                xar7WordPcWrites++;
+                xar7WriteIndex = index;
             }
         }
         require(calls == 1 && spAdds == 0 && spSubs == 0 &&
-                rpcStores == 0 && rpcLoads == 0 && xar7Copies == 1,
+                rpcStores == 0 && rpcLoads == 0 && xar7WordPcWrites == 1,
             functionName + " raw FFC at " + instruction.getAddress() +
                 " gained RPC/SP state or lost XAR7 setup: calls=" + calls +
                 " adds=" + spAdds + " subs=" + spSubs +
                 " stores=" + rpcStores + " loads=" + rpcLoads +
-                " XAR7 copies=" + xar7Copies);
-        require(xar7CopyIndex >= 0 && callIndex >= 0 && xar7CopyIndex < callIndex,
+                " XAR7 word-PC writes=" + xar7WordPcWrites);
+        require(xar7WriteIndex >= 0 && callIndex >= 0 && xar7WriteIndex < callIndex,
             functionName + " raw FFC return-address setup is not before CALL");
     }
 

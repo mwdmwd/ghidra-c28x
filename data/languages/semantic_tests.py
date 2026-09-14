@@ -3737,7 +3737,10 @@ def _execute_call_state(
             write(op.output, load(args[1], op.output.size))
             continue
         if code in (OpCode.CALL, OpCode.CALLIND, OpCode.RETURN):
-            flows.append(args[0])
+            flows.append(op.inputs[0].offset if code == OpCode.CALL else args[0])
+            continue
+        if code == OpCode.CBRANCH:
+            assert args[1] == 0, "call-state vector unexpectedly took an internal branch"
             continue
         if op.output is None:
             raise AssertionError(f"unsupported call P-Code side effect {code.name}")
@@ -3753,8 +3756,14 @@ def _execute_call_state(
             result = args[0] & args[1]
         elif code == OpCode.INT_OR:
             result = args[0] | args[1]
+        elif code == OpCode.INT_LEFT:
+            result = args[0] << args[1]
+        elif code == OpCode.INT_RIGHT:
+            result = args[0] >> args[1]
         elif code == OpCode.INT_EQUAL:
             result = int(args[0] == args[1])
+        elif code == OpCode.BOOL_NEGATE:
+            result = int(args[0] == 0)
         elif code == OpCode.INT_SLESS:
             result = int(signed(args[0], op.inputs[0].size) <
                          signed(args[1], op.inputs[1].size))
@@ -3801,9 +3810,11 @@ def check_lcr_nested_state(_ops: list) -> None:
     state = {"SP": 0x400, "RPC": 0x111111}
     state, memory, flow1 = _execute_call_state(first, state)
     first_link = state["RPC"]
+    assert first_link == 0x102
     assert state["SP"] == 0x402 and _memory_value(memory, 0x400, 4) == 0x111111
     state, memory, flow2 = _execute_call_state(second, state, memory)
     second_link = state["RPC"]
+    assert second_link == 0x182
     assert state["SP"] == 0x404 and _memory_value(memory, 0x402, 4) == first_link
     state, memory, returns = _execute_call_state(ret, state, memory)
     assert returns == [second_link] and state["RPC"] == first_link and state["SP"] == 0x402
@@ -3820,6 +3831,54 @@ def check_lcr_indirect_state(ops: list) -> None:
     )
     assert flow == [0x023456] and state["SP"] == 0x502 and state["RPC"] != 0x123456
     assert _memory_value(memory, 0x500, 4) == 0x123456
+
+
+def check_call_return_word_pc(_ops: list, words: tuple[int, ...], word_pc: int,
+                              kind: str, expected_target: int) -> None:
+    ops = _translate_at(words, word_pc * 2)
+    initial = {"SP": 0x600, "RPC": 0x345678, "XAR0": 0xFFC23456,
+               "XAR7": 0xFFCA4321}
+    state, memory, flow = _execute_call_state(ops, initial)
+    assert flow == [expected_target], f"{kind} changed its call target: {flow}"
+    assert state["SP"] == 0x602
+    if kind == "LCR":
+        assert state["RPC"] == word_pc + len(words)
+        assert _memory_value(memory, 0x600, 4) == initial["RPC"]
+    else:
+        assert state["RPC"] == initial["RPC"]
+        assert _memory_value(memory, 0x600, 4) == word_pc + len(words)
+
+
+def check_ffc_return_word_pc(_ops: list) -> None:
+    ops = _translate_at((0x00C9, 0xCC08), 0x151B1 * 2)
+    state, _memory, flow = _execute_call_state(ops, {"XAR7": 0xDEADBEEF})
+    assert state["XAR7"] == 0x151B3
+    assert flow == [0x9CC08]
+
+
+def check_xcall_return_word_pc(_ops: list, words: tuple[int, ...],
+                               word_pc: int, target: int) -> None:
+    ops = _translate_at(words, word_pc * 2)
+    state, memory, flow = _execute_call_state(ops, {"SP": 0x700, "AL": 0xF123})
+    assert flow == [target]
+    assert state["SP"] == 0x701
+    assert _memory_value(memory, 0x700, 2) == ((word_pc + len(words)) & 0xFFFF)
+
+
+def check_interrupt_return_word_pc(_ops: list, words: tuple[int, ...],
+                                   word_pc: int, vector: int) -> None:
+    ops = _translate_at(words, word_pc * 2)
+    state, memory, flow = _execute_call_state(ops, {"SP": 0x800})
+    assert flow == [vector]
+    assert state["SP"] == 0x80F
+    assert _memory_value(memory, 0x80D, 4) == word_pc + len(words)
+
+
+def check_mov_pc_current_word(_ops: list) -> None:
+    ops = _translate_at((0x3E58,), 0x12070 * 2)
+    state, _memory, flow = _execute_call_state(ops, {"XAR0": 0xDEADBEEF})
+    assert state["XAR0"] == 0x12070
+    assert flow == []
 
 
 def check_lc_direct_state(ops: list) -> None:
@@ -4184,6 +4243,37 @@ CASES = (
     Case("LCR direct preserves nested RPC/SP state", (0x7641, 0x7010), check_lcr_nested_state),
     Case("LCR indirect masks its target and saves RPC", (0x3E60,), check_lcr_indirect_state),
     Case("LC direct uses the stack without changing RPC", (0x0081, 0x700F), check_lc_direct_state),
+    Case("LCR direct saves the next word PC in RPC", (0x7649, 0x8B0D),
+         lambda ops: check_call_return_word_pc(ops, (0x7649, 0x8B0D), 0x1206F,
+                                               "LCR", 0x98B0D * 2)),
+    Case("LCR indirect saves the next word PC in RPC", (0x3E60,),
+         lambda ops: check_call_return_word_pc(ops, (0x3E60,), 0x12060,
+                                               "LCR", 0x023456)),
+    Case("LC direct pushes the next word PC", (0x0080, 0xFFFF),
+         lambda ops: check_call_return_word_pc(ops, (0x0080, 0xFFFF), 0x12000,
+                                               "LC", 0xFFFF * 2)),
+    Case("LC indirect pushes the next word PC", (0x7604,),
+         lambda ops: check_call_return_word_pc(ops, (0x7604,), 0x12010,
+                                               "LC", 0x0A4321)),
+    Case("FFC saves the next word PC in XAR7", (0x00C9, 0xCC08),
+         check_ffc_return_word_pc),
+    Case("XCALL AL pushes the next word PC low half", (0x5634,),
+         lambda ops: check_xcall_return_word_pc(ops, (0x5634,), 0x3F1000,
+                                                0x3FF123)),
+    Case("XCALL immediate ARP pushes the next word PC low half", (0x3E6A, 0xF123),
+         lambda ops: check_xcall_return_word_pc(ops, (0x3E6A, 0xF123), 0x3F1020,
+                                                0x3FF123)),
+    Case("XCALL conditional pushes the next word PC low half", (0x56EF, 0xF123),
+         lambda ops: check_xcall_return_word_pc(ops, (0x56EF, 0xF123), 0x3F1040,
+                                                0x3FF123)),
+    Case("INTR pushes the next word PC", (0x0010,),
+         lambda ops: check_interrupt_return_word_pc(ops, (0x0010,), 0x12040,
+                                                    0x3FFFC2)),
+    Case("TRAP pushes the next word PC", (0x0023,),
+         lambda ops: check_interrupt_return_word_pc(ops, (0x0023,), 0x12050,
+                                                    0x3FFFC6)),
+    Case("MOV XAR0,PC reads the current word PC", (0x3E58,),
+         check_mov_pc_current_word),
     Case("LRET pops a direct-call return without changing RPC", (0x7614,), check_lret_state),
     Case("LRETR returns through current RPC then restores the older RPC", (0x0006,), check_lretr_state),
     Case("IRET releases seven context pairs and the alignment word", (0x7602,), check_iret_stack_release),

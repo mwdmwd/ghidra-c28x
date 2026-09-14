@@ -630,7 +630,7 @@ public class RpcAbiTest extends GhidraScript {
                 continue; // decompiler synthetic tail-call or another call mechanism
             }
             calls++;
-            int saveIndex = -1, addIndex = -1, rpcCopyIndex = -1;
+            int saveIndex = -1, addIndex = -1, rpcWriteIndex = -1;
             int subIndex = -1, rpcLoadIndex = -1;
             int stackAdds = 0, stackSubs = 0;
             for (int candidateIndex = 0; candidateIndex < ops.size(); candidateIndex++) {
@@ -645,8 +645,10 @@ public class RpcAbiTest extends GhidraScript {
                     stackAdds++;
                     addIndex = candidateIndex;
                 }
-                if (candidate.getOpcode() == PcodeOp.COPY && outputRegister(candidate, "RPC")) {
-                    rpcCopyIndex = candidateIndex;
+                if (candidate.getOpcode() == PcodeOp.INT_RIGHT &&
+                    outputRegister(candidate, "RPC") && candidate.getNumInputs() == 2 &&
+                    constant(candidate.getInput(1), 1)) {
+                    rpcWriteIndex = candidateIndex;
                 }
                 if (binaryRegisterConstant(candidate, PcodeOp.INT_SUB, "SP", 2)) {
                     stackSubs++;
@@ -661,11 +663,11 @@ public class RpcAbiTest extends GhidraScript {
                 "completed LCR call must have one SP += 2 and one SP -= 2 in " +
                     functionName + " at " + instruction.getAddress() +
                     ", got adds=" + stackAdds + " subs=" + stackSubs);
-            require(saveIndex >= 0 && addIndex >= 0 && rpcCopyIndex >= 0 &&
+            require(saveIndex >= 0 && addIndex >= 0 && rpcWriteIndex >= 0 &&
                     subIndex >= 0 && rpcLoadIndex >= 0,
                 "incomplete LCR/LRETR state transition in " + functionName +
                     " at " + instruction.getAddress());
-            require(saveIndex < addIndex && addIndex < rpcCopyIndex && rpcCopyIndex < index &&
+            require(saveIndex < addIndex && addIndex < rpcWriteIndex && rpcWriteIndex < index &&
                     index < subIndex && subIndex < rpcLoadIndex,
                 "misordered completed LCR state transition in " + functionName +
                     " at " + instruction.getAddress());
