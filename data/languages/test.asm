@@ -837,3 +837,9 @@
     TBIT *XAR4++,T
     TBIT AL,#0
     TBIT AH,#15
+
+; Partial DP replacement versus whole-register MOVZ.
+    MOV DP,#0
+    MOV DP,#0x123
+    MOV DP,#1023
+    MOVZ DP,#0

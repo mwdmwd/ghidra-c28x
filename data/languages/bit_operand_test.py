@@ -53,8 +53,56 @@ def check_tbit() -> int:
     return count
 
 
+def check_mov_dp() -> int:
+    """SPRU430F p.258: replace bits 9:0 without repositioning bits 15:10."""
+    # Batch translation avoids reparsing the full language 2,048 times. Neither
+    # MOV form changes decode context. Execute each IMARK-delimited instruction
+    # independently, with fresh runtime registers for every oracle vector.
+    def instructions(words: list[int]) -> list[list]:
+        result: list[list] = []
+        for op in _translate(words):
+            if op.opcode == OpCode.IMARK:
+                result.append([])
+            else:
+                result[-1].append(op)
+        assert len(result) == len(words)
+        return result
+
+    moves = instructions([0xF800 | imm for imm in range(1024)])
+    zero_moves = instructions([0xB800 | imm for imm in range(1024)])
+    count = 0
+    for imm in range(1024):
+        ops = moves[imm]
+        assert {_reg(op.output) for op in ops if _reg(op.output)} == {"DP"}
+        assert not any(op.opcode in (OpCode.LOAD, OpCode.STORE, OpCode.BRANCH,
+                                    OpCode.CBRANCH) for op in ops)
+        for high in range(64):
+            for low in (0, 0x3FF):
+                old = (high << 10) | low
+                got = _execute(ops, {"DP": old})
+                expected = (old & 0xFC00) | imm
+                assert got.register("DP") == expected, (hex(old), imm, got.register("DP"), expected)
+                count += 1
+        # MOVZ is a distinct, unchanged whole-register zero-extension.
+        got = _execute(zero_moves[imm], {"DP": 0xFFFF})
+        assert got.register("DP") == imm, ("MOVZ", imm)
+        count += 1
+    for high in range(64):
+        old = (high << 10) | 0x3FF
+        expected = (old & 0xFC00) | 0x123
+        address = (expected << 6) | 0x2A
+        # MOV DP,#0x123; MOV AL,@0x2a: preserve upper-page address data flow.
+        got = _execute(_translate((0xF923, 0x922A)), {"DP": old}, {address: 0x55AA})
+        assert got.register("DP") == expected
+        assert got.register("AL") == 0x55AA
+        assert len(got.loads) == 1 and got.loads[0][1:3] == (address, 2)
+        count += 1
+    return count
+
+
 def main() -> int:
     print(f"TBIT_OPERAND_VECTORS={check_tbit()}")
+    print(f"MOV_DP_OPERAND_VECTORS={check_mov_dp()}")
     print("BIT_OPERAND_TEST_PASS=all")
     return 0
 

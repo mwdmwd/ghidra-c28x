@@ -4302,10 +4302,12 @@ CASES += tuple(
 )
 
 
-from bit_operand_test import check_tbit
+from bit_operand_test import check_tbit, check_mov_dp
 
 CASES += (Case("TBIT T reverses the low four index bits", (0x5625, 0x00A9),
-               lambda _ops: check_tbit()),)
+               lambda _ops: check_tbit()),
+          Case("MOV DP immediate preserves positioned upper bits", (0xF800,),
+               lambda _ops: check_mov_dp()))
 
 
 def main() -> int:

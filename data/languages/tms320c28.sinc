@@ -3328,8 +3328,9 @@ with : ctx_objmode=1 {
 
 # p.258
 :mov DP, #imm10 is op10_6=0b111110 & DP & imm10 {
-	local dph:2 = DP[10,6];
-	DP = dph | imm10;
+	# A bitrange extracts and right-justifies; preserve the upper bits in place.
+	# Adapted from ghidra-tms320c28x bc32ac08ba70a5ba194824ec8a00b6f007eb0201.
+	DP = (DP & 0xfc00) | imm10;
 }
 
 # p.259
