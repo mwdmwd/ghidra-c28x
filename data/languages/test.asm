@@ -817,3 +817,16 @@
     NOP
     MACF32 R7H, R3H, *XAR6++, *XAR7++
     NOP
+
+; Second upstream comparison: arithmetic flag forms, both AX choices and aliases.
+    ADD AL,AR0
+    ADD AH,AR0
+    ADD AL,AR1
+    ADD *XAR4++,AH
+    SUB AL,AR0
+    SUB *XAR4++,AH
+    SUBR *XAR4++,AH
+    ADDB AL,#-128
+    ADDB AH,#127
+    INC *XAR4++
+    DEC *XAR4++

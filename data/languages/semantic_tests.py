@@ -4291,6 +4291,17 @@ CASES = (
 )
 
 
+# These cases share the finite memory/integer executor with repeat-transfer
+# tests so postincrement and aliased register forms are checked as well as flags.
+from alu16_flags_test import FAMILIES as ALU16_FAMILIES, check_family as check_alu16_family
+
+CASES += tuple(
+    Case("16-bit ALU flags: " + family, (0x7700,),
+         lambda _ops, family=family: check_alu16_family(family))
+    for family in ALU16_FAMILIES
+)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(

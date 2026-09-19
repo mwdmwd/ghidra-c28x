@@ -2178,15 +2178,25 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 	acc_add32(value);
 }
 
-# p.131
+# p.131 — C is fresh unsigned carry; V is sticky signed overflow.
+# Adapted from ghidra-tms320c28x's flag corrections; unlike that tree, do not
+# clear previously latched V.  Snapshots also avoid duplicate memory loads.
 :add ax8, loc16 is op9_7=0b1001010 & ax8 & loc16 {
-	ax8 = ax8 + loc16;
+	local left:2 = ax8;
+	local right:2 = loc16;
+	C = carry(left, right);
+	V = V || scarry(left, right);
+	ax8 = left + right;
 	flagnz(ax8);
 }
 
 # p.132
 :add loc16, ax8 is op9_7=0b0111001 & ax8 & loc16 {
-	local r:2 = loc16 + ax8;
+	local left:2 = loc16;
+	local right:2 = ax8;
+	local r:2 = left + right;
+	C = carry(left, right);
+	V = V || scarry(left, right);
 	loc16 = r;
 	flagnz(r);
 }
@@ -2217,9 +2227,12 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.135
 :addb ax8, #simm8 is op9_7=0b1001110 & ax8 & simm8 {
-	ax8 = ax8 + simm8;
+	local left:2 = ax8;
+	local right:2 = sext(simm8:1);
+	C = carry(left, right);
+	V = V || scarry(left, right);
+	ax8 = left + right;
 	flagnz(ax8);
-	# TODO C  V
 }
 
 # p.136
@@ -2641,7 +2654,10 @@ with : ctx_objmode=1 {
 
 # p.185
 :dec loc16 is op8_8=0b00001011 & loc16 {
-	local r:2 = loc16 - 1;
+	local old:2 = loc16;
+	local r:2 = old - 1;
+	C = old != 0;
+	V = V || sborrow(old, 1:2);
 	loc16 = r;
 	flagnz(r);
 }
@@ -2799,7 +2815,10 @@ with : ctx_objmode=1 {
 
 # p.211
 :inc loc16 is op8_8=0b00001010 & loc16 {
-	local r:2 = loc16 + 1;
+	local old:2 = loc16;
+	local r:2 = old + 1;
+	C = carry(old, 1:2);
+	V = V || scarry(old, 1:2);
 	loc16 = r;
 	flagnz(r);
 }
@@ -4772,13 +4791,21 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.418
 :sub ax8, loc16 is op9_7=0b1001111 & ax8 & loc16 {
-	ax8 = ax8 - loc16;
+	local left:2 = ax8;
+	local right:2 = loc16;
+	C = left >= right;
+	V = V || sborrow(left, right);
+	ax8 = left - right;
 	flagnz(ax8);
 }
 
 # p.419
 :sub loc16, ax8 is op9_7=0b0111010 & ax8 & loc16 {
-	local r:2 = loc16 - ax8;
+	local left:2 = loc16;
+	local right:2 = ax8;
+	local r:2 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
 	loc16 = r;
 	flagnz(r);
 }
@@ -4895,7 +4922,11 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.431
 :subr loc16, ax8 is ctx_objmode=1 & op9_7=0b1110101 & ax8 & loc16 {
-	local r:2 = ax8 - loc16;
+	local left:2 = ax8;
+	local right:2 = loc16;
+	local r:2 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
 	loc16 = r;
 	flagnz(r);
 }

@@ -248,7 +248,7 @@ assembler-test: tms320c28.sla assembler_test.py
 
 # Focused P-Code semantic regressions for compiler-critical instructions.
 .PHONY: semantic-test
-semantic-test: tms320c28.sla semantic_tests.py
+semantic-test: tms320c28.sla semantic_tests.py alu16_flags_test.py repeat_transfer_test.py
 	$(Q)$(PYTHON) semantic_tests.py
 
 # Exact instruction-local shadows for repeated program-space transfers and a
@@ -566,3 +566,8 @@ clean:
 	@rm -f switch_saved_layout_validation.obj switch_saved_layout_validation.linked.out switch_saved_layout_validation.out switch_saved_layout_validation.out.new
 	@rm -f ffc_validation.obj ffc_validation.linked.out ffc_validation.out ffc_validation.out.new
 	@rm -f switch_pread_validation.obj switch_pread_validation.linked.out switch_pread_validation.out switch_pread_validation.out.new
+
+# Manual-backed 16-bit arithmetic C/V/N/Z and single-access regressions.
+.PHONY: alu16-flags-test
+alu16-flags-test: tms320c28.sla alu16_flags_test.py repeat_transfer_test.py
+	$(Q)$(PYTHON) alu16_flags_test.py

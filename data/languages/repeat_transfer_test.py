@@ -208,6 +208,14 @@ def _execute(
             result = args[0]
         elif code == OpCode.INT_SEXT:
             result = _signed(args[0], op.inputs[0].size)
+        elif code == OpCode.INT_CARRY:
+            result = int(args[0] + args[1] > _mask(op.inputs[0].size))
+        elif code in (OpCode.INT_SCARRY, OpCode.INT_SBORROW):
+            size = op.inputs[0].size
+            left, right = (_signed(args[i], size) for i in (0, 1))
+            total = left + right if code == OpCode.INT_SCARRY else left - right
+            limit = 1 << (size * 8 - 1)
+            result = int(not -limit <= total < limit)
         elif code == OpCode.INT_ADD:
             result = args[0] + args[1]
         elif code == OpCode.INT_SUB:
