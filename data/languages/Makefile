@@ -544,6 +544,8 @@ zoo-test: tms320c28.sla analyzer zoo-build ZooTest.java
 
 .PHONY: clean
 clean:
+	@rm -rf ghidra-ffc-cfg-test
+	@rm -f ffc_cfg_encodings.obj
 	@rm -rf $(GHIDRA_DECOMP_DIR) $(GHIDRA_SWITCH_DIR) $(GHIDRA_ZOO_DIR)
 	@rm -rf $(GHIDRA_PROFILE_DIR) $(GHIDRA_COPY_SOURCE_DIR)
 	@rm -rf $(GHIDRA_RPC_ABI_DIR) $(RPC_ABI_BUILD_DIR) $(PROFILE_GENERATE_DIR)
@@ -575,3 +577,21 @@ alu16-flags-test: tms320c28.sla alu16_flags_test.py repeat_transfer_test.py
 .PHONY: bit-operand-test
 bit-operand-test: tms320c28.sla bit_operand_test.py repeat_transfer_test.py
 	$(Q)$(PYTHON) bit_operand_test.py
+
+# Finite CFG proof and revocation/republication of all FFC helper exits.
+.PHONY: ffc-cfg-test
+ffc-cfg-test: tms320c28.sla analyzer ffc_validation.out FfcCfgTest.java ffc_cfg_encodings.asm
+	$(Q)$(AS) $(ASFLAGS) --abi=eabi --compile_only --output_file=ffc_cfg_encodings.obj ffc_cfg_encodings.asm
+	@rm -rf ghidra-ffc-cfg-test
+	@mkdir -p ghidra-ffc-cfg-test/{home,config,project,tmp,cache,scripts}
+	@cp FfcCfgTest.java ghidra-ffc-cfg-test/scripts/
+	$(Q)HOME=$$PWD/ghidra-ffc-cfg-test/home XDG_CONFIG_HOME=$$PWD/ghidra-ffc-cfg-test/config \
+		GHIDRA_HEADLESS_JAVA_OPTIONS="-Dapplication.tempdir=$$PWD/ghidra-ffc-cfg-test/tmp -Dapplication.cachedir=$$PWD/ghidra-ffc-cfg-test/cache -Djava.io.tmpdir=$$PWD/ghidra-ffc-cfg-test/tmp" \
+		$(GHIDRA_HEADLESS) $$PWD/ghidra-ffc-cfg-test/project ffc-cfg \
+		-import ffc_validation.out -processor tms320c28:LE:32:default -cspec default \
+		-noanalysis -scriptPath $$PWD/ghidra-ffc-cfg-test/scripts \
+		-postScript $$PWD/ghidra-ffc-cfg-test/scripts/FfcCfgTest.java -overwrite -deleteProject \
+		> ghidra-ffc-cfg-test/console.log 2>&1 || { cat ghidra-ffc-cfg-test/console.log; exit 1; }; \
+		cat ghidra-ffc-cfg-test/console.log; \
+		test "$$(grep -c 'FFC_CFG_PASS=all' ghidra-ffc-cfg-test/console.log)" -eq 1; \
+		test "$$(grep -c 'FFC_CFG_CASE_PASS=' ghidra-ffc-cfg-test/console.log)" -eq 27

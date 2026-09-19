@@ -64,7 +64,7 @@ near_ingress_source:
     LB        near_ingress_inner
     .endasmfunc
 
-    ; Near miss: provenance is interrupted by explicit control flow.
+    ; Near miss: provenance is interrupted by direct control flow (now accepted by bounded CFG proof).
     .asmfunc
 near_flow:
     SB        near_flow_cont, UNC

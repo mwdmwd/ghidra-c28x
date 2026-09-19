@@ -689,13 +689,14 @@ public class SwitchTest extends GhidraScript {
                 tagged++;
             }
         }
-        require(tagged == 1, "only the proven FFC terminal may be tagged, got " + tagged);
+        require(tagged == 2, "both proven FFC terminals must be tagged, got " + tagged);
+        require(isCanonical(wordAddress(0x16030), ffcContext),
+            "direct-branch FFC helper was not tagged");
 
         long[] rejectedReturns = {
             0x16028, // XAR7 clobber
             0x1602a, // mixed FFC/LCR ingress
             0x1602d, // external ingress into helper interior
-            0x16030, // explicit control flow in helper
             0x16033, // fall-through into nominal helper entry
             0x16036  // ordinary indirect branch with no FFC provenance
         };
@@ -722,7 +723,7 @@ public class SwitchTest extends GhidraScript {
         Instruction explicitFlow = getInstructionAt(wordAddress(0x1602f));
         require(explicitFlow != null && explicitFlow.getMnemonicString().equalsIgnoreCase("SB") &&
                 explicitFlow.getFlowType().isJump(),
-            "control-flow near miss no longer branches before its LB");
+            "direct-branch positive no longer branches before its LB");
         Instruction fallthrough = getInstructionAt(wordAddress(0x16031));
         require(fallthrough != null && wordAddress(0x16032).equals(fallthrough.getFallThrough()),
             "fall-through near miss no longer enters the nominal helper");
@@ -759,7 +760,7 @@ public class SwitchTest extends GhidraScript {
 
         println("FFC_RETURN_CALLERS=2");
         println("FFC_RETURN_HELPER_INSTRUCTIONS=14");
-        println("FFC_RETURN_NEAR_MISS_REJECTED=6");
+        println("FFC_RETURN_NEAR_MISS_REJECTED=5");
         println("FFC_RETURN_CALLING_CONVENTION=__ffc");
     }
 

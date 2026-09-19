@@ -33,3 +33,5 @@ ghidra-status-mode-test/
 
 code-pointer-build/
 ghidra-code-pointer-test/
+
+ghidra-ffc-cfg-test/

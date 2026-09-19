@@ -1,0 +1,8 @@
+ .text
+ FFC XAR7, 0x30010
+ SB $+3,NEQ
+ MOV AR7,#1
+ MOVB XAR7,#0
+ XB *AL
+ MOVL XAR6,*XAR7++
+ MOV XAR4,PC
