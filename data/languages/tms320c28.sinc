@@ -4965,7 +4965,10 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.437
 :tbit loc16, T is ctx_objmode=1 & op0_16=0b0101011000100101; op8_8=0b00000000 & loc16 & T {
-	local shifted:2 = loc16 >> T[0,4];
+	# Unlike the immediate form, T=0 selects bit 15 and T=15 selects bit 0.
+	# Adapted from ghidra-tms320c28x 521ee9fc8861e82c9ac5252ae268e8ed3f588fd6.
+	local bit:2 = 15 - (T & 0xf);
+	local shifted:2 = loc16 >> bit;
 	TC = shifted[0,1];
 }
 

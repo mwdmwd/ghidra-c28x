@@ -830,3 +830,10 @@
     ADDB AH,#127
     INC *XAR4++
     DEC *XAR4++
+
+; T-controlled and immediate bit numbering are deliberately different.
+    TBIT AL,T
+    TBIT AH,T
+    TBIT *XAR4++,T
+    TBIT AL,#0
+    TBIT AH,#15

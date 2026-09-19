@@ -248,7 +248,7 @@ assembler-test: tms320c28.sla assembler_test.py
 
 # Focused P-Code semantic regressions for compiler-critical instructions.
 .PHONY: semantic-test
-semantic-test: tms320c28.sla semantic_tests.py alu16_flags_test.py repeat_transfer_test.py
+semantic-test: tms320c28.sla semantic_tests.py alu16_flags_test.py bit_operand_test.py repeat_transfer_test.py
 	$(Q)$(PYTHON) semantic_tests.py
 
 # Exact instruction-local shadows for repeated program-space transfers and a
@@ -571,3 +571,7 @@ clean:
 .PHONY: alu16-flags-test
 alu16-flags-test: tms320c28.sla alu16_flags_test.py repeat_transfer_test.py
 	$(Q)$(PYTHON) alu16_flags_test.py
+
+.PHONY: bit-operand-test
+bit-operand-test: tms320c28.sla bit_operand_test.py repeat_transfer_test.py
+	$(Q)$(PYTHON) bit_operand_test.py

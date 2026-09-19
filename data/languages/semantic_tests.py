@@ -4302,6 +4302,12 @@ CASES += tuple(
 )
 
 
+from bit_operand_test import check_tbit
+
+CASES += (Case("TBIT T reverses the low four index bits", (0x5625, 0x00A9),
+               lambda _ops: check_tbit()),)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
