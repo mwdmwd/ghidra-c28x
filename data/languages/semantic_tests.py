@@ -438,7 +438,7 @@ def _float32_to_bits(value: float) -> int:
 
 
 def _execute_tmu_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
-    """Execute the finite P-Code subset used by focused TMU constructors.
+    """Execute the finite P-Code subset used by focused TMU/FPU constructors.
 
     Unlike the integer-only harness, this supports forward intra-instruction
     branches and the floating-point operations used by the retained TMU
@@ -592,6 +592,16 @@ def _execute_tmu_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
         elif opcode == OpCode.FLOAT_SQRT:
             operand = _float32_from_bits(args[0])
             result = _float32_to_bits(math.sqrt(operand))
+        elif opcode == OpCode.FLOAT_FLOOR:
+            result = _float32_to_bits(math.floor(_float32_from_bits(args[0])))
+        elif opcode == OpCode.FLOAT_ROUND:
+            # Ghidra's native FloatFormat::opRound uses C++ round (ties away
+            # from zero). Keep its FLOAT result here: it is not an integer
+            # conversion, and cannot implement the C28x ties-to-even rule.
+            operand = _float32_from_bits(args[0])
+            result = _float32_to_bits(
+                math.copysign(math.floor(abs(operand) + 0.5), operand)
+            )
         elif opcode == OpCode.FLOAT_TRUNC:
             result = math.trunc(_float32_from_bits(args[0]))
         elif opcode == OpCode.FLOAT_INT2FLOAT:
@@ -620,6 +630,57 @@ def _execute_tmu_pcode(ops: list, initial: dict[str, int]) -> dict[str, int]:
 
 def _f32(value: float) -> int:
     return _float32_to_bits(value)
+
+
+def check_fpu_round16(ops: list, dst: str, src: str, unsigned: bool) -> None:
+    # SPRUEO2B pp. 56/59: integer results, nearest with ties to even, and
+    # no flag changes. SPRUHS1C p. 57 also specifies unsigned saturation.
+    writes = {_reg(op.output) for op in ops if _reg(op.output) is not None}
+    assert writes == {dst}, f"rounded conversion changed other registers: {writes}"
+    reads = {_reg(node) for op in ops for node in op.inputs if _reg(node) is not None}
+    assert reads <= {src, dst}, f"rounded conversion depends on flags/modes: {reads}"
+
+    vectors = [
+        (1.7, 2), (10.8, 11), (1.2, 1), (1.0, 1),
+        (0.0, 0), (-0.0, 0), (0.5, 0), (1.5, 2), (2.5, 2),
+        (3.5, 4), (4.5, 4), (32766.5, 32766), (32767.0, 32767),
+    ]
+    if unsigned:
+        vectors += [
+            (-10.8, 0), (-1.7, 0), (-0.5, 0), (-65536.0, 0),
+            (32767.5, 32768), (32768.0, 32768), (65534.5, 65534),
+            (65535.0, 65535), (65535.5, 65535), (65536.0, 65535),
+            (300000.0, 65535),
+        ]
+    else:
+        vectors += [
+            (-1.7, -2), (-1.2, -1), (-1.0, -1), (-0.5, 0),
+            (-1.5, -2), (-2.5, -2), (-3.5, -4), (-4.5, -4),
+            (-32767.5, -32768), (-32768.0, -32768),
+        ]
+
+    bit_vectors = [(_f32(value), expected) for value, expected in vectors]
+    # Adjacent binary32 values distinguish exact ties from nearby fractions.
+    for value in (0.5, 1.5, 2.5, 32766.5):
+        bit_vectors += [(_f32(value) - 1, math.floor(value)),
+                        (_f32(value) + 1, math.ceil(value))]
+        if not unsigned:
+            bit_vectors += [(_f32(-value) - 1, -math.floor(value)),
+                            (_f32(-value) + 1, -math.ceil(value))]
+
+    for bits, expected in bit_vectors:
+        initial = {dst: 0xA5A55A5A, src: bits}
+        result = _execute_tmu_pcode(ops, initial)
+        assert result[dst] == expected & 0xFFFFFFFF, (
+            f"input {_float32_from_bits(bits)} ({bits:#010x}): "
+            f"expected {expected & 0xFFFFFFFF:#010x}, got {result[dst]:#010x}"
+        )
+        if src != dst:
+            assert result[src] == bits, "rounded conversion modified its source"
+
+    assert any(op.opcode == OpCode.FLOAT_TRUNC for op in ops), (
+        "rounded floating value must be converted to an integer"
+    )
 
 
 def check_divf32(ops: list) -> None:
@@ -4193,6 +4254,14 @@ CASES = (
     Case("SFR ACC,#5 is branch-free with SXM and carry", (0xFF44,), check_sfr_immediate_eventual_state),
     Case("SFR ACC,T is branch-free for zero and maximum shifts", (0xFF51,), check_sfr_t_eventual_state),
     Case("CMPF32 conditions special values without internal CFG", (0xE694, 0x0008), check_cmpf32_branch_free),
+    Case("F32TOI16R produces a signed integer with ties to even", (0xE68C, 0x8008),
+         lambda ops: check_fpu_round16(ops, "R0H", "R1H", False)),
+    Case("F32TOI16R supports an aliased source and destination", (0xE68C, 0x803F),
+         lambda ops: check_fpu_round16(ops, "R7H", "R7H", False)),
+    Case("F32TOUI16R produces an unsigned integer with ties to even", (0xE68E, 0x801E),
+         lambda ops: check_fpu_round16(ops, "R6H", "R3H", True)),
+    Case("F32TOUI16R supports an aliased source and destination", (0xE68E, 0x8000),
+         lambda ops: check_fpu_round16(ops, "R0H", "R0H", True)),
     Case("ZALR publishes one full-width ACC write", (0x5613, 0x0011), check_zalr_full_width_write),
     Case("RPTB stores block start in word-address units", (0xB589, 0x0002), check_rptb_start_word_address),
     Case("MOVST0 all flags commits selected eventual state", (0xADFF,), check_movst0_all_eventual_state),

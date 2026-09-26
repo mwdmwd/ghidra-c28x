@@ -544,9 +544,25 @@ macro update_stf_mov(res) {
 	rah3 = sext(s);
 }
 
-# p.56 - no flags
+# Rounded 16-bit conversions use nearest with ties to even (SPRUEO2B pp. 56/59).
+# SLEIGH round() returns a FLOAT, and FLOAT_ROUND does not guarantee even ties.
+# Convert the floor to an integer, then select the upper neighbor only when
+# closer or when the exact tie's lower neighbor is odd. All sources are read
+# before the destination write, including when RaH and RbH are the same.
+macro fpu_round_even_integer(out, in) {
+	local lower:4 = floor(in);
+	local integer:4 = trunc(lower);
+	local fraction:4 = in f- lower;
+	local half:4 = 0x3F000000;
+	local increment:1 = (half f< fraction)
+		|| ((fraction f== half) && ((integer & 1) != 0));
+	out = integer + zext(increment);
+}
+
+# p.56 - no flags; sign-extend the converted integer, not the float's low bits
 :f32toi16r rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b1000000000 & rbh3 & rah3 {
-	local t:4 = round(rbh3);
+	local t:4;
+	fpu_round_even_integer(t, rbh3);
 	local s:2 = t[0,16];
 	rah3 = sext(s);
 }
@@ -569,13 +585,19 @@ macro update_stf_mov(res) {
 	<done>
 }
 
-# p.59 - no flags
+# p.59 - no flags; SPRUHS1C p.57 specifies saturation to the unsigned range
 :f32toui16r rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b1000000000 & rbh3 & rah3 {
 	local zero:4 = 0;
 	if (rbh3 f< zero) goto <negative>;
-	local t:4 = round(rbh3);
+	local maximum:4 = 0x477FFF00; # 65535.0f
+	if (maximum f<= rbh3) goto <saturate>;
+	local t:4;
+	fpu_round_even_integer(t, rbh3);
 	local s:2 = t[0,16];
 	rah3 = zext(s);
+	goto <done>;
+	<saturate>
+	rah3 = 0x0000FFFF;
 	goto <done>;
 	<negative>
 	rah3 = 0;
