@@ -206,6 +206,14 @@ macro packst0(res) {
 		| (ovc_raw << 10));
 }
 
+macro decode_pm(pm_raw) {
+	# Table 2-3: raw 101 is -4 in C28x mode, +4 in C2xLP mode.
+	local pm_default:1 = 1 - pm_raw;
+	local pm_plus4:1 = (AMODE != 0) && (pm_raw == 5);
+	local pm_plus4_mask:1 = 0 - pm_plus4;
+	PM = (pm_default & ~pm_plus4_mask) | (4 & pm_plus4_mask);
+}
+
 macro unpackst0(in) {
 	# OVC is a signed six-bit counter. Preserve that signed interpretation in
 	# the one-byte internal register so comparisons and wraparound are correct.
@@ -216,10 +224,7 @@ macro unpackst0(in) {
 	# Decode the raw PM field into the signed shift used by pmshift().  Raw 101
 	# is the sole AMODE-dependent value: -4 in C28x mode, +4 in C2xLP mode.
 	local pm_raw:1 = in[7,3];
-	local pm_default:1 = 1 - pm_raw;
-	local pm_plus4:1 = (AMODE != 0) && (pm_raw == 5);
-	local pm_plus4_mask:1 = 0 - pm_plus4;
-	PM = (pm_default & ~pm_plus4_mask) | (4 & pm_plus4_mask);
+	decode_pm(pm_raw);
 	V   = in[6,1];
 	N   = in[5,1];
 	Z   = in[4,1];
@@ -3513,7 +3518,8 @@ with : ctx_objmode=1 {
 
 # p.275
 :mov PM, ax0 is ctx_objmode=1 & op1_15=0b010101100011100 & PM & ax0 {
-	PM = ax0[0,3]; # TODO check encoding
+	local raw:1 = ax0[0,3];
+	decode_pm(raw);
 }
 
 # p.276
