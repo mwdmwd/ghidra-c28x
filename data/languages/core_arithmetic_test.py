@@ -13,9 +13,12 @@ from repeat_transfer_test import _execute, _reg, _translate
 
 def execute(words, initial, memory=None):
     ops = _translate(words)
+    return run(ops, initial, memory), ops
+
+
+def run(ops, initial, memory=None):
     present = {_reg(node) for op in ops for node in (*op.inputs, op.output)}
-    trace = _execute(ops, {k: v for k, v in initial.items() if k in present}, memory)
-    return trace, ops
+    return _execute(ops, {k: v for k, v in initial.items() if k in present}, memory)
 
 
 def state(trace, initial, names):
@@ -56,8 +59,45 @@ def check_maxcul():
             assert writes - {None} == {"P", "V"}, writes
 
 
+def check_integer_mac_flags():
+    # pp.199-200/205-206: add/subtract unsigned old P, independently of PM
+    # and OVM. The new signed product is shifted only when stored into P.
+    arithmetic = ((0, 1), (0, 0), (0xFFFFFFFF, 1), (0x7FFFFFFF, 1),
+                  (0x80000000, 1), (0x80000000, 0xFFFFFFFF),
+                  (0x7FFFFFFF, 0xFFFFFFFF), (1, 0xFFFFFFFF))
+    for words, subtract in (((0x5643, 0x00A4), True),
+                            ((0x564D, 0xC7A4), False),
+                            ((0x564D, 0x87A4), False)):
+        ops = _translate(words)
+        for (acc, p), (a, b), shift, ovc, v, ovm in product(
+                arithmetic, ((3, 5), (-7, 9), (-0x80000000, -1)),
+                (-6, 0, 1, 4), (-32, -1, 0, 31), (0, 1), (0, 1)):
+            initial = {"ACC": acc, "P": p, "XAR4": a & 0xFFFFFFFF,
+                       "XT": b & 0xFFFFFFFF, "XAR7": 0x2400,
+                       "C": acc & 1, "V": v, "N": 1, "Z": 1,
+                       "OVC": ovc & 0xFF, "OVM": ovm, "PM": shift & 0xFF}
+            memory = {0x2400: b & 0xFFFF, 0x2401: (b >> 16) & 0xFFFF}
+            trace = run(ops, initial, memory)
+            total = acc - p if subtract else acc + p
+            signed_total = signed(acc) - signed(p) if subtract else signed(acc) + signed(p)
+            result = total & 0xFFFFFFFF
+            event = int(acc < p) if subtract else int(total > 0xFFFFFFFF)
+            counter = (ovc - event if subtract else ovc + event) & 0x3F
+            shifted_product = (a * b) << shift if shift >= 0 else (a * b) >> -shift
+            expected = {"ACC": result, "P": shifted_product & 0xFFFFFFFF,
+                        "C": 1 - event if subtract else event,
+                        "V": v | int(not -0x80000000 <= signed_total < 0x80000000),
+                        "N": result >> 31, "Z": int(result == 0),
+                        "OVC": signed(counter, 6) & 0xFF, "OVM": ovm}
+            assert state(trace, initial, expected) == expected, (words, initial, expected)
+        touched = {_reg(node) for op in ops for node in (*op.inputs, op.output)}
+        assert "OVM" not in touched, "unsigned product accumulation must not use OVM"
+
+
 if __name__ == "__main__":
     check_mov_pm()
     print("MOV_PM_VECTORS=96")
     check_maxcul()
     print("MAXCUL_VECTORS=150")
+    check_integer_mac_flags()
+    print("INTEGER_MAC_FLAG_VECTORS=4608")

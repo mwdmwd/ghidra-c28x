@@ -2785,21 +2785,19 @@ with : ctx_objmode=1 {
 
 # p.199
 :imacl P, loc32, *XAR7 is ctx_objmode=1 & op0_16=0b0101011001001101; op8_8=0b11000111 & P & loc32 & XAR7 {
-	# TODO C, V, OVCU, OVM
-	ACC = ACC + P;
+	local old_p:4 = P;
+	add_unsigned32(ACC, old_p);
 	local tmp:8 = sext(loc32) * sext(*:4 XAR7);
 	store_p_lower38(tmp);
-	flagnz(ACC);
 }
 
 # p.199
 :imacl P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 {
-	# TODO C, V, OVCU, OVM
-	ACC = ACC + P;
+	local old_p:4 = P;
+	add_unsigned32(ACC, old_p);
 	local tmp:8 = sext(loc32) * sext(*:4 XAR7);
 	store_p_lower38(tmp);
 	XAR7 = XAR7 + 1;
-	flagnz(ACC);
 }
 
 # p.201
@@ -2829,7 +2827,7 @@ with : ctx_objmode=1 {
 # p.205
 :impysl P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001000011; op8_8=0b00000000 & P & XT & loc32 {
 	local oldp:4 = P;
-	acc_sub32(oldp);
+	sub_unsigned32(ACC, oldp);
 	local prod:8 = sext(XT) * sext(loc32);
 	store_p_lower38(prod);
 }
