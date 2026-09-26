@@ -4420,11 +4420,15 @@ CASES += tuple(
 
 
 from bit_operand_test import check_tbit, check_mov_dp
+from macf32_test import check_parallel as check_macf32_parallel
 
 CASES += (Case("TBIT T reverses the low four index bits", (0x5625, 0x00A9),
                lambda _ops: check_tbit()),
           Case("MOV DP immediate preserves positioned upper bits", (0xF800,),
                lambda _ops: check_mov_dp()))
+
+CASES += (Case("MACF32 parallel sources precede every destination write", (0x7700,),
+               lambda _ops: check_macf32_parallel()),)
 
 
 def main() -> int:

@@ -213,14 +213,16 @@ macro update_stf_mov(res) {
 }
 
 :macf32 "R3H, R2H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local product:4 = fpu_re_low f* p1_f3;
 	R3H = R3H f+ R2H;
-	p2_d3 = fpu_re_low f* p1_f3;
+	p2_d3 = product;
 	p2_a3 = loc32;
 	update_stf_mov(p2_a3);
 }
 :macf32 "R7H, R6H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local product:4 = fpu_re_low f* p1_f3;
 	R7H = R7H f+ R6H;
-	p2_d3 = fpu_re_low f* p1_f3;
+	p2_d3 = product;
 	p2_a3 = loc32;
 	update_stf_mov(p2_a3);
 }
@@ -260,14 +262,16 @@ macro update_stf_mov(res) {
 }
 
 :macf32 "R3H, R2H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local product:4 = fpu_re_high f* p1_f3;
 	R3H = R3H f+ R2H;
-	p2_d3 = fpu_re_high f* p1_f3;
+	p2_d3 = product;
 	p2_a3 = loc32;
 	update_stf_mov(p2_a3);
 }
-:macf32 "R7H, R6H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=1 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+:macf32 "R7H, R6H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local product:4 = fpu_re_high f* p1_f3;
 	R7H = R7H f+ R6H;
-	p2_d3 = fpu_re_high f* p1_f3;
+	p2_d3 = product;
 	p2_a3 = loc32;
 	update_stf_mov(p2_a3);
 }

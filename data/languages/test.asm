@@ -817,6 +817,14 @@
     NOP
     MACF32 R7H, R3H, *XAR6++, *XAR7++
     NOP
+    MACF32 R3H,R2H,R2H,R3H,R1H || MOV32 R0H,*XAR4++
+    NOP
+    MACF32 R3H,R2H,R2H,R5H,R3H || MOV32 R0H,*XAR4++
+    NOP
+    MACF32 R7H,R6H,R6H,R3H,R7H || MOV32 R0H,*XAR4++
+    NOP
+    MACF32 R7H,R6H,R6H,R7H,R1H || MOV32 R0H,*XAR4++
+    NOP
 
 ; Second upstream comparison: arithmetic flag forms, both AX choices and aliases.
     ADD AL,AR0

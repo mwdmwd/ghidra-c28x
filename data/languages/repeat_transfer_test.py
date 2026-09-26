@@ -88,7 +88,7 @@ def _execute(
     initial_registers: dict[str, int],
     initial_words: dict[int, int] | None = None,
 ) -> Trace:
-    """Execute the finite integer/memory/control-flow subset in these fixtures."""
+    """Execute the finite integer/memory/control-flow subset and FPU MAC ops."""
 
     cells: dict[tuple[str, int], int] = {}
     registers: dict[str, object] = {}
@@ -268,6 +268,12 @@ def _execute(
             result = args[0] >> (args[1] * 8)
         elif code == OpCode.PIECE:
             result = (args[0] << (op.inputs[1].size * 8)) | args[1]
+        elif code in (OpCode.FLOAT_ADD, OpCode.FLOAT_MULT):
+            assert all(node.size == 4 for node in (*op.inputs, op.output))
+            left, right = (struct.unpack("<f", struct.pack("<I", value))[0]
+                           for value in args)
+            value = left + right if code == OpCode.FLOAT_ADD else left * right
+            result = struct.unpack("<I", struct.pack("<f", value))[0]
         else:
             raise AssertionError(f"unsupported repeat-transfer P-Code op {code.name}")
         write(op.output, result)
