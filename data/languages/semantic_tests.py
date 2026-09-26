@@ -655,6 +655,23 @@ def check_fracf32(ops: list, dst: str, src: str) -> None:
                 assert actual[src] == bits, "FRACF32 modified its source"
 
 
+def check_f32toui16(ops: list, dst: str, src: str) -> None:
+    # SPRUHS1C p. 56: saturate to [0,65535], then truncate toward zero.
+    writes = {_reg(op.output) for op in ops if _reg(op.output) is not None}
+    assert writes == {dst}, f"F32TOUI16 changed other registers: {writes}"
+    vectors = [0, 1, 0x007FFFFF, _f32(0.5), _f32(1.7), _f32(32768.75),
+               _f32(65535.0) - 1, _f32(65535.0), _f32(65535.0) + 1,
+               _f32(65536.0), _f32(300000.0), _f32(2.0 ** 31), 0x7F7FFFFF]
+    for magnitude in vectors:
+        for sign in (0, 0x80000000):
+            bits = magnitude | sign
+            expected = min(65535, max(0, math.trunc(_float32_from_bits(bits))))
+            actual = _execute_tmu_pcode(ops, {dst: 0xA5A55A5A, src: bits})
+            assert actual[dst] == expected, (hex(bits), actual, expected)
+            if src != dst:
+                assert actual[src] == bits, "F32TOUI16 modified its source"
+
+
 def check_fpu_round16(ops: list, dst: str, src: str, unsigned: bool) -> None:
     # SPRUEO2B pp. 56/59: integer results, nearest with ties to even, and
     # no flag changes. SPRUHS1C p. 57 also specifies unsigned saturation.
@@ -4281,6 +4298,10 @@ CASES = (
          lambda ops: check_fracf32(ops, "R0H", "R1H")),
     Case("FRACF32 supports an aliased source and destination", (0xE6F1, 0x003F),
          lambda ops: check_fracf32(ops, "R7H", "R7H")),
+    Case("F32TOUI16 saturates before integer conversion", (0xE68E, 0x0008),
+         lambda ops: check_f32toui16(ops, "R0H", "R1H")),
+    Case("F32TOUI16 saturation supports aliased registers", (0xE68E, 0x003F),
+         lambda ops: check_f32toui16(ops, "R7H", "R7H")),
     Case("F32TOI16R produces a signed integer with ties to even", (0xE68C, 0x8008),
          lambda ops: check_fpu_round16(ops, "R0H", "R1H", False)),
     Case("F32TOI16R supports an aliased source and destination", (0xE68C, 0x803F),

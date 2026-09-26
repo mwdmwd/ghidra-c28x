@@ -572,13 +572,18 @@ macro fpu_round_even_integer(out, in) {
 	rah3 = trunc(rbh3);
 }
 
-# p.58 - no flags
+# p.58 - no flags; SPRUHS1C p.56 specifies saturation before conversion
 :f32toui16 rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b0000000000 & rbh3 & rah3 {
 	local zero:4 = 0;
 	if (rbh3 f< zero) goto <negative>;
+	local maximum:4 = 0x477FFF00; # 65535.0f
+	if (maximum f<= rbh3) goto <saturate>;
 	local t:4 = trunc(rbh3);
 	local s:2 = t[0,16];
 	rah3 = zext(s);
+	goto <done>;
+	<saturate>
+	rah3 = 0x0000FFFF;
 	goto <done>;
 	<negative>
 	rah3 = 0;
