@@ -2443,13 +2443,20 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.157
 :asr ax4, shift0_4_1 is op5_11=0b11111111101 & ax4 & shift0_4_1 {
+	local carry_value:2 = ax4 >> (shift0_4_1 - 1);
+	C = carry_value[0,1];
 	ax4 = ax4 s>> shift0_4_1;
 	flagnz(ax4);
 }
 
 # p.158
 :asr ax0, T is op1_15=0b111111110110010 & ax0 & T {
-	ax0 = ax0 s>> T[0,4];
+	local shift:4 = zext(T[0,4]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
+	local carry_value:2 = ax0 >> (safe_shift - 1);
+	C = carry_value[0,1] && nonzero;
+	ax0 = ax0 s>> shift;
 	flagnz(ax0);
 }
 
@@ -3129,7 +3136,12 @@ with : ctx_objmode=1 {
 
 # p.236
 :lsll ACC, T is ctx_objmode=1 & op0_16=0b0101011000111011 & ACC & T {
-	ACC = ACC << zext(T[0,5]);
+	local shift:4 = zext(T[0,5]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
+	local carry_value:4 = ACC << (safe_shift - 1);
+	C = carry_value[31,1] && nonzero;
+	ACC = ACC << shift;
 	flagnz(ACC);
 }
 

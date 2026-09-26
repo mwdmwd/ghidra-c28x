@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from itertools import product
 
+from pypcode import OpCode
 from repeat_transfer_test import _execute, _reg, _translate
 
 
@@ -57,6 +58,35 @@ def check_maxcul():
             assert state(trace, initial, expected) == expected, (initial, expected)
             writes = {_reg(op.output) for op in ops if op.output is not None}
             assert writes - {None} == {"P", "V"}, writes
+
+
+def check_shift_carry():
+    # pp.157-158/236: last bit shifted out; masked-zero T explicitly clears C.
+    forms = []
+    for destination, base, variable in (("AL", 0xFFA0, 0xFF64), ("AH", 0xFFB0, 0xFF65)):
+        forms += [((base | (count - 1),), destination, 16, count, None, False)
+                  for count in range(1, 17)]
+        forms += [((variable,), destination, 16, count, count | high, False)
+                  for count in range(16) for high in (0, 0xFFF0)]
+    forms += [((0x563B,), "ACC", 32, count, count | high, True)
+              for count in range(32) for high in (0, 0xFFE0)]
+    for words, destination, width, count, t, left in forms:
+        ops = _translate(words)
+        assert not any(op.opcode in (OpCode.BRANCH, OpCode.CBRANCH) for op in ops)
+        values = (0, 1, 2, 3, (1 << (width - 1)) - 1, 1 << (width - 1),
+                  (1 << (width - 1)) + 1, (1 << width) - 1)
+        for value, c in product(values, (0, 1)):
+            initial = {destination: value, "C": c, "N": 1, "Z": 1}
+            if t is not None:
+                initial["T"] = t
+            trace = run(ops, initial)
+            result = (value << count if left else signed(value, width) >> count) & ((1 << width) - 1)
+            carry = (value >> (width - count if left else count - 1)) & 1 if count else 0
+            expected = {destination: result, "C": carry,
+                        "N": result >> (width - 1), "Z": int(result == 0)}
+            assert state(trace, initial, expected) == expected, (words, initial, expected)
+        writes = {_reg(op.output) for op in ops if op.output is not None}
+        assert writes - {None} == {destination, "C", "N", "Z"}, writes
 
 
 def check_loc32_flags():
@@ -163,3 +193,5 @@ if __name__ == "__main__":
     print("MOVU_OVC_VECTORS=4097")
     check_loc32_flags()
     print("LOC32_FLAG_VECTORS=2304")
+    check_shift_carry()
+    print("SHIFT_CARRY_VECTORS=2560")
