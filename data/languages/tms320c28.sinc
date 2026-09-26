@@ -3941,8 +3941,16 @@ movl_store_flags: is op0_8=0b10101001 {
 }
 
 # p.314
+:movu regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101000; op8_8=0 & op4_4=0b1010 & regax & regax=8 & OVC {
+	regax = zext(OVC) & 0x3f;
+	flagnz(regax);
+}
+:movu regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101000; op8_8=0 & op4_4=0b1010 & regax & regax=9 & OVC {
+	regax = zext(OVC) & 0x3f;
+	flagnz(regax);
+}
 :movu loc16, OVC is ctx_objmode=1 & op0_16=0b0101011000101000; op8_8=0b00000000 & loc16 & OVC {
-	loc16 = zext(OVC);
+	loc16 = zext(OVC) & 0x3f;
 }
 
 # p.315

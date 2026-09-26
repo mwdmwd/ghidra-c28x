@@ -59,6 +59,31 @@ def check_maxcul():
             assert writes - {None} == {"P", "V"}, writes
 
 
+def check_movu_ovc():
+    # p.314: expose exactly six unsigned bits; refresh N/Z for AX destinations.
+    for loc, destination in ((0xA9, "AL"), (0xA8, "AH"), (0xA0, "AR0"), (0x84, "memory")):
+        ops = _translate((0x5628, loc))
+        for ovc, n, z in product(range(256), (0, 1), (0, 1)):
+            initial = {"OVC": ovc, "N": n, "Z": z, "XAR4": 0x2400}
+            if destination != "memory":
+                initial[destination] = 0xA5A5
+            trace = run(ops, initial, {0x2400: 0xABCD, 0x2401: 0x1234})
+            value = trace.word(0x2400) if destination == "memory" else trace.register(destination)
+            assert value == ovc & 0x3F, (loc, ovc, value)
+            ax = destination in ("AL", "AH")
+            expected = {"OVC": ovc, "N": 0 if ax else n,
+                        "Z": int(value == 0) if ax else z}
+            assert state(trace, initial, expected) == expected, (loc, initial, expected)
+            assert not trace.loads
+            if destination == "memory":
+                assert len(trace.stores) == 1
+                assert trace.register("XAR4") == 0x2401
+                assert trace.word(0x2401) == 0x1234
+    trace, _ops = execute((0x5655, 0x00A4, 0x5628, 0x00A0),
+                          {"ACC": 0, "XAR4": 1, "OVC": 0, "V": 0})
+    assert trace.register("AR0") == 63, "reachable unsigned borrow must store six bits"
+
+
 def check_integer_mac_flags():
     # pp.199-200/205-206: add/subtract unsigned old P, independently of PM
     # and OVM. The new signed product is shifted only when stored into P.
@@ -101,3 +126,5 @@ if __name__ == "__main__":
     print("MAXCUL_VECTORS=150")
     check_integer_mac_flags()
     print("INTEGER_MAC_FLAG_VECTORS=4608")
+    check_movu_ovc()
+    print("MOVU_OVC_VECTORS=4097")

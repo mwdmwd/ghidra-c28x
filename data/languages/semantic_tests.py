@@ -4421,7 +4421,7 @@ CASES += tuple(
 
 from bit_operand_test import check_tbit, check_mov_dp
 from macf32_test import check_parallel as check_macf32_parallel, check_repeat as check_macf32_repeat
-from core_arithmetic_test import check_mov_pm, check_maxcul, check_integer_mac_flags
+from core_arithmetic_test import check_mov_pm, check_maxcul, check_integer_mac_flags, check_movu_ovc
 from dual_mac_test import check_dual_mac
 
 CASES += (Case("TBIT T reverses the low four index bits", (0x5625, 0x00A9),
@@ -4441,7 +4441,9 @@ CASES += (Case("MOV PM decodes all raw modes before product shifts", (0x7700,),
           Case("IMPYSL and IMACL preserve unsigned counter and sticky overflow", (0x7700,),
                lambda _ops: check_integer_mac_flags()),
           Case("Dual-memory MAC gives loc updates priority over XAR7 postincrement", (0x7700,),
-               lambda _ops: check_dual_mac()))
+               lambda _ops: check_dual_mac()),
+          Case("MOVU OVC exposes six bits and refreshes AX flags", (0x7700,),
+               lambda _ops: check_movu_ovc()))
 
 
 def main() -> int:
