@@ -617,9 +617,11 @@ macro fpu_round_even_integer(out, in) {
 
 # p.61 - no flags
 :fracf32 rah3, rbh3 is op0_16=0b1110011011110001; op6_10=0b0000000000 & rbh3 & rah3 {
-	local i:4 = trunc(rbh3);
-	local int_part:4 = int2float(i);
-	rah3 = rbh3 f- int_part;
+	# Keep the integer part in floating-point format: finite binary32 values
+	# above 2^23 are already integral, including those outside int32's range.
+	local magnitude:4 = rbh3 & 0x7FFFFFFF;
+	local fraction:4 = magnitude f- floor(magnitude);
+	rah3 = fraction | (rbh3 & 0x80000000);
 }
 
 # p.62 - no flags

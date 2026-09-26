@@ -632,6 +632,29 @@ def _f32(value: float) -> int:
     return _float32_to_bits(value)
 
 
+def check_fracf32(ops: list, dst: str, src: str) -> None:
+    # SPRUEO2B p. 61: fractional part, with no integer-range limitation or flags.
+    writes = {_reg(op.output) for op in ops if _reg(op.output) is not None}
+    assert writes == {dst}, f"FRACF32 changed other registers: {writes}"
+    magnitudes = [0, 1, 0x007FFFFF, 0x00800000, 0x3EFFFFFF,
+                  0x3F000000, 0x3F7FFFFF, 0x3F800000, 0x3F800001,
+                  _f32(19.625), 0x4AFFFFFF, 0x4B000000, 0x4B000001,
+                  0x4EFFFFFF, 0x4F000000, 0x4F000001, 0x5F000000,
+                  0x7F7FFFFF]
+    for magnitude in magnitudes:
+        for sign in (0, 0x80000000):
+            bits = magnitude | sign
+            expected = _f32(math.modf(_float32_from_bits(bits))[0])
+            actual = _execute_tmu_pcode(ops, {dst: 0xA5A55A5A, src: bits})
+            # The instruction page does not specify the sign of an exact zero.
+            if expected & 0x7FFFFFFF == 0:
+                assert actual[dst] & 0x7FFFFFFF == 0, (hex(bits), actual)
+            else:
+                assert actual[dst] == expected, (hex(bits), actual, hex(expected))
+            if src != dst:
+                assert actual[src] == bits, "FRACF32 modified its source"
+
+
 def check_fpu_round16(ops: list, dst: str, src: str, unsigned: bool) -> None:
     # SPRUEO2B pp. 56/59: integer results, nearest with ties to even, and
     # no flag changes. SPRUHS1C p. 57 also specifies unsigned saturation.
@@ -4254,6 +4277,10 @@ CASES = (
     Case("SFR ACC,#5 is branch-free with SXM and carry", (0xFF44,), check_sfr_immediate_eventual_state),
     Case("SFR ACC,T is branch-free for zero and maximum shifts", (0xFF51,), check_sfr_t_eventual_state),
     Case("CMPF32 conditions special values without internal CFG", (0xE694, 0x0008), check_cmpf32_branch_free),
+    Case("FRACF32 handles the complete finite binary32 range", (0xE6F1, 0x0008),
+         lambda ops: check_fracf32(ops, "R0H", "R1H")),
+    Case("FRACF32 supports an aliased source and destination", (0xE6F1, 0x003F),
+         lambda ops: check_fracf32(ops, "R7H", "R7H")),
     Case("F32TOI16R produces a signed integer with ties to even", (0xE68C, 0x8008),
          lambda ops: check_fpu_round16(ops, "R0H", "R1H", False)),
     Case("F32TOI16R supports an aliased source and destination", (0xE68C, 0x803F),
