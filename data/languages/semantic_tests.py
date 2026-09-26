@@ -4421,7 +4421,7 @@ CASES += tuple(
 
 from bit_operand_test import check_tbit, check_mov_dp
 from macf32_test import check_parallel as check_macf32_parallel, check_repeat as check_macf32_repeat
-from core_arithmetic_test import check_mov_pm
+from core_arithmetic_test import check_mov_pm, check_maxcul
 
 CASES += (Case("TBIT T reverses the low four index bits", (0x5625, 0x00A9),
                lambda _ops: check_tbit()),
@@ -4434,7 +4434,9 @@ CASES += (Case("MACF32 parallel sources precede every destination write", (0x770
                lambda _ops: check_macf32_repeat()))
 
 CASES += (Case("MOV PM decodes all raw modes before product shifts", (0x7700,),
-               lambda _ops: check_mov_pm()),)
+               lambda _ops: check_mov_pm()),
+          Case("MAXCUL selects the unsigned low-word maximum with sticky V", (0x7700,),
+               lambda _ops: check_maxcul()))
 
 
 def main() -> int:

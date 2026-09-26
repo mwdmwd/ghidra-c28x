@@ -3229,14 +3229,14 @@ with : ctx_objmode=1 {
 
 # p.247
 :maxcul P, loc32 is ctx_objmode=1 & op0_16=0b0101011001010001; op8_8=0b00000000 & P & loc32 {
-	# N/Z set by prior instruction; if N && !Z → P > loc32, update to loc32
+	# N/Z describe the high words: N && !Z selects the incoming low word.
 	if (N == 0) goto <check_eq>;
 	if (Z != 0) goto inst_next;
 	P = loc32;
 	goto inst_next;
 <check_eq>
 	if (Z == 0) goto inst_next;
-	if (P < loc32) goto inst_next;
+	if (P >= loc32) goto inst_next;
 	V = 1;
 	P = loc32;
 }

@@ -41,6 +41,23 @@ def check_mov_pm():
             assert writes - {None} == {"PM", "AR0"}, writes
 
 
+def check_maxcul():
+    # p.247: N/Z describe the preceding high-word MAXL. V is sticky and is
+    # set here only when equal high words require replacing the low word.
+    values = (0, 1, 2, 0x80000000, 0xFFFFFFFF)
+    for n, z in ((0, 0), (0, 1), (1, 0)):
+        for p, source, v in product(values, values, (0, 1)):
+            initial = {"N": n, "Z": z, "V": v, "P": p, "XAR4": source}
+            trace, ops = execute((0x5651, 0x00A4), initial)
+            expected_p = source if n else (max(p, source) if z else p)
+            expected = {"P": expected_p, "V": v | int(z and p < source), "N": n, "Z": z}
+            assert state(trace, initial, expected) == expected, (initial, expected)
+            writes = {_reg(op.output) for op in ops if op.output is not None}
+            assert writes - {None} == {"P", "V"}, writes
+
+
 if __name__ == "__main__":
     check_mov_pm()
     print("MOV_PM_VECTORS=96")
+    check_maxcul()
+    print("MAXCUL_VECTORS=150")
