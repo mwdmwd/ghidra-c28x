@@ -2052,6 +2052,34 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 <done_xpwrite_al>
 }
 
+# SPRUEO2B pp.70-71: repeated memory MACF32.
+# The repeated form alternates accumulator/product pairs. Keep its phase in
+# an instruction-local temporary, initialized once per RPT, and evaluate the
+# addressing operand on every iteration. The last products remain in R2/R6
+# for the caller's final additions (also true for cascaded even repeats).
+:macf32 "R7H, R3H," loc32^", *XAR7++" is ctx_objmode=1 & rpt_phase=0 & rpt_active=1 & op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {
+	local second_pair:1 = 0;
+	<repeat_macf32>
+	build loc32;
+	local v1:4 = loc32;
+	local v2:4 = *:4 XAR7;
+	XAR7 = XAR7 + 2;
+	local product:4 = v1 f* v2;
+	if (second_pair != 0) goto <high_pair>;
+	R3H = R3H f+ R2H;
+	R2H = product;
+	goto <next_macf32>;
+	<high_pair>
+	R7H = R7H f+ R6H;
+	R6H = product;
+	<next_macf32>
+	if (RPTC == 0) goto <done_macf32>;
+	RPTC = RPTC - 1;
+	second_pair = second_pair ^ 1;
+	goto <repeat_macf32>;
+	<done_macf32>
+}
+
 # RPT repeat wrapper: when an instruction follows RPT, execute it N+1 times.
 # rpt_active is set (with noflow) by RPT on inst_next; rpt_phase prevents recursion.
 # A separately proved full-width SUBCUL division has already summarized all

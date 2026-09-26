@@ -278,6 +278,7 @@ macro update_stf_mov(res) {
 
 # p.70 — MACF32 R7H, R3H, mem32, *XAR7++
 # LSW: 1110 0010 0101 0000 (fixed), MSW: 0001 1111 mem32
+# The repeated form is selected ahead of the RPT wrapper in tms320c28.sinc.
 :macf32 "R7H, R3H," loc32^", *XAR7++" is op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {
 	R3H = R3H f+ R2H;
 	local v1:4 = loc32;
