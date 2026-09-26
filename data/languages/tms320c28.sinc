@@ -2329,7 +2329,11 @@ cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
 
 # p.142
 :addl loc32, ACC is ctx_objmode=1 & op0_16=0b0101011000000001 & ACC; op8_8=0b00000000 & loc32 {
-	local r:4 = loc32 + ACC;
+	local left:4 = loc32;
+	local right:4 = ACC;
+	local r:4 = left + right;
+	C = carry(left, right);
+	V = V || scarry(left, right);
 	loc32 = r;
 	flagnz(r);
 }
@@ -4994,7 +4998,11 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.430
 :subl loc32, ACC is ctx_objmode=1 & op0_16=0b0101011001000001; op8_8=0b00000000 & loc32 & ACC {
-	local r:4 = loc32 - ACC;
+	local left:4 = loc32;
+	local right:4 = ACC;
+	local r:4 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
 	loc32 = r;
 	flagnz(r);
 }
@@ -5012,7 +5020,11 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.432
 :subrl loc32, ACC is ctx_objmode=1 & op0_16=0b0101011001001001; op8_8=0b00000000 & loc32 & ACC {
-	local r:4 = ACC - loc32;
+	local left:4 = ACC;
+	local right:4 = loc32;
+	local r:4 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
 	loc32 = r;
 	flagnz(r);
 }

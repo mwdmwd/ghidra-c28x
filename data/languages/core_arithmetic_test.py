@@ -59,6 +59,39 @@ def check_maxcul():
             assert writes - {None} == {"P", "V"}, writes
 
 
+def check_loc32_flags():
+    # pp.142/430/432: unsigned carry/no-borrow and sticky signed overflow.
+    values = (0, 1, 2, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFE, 0xFFFFFFFF)
+    for opcode in (0x5601, 0x5641, 0x5649):
+        for loc, destination in ((0xA4, "XAR4"), (0xA9, "ACC"), (0x84, "memory")):
+            ops = _translate((opcode, loc))
+            for value, acc, c, v in product(values, values, (0, 1), (0, 1)):
+                if destination == "ACC":
+                    value = acc
+                initial = {"ACC": acc, "C": c, "V": v, "N": 1, "Z": 1,
+                           "XAR4": 0x2400 if destination == "memory" else value}
+                memory = {0x2400: value & 0xFFFF, 0x2401: value >> 16, 0x2402: 0xBEEF}
+                trace = run(ops, initial, memory)
+                left, right = (acc, value) if opcode == 0x5649 else (value, acc)
+                subtract = opcode != 0x5601
+                total = left - right if subtract else left + right
+                stotal = signed(left) - signed(right) if subtract else signed(left) + signed(right)
+                result = total & 0xFFFFFFFF
+                expected = {"C": int(left >= right) if subtract else int(total > 0xFFFFFFFF),
+                            "V": v | int(not -0x80000000 <= stotal < 0x80000000),
+                            "N": result >> 31, "Z": int(result == 0)}
+                assert state(trace, initial, expected) == expected, (opcode, loc, initial, expected)
+                actual = (trace.word(0x2400) | (trace.word(0x2401) << 16)
+                          if destination == "memory" else trace.register(destination))
+                assert actual == result, (opcode, loc, initial, hex(actual), hex(result))
+                if destination != "ACC":
+                    assert trace.register("ACC") == acc
+                if destination == "memory":
+                    assert len(trace.loads) == len(trace.stores) == 1
+                    assert trace.register("XAR4") == 0x2402
+                    assert trace.word(0x2402) == 0xBEEF
+
+
 def check_movu_ovc():
     # p.314: expose exactly six unsigned bits; refresh N/Z for AX destinations.
     for loc, destination in ((0xA9, "AL"), (0xA8, "AH"), (0xA0, "AR0"), (0x84, "memory")):
@@ -128,3 +161,5 @@ if __name__ == "__main__":
     print("INTEGER_MAC_FLAG_VECTORS=4608")
     check_movu_ovc()
     print("MOVU_OVC_VECTORS=4097")
+    check_loc32_flags()
+    print("LOC32_FLAG_VECTORS=2304")
