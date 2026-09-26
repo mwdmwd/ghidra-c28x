@@ -1122,6 +1122,20 @@ loc32: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
 loc32: reg32             is ctx_amode=0 & op4_4=0b1010 & reg32 { export reg32; }
 loc32: reg32             is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg32 { export reg32; }
 
+# Dual-memory MAC: the data-side address generator wins conflicting XAR7
+# updates (SPRU430F pp.187/199/244/385). Evaluate this before building loc,
+# because legacy forms may select a different ARP after updating the old one.
+# Test the addressing mode, not whether XAR7's value changed: an AR0 modifier
+# of zero still belongs to the data-side address generator.
+xar7_prog_step: is op0_8 { local step:4 = 1; export step; }
+xar7_prog_step: is op0_8=0x87 | op0_8=0x8f { local step:4 = 0; export step; }
+xar7_prog_step: is op0_8=0xb9 | op0_8=0xba | op0_8=0xbb | op0_8=0xbc | op0_8=0xae | op0_8=0xaf {
+	local step:4 = zext(ARP != 7); export step;
+}
+xar7_prog_step: is ctx_amode=1 & (op3_5=0x18 | op3_5=0x19 | op3_5=0x1a | op3_5=0x1b | op3_5=0x1c | op3_5=0x1d) {
+	local step:4 = zext(ARP != 7); export step;
+}
+
 # Address-only mirrors for instructions whose semantics need the effective
 # RAM address itself (DMOV/MOVAD/MOVDL/MOVD32/XMACD).  These remain separate
 # from loc16/loc32 so their exports cannot be mistaken for dereferenced values;
@@ -2702,8 +2716,10 @@ with : ctx_objmode=1 {
 
 # p.187
 :dmac ACC:P, loc32, *XAR7 is ctx_objmode=1 & op0_16=0b0101011001001011; op8_8=0b11000111 & ACC & P & loc32 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc32;
 	XT = loc32;
-	local coeff:4 = *:4 XAR7;
+	local coeff:4 = *:4 program_addr;
 	local prod_hi:4 = sext(XT[16,16]) * sext(coeff[16,16]);
 	local prod_lo:4 = sext(XT[0,16]) * sext(coeff[0,16]);
 	local sh_hi:4;
@@ -2715,9 +2731,13 @@ with : ctx_objmode=1 {
 }
 
 # p.187
-:dmac ACC:P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001011; op8_8=0b10000111 & ACC & P & loc32 & XAR7 {
+:dmac ACC:P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001011; op8_8=0b10000111 & ACC & P & loc32 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc32;
 	XT = loc32;
-	local coeff:4 = *:4 XAR7;
+	local coeff:4 = *:4 program_addr;
 	local prod_hi:4 = sext(XT[16,16]) * sext(coeff[16,16]);
 	local prod_lo:4 = sext(XT[0,16]) * sext(coeff[0,16]);
 	local sh_hi:4;
@@ -2726,7 +2746,7 @@ with : ctx_objmode=1 {
 	pmshift(sh_lo, prod_lo);
 	acc_add32(sh_hi);
 	P = P + sh_lo;
-	XAR7 = XAR7 + 2;
+	XAR7 = XAR7 + (program_step << 1);
 }
 
 # p.189
@@ -2785,19 +2805,25 @@ with : ctx_objmode=1 {
 
 # p.199
 :imacl P, loc32, *XAR7 is ctx_objmode=1 & op0_16=0b0101011001001101; op8_8=0b11000111 & P & loc32 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc32;
 	local old_p:4 = P;
 	add_unsigned32(ACC, old_p);
-	local tmp:8 = sext(loc32) * sext(*:4 XAR7);
+	local tmp:8 = sext(loc32) * sext(*:4 program_addr);
 	store_p_lower38(tmp);
 }
 
 # p.199
-:imacl P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 {
+:imacl P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc32;
 	local old_p:4 = P;
 	add_unsigned32(ACC, old_p);
-	local tmp:8 = sext(loc32) * sext(*:4 XAR7);
+	local tmp:8 = sext(loc32) * sext(*:4 program_addr);
 	store_p_lower38(tmp);
-	XAR7 = XAR7 + 1;
+	XAR7 = XAR7 + (program_step << 1);
 }
 
 # p.201
@@ -3196,21 +3222,27 @@ with : ctx_objmode=1 {
 
 # p.244
 :mac P, loc16, *XAR7 is ctx_objmode=1 & op0_16=0b0101011000000111; op8_8=0b11000111 & P & loc16 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc16;
 	acc_add_pm_p();
 	T = loc16;
-	local coeff:2 = *:2 XAR7;
+	local coeff:2 = *:2 program_addr;
 	local prod:4 = sext(T) * sext(coeff);
 	P = prod;
 }
 
 # p.244
-:mac P, loc16, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 {
+:mac P, loc16, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc16;
 	acc_add_pm_p();
 	T = loc16;
-	local coeff:2 = *:2 XAR7;
+	local coeff:2 = *:2 program_addr;
 	local prod:4 = sext(T) * sext(coeff);
 	P = prod;
-	XAR7 = XAR7 + 1;
+	XAR7 = XAR7 + program_step;
 }
 
 # p.246
@@ -4515,15 +4547,21 @@ movl_store_flags: is op0_8=0b10101001 {
 
 # p.385
 :qmacl P, loc32, *XAR7   is ctx_objmode=1 & op0_16=0b0101011001001111; op8_8=0b11000111 & P & loc32 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc32;
 	acc_add_pm_p();
-	local prod:8 = sext(loc32) * sext(*:4 XAR7);
+	local prod:8 = sext(loc32) * sext(*:4 program_addr);
 	P = prod[32,32];
 }
-:qmacl P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001111; op8_8=0b10000111 & P & loc32 & XAR7 {
+:qmacl P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001111; op8_8=0b10000111 & P & loc32 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc32;
 	acc_add_pm_p();
-	local prod:8 = sext(loc32) * sext(*:4 XAR7);
+	local prod:8 = sext(loc32) * sext(*:4 program_addr);
 	P = prod[32,32];
-	XAR7 = XAR7 + 2;
+	XAR7 = XAR7 + (program_step << 1);
 }
 
 # p.387

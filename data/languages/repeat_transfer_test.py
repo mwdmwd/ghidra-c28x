@@ -189,16 +189,28 @@ def _execute(
         args = [read(node) for node in op.inputs]
         if code == OpCode.LOAD:
             pointer = args[1]
-            value = load(pointer, op.output.size)
-            loads.append((pc, pointer, op.output.size, value))
+            space = op.inputs[0].getSpaceFromConst().name
+            if space == "register":
+                value = sum(cells.get((space, pointer + index), 0) << (8 * index)
+                            for index in range(op.output.size))
+            else:
+                assert space == "ram", space
+                value = load(pointer, op.output.size)
+                loads.append((pc, pointer, op.output.size, value))
             write(op.output, value)
             pc += 1
             continue
         if code == OpCode.STORE:
             pointer = args[1]
             value = args[2]
-            stores.append((pc, pointer, op.inputs[2].size, value))
-            store(pointer, op.inputs[2].size, value)
+            space = op.inputs[0].getSpaceFromConst().name
+            if space == "register":
+                for index in range(op.inputs[2].size):
+                    cells[(space, pointer + index)] = (value >> (8 * index)) & 0xFF
+            else:
+                assert space == "ram", space
+                stores.append((pc, pointer, op.inputs[2].size, value))
+                store(pointer, op.inputs[2].size, value)
             pc += 1
             continue
         if op.output is None:
